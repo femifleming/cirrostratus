@@ -1,21 +1,21 @@
-# Qiemem Bribery Edition
+# BRIBESTAGES
 
-Custom firmware for the Mutable Instruments Stages module. It's [qiemem's bipolar multi-mode firmware](https://github.com/qiemem/eurorack/tree/bipolar/stages) v1.3.0 with two additions:
+Formerly Qiemem Bribery Edition. Custom firmware for the Mutable Instruments Stages module. It's [qiemem's bipolar multi-mode firmware](https://github.com/qiemem/eurorack/tree/bipolar/stages) v1.3.0 with two additions:
 
 - **Segment linking:** you choose which segments form an envelope with the buttons, and patching cables no longer changes your groups.
 - **Follow segments:** an envelope follower. Patch audio into a segment and its output follows the loudness.
 
 Everything qiemem's firmware does still works.
 
-**Web page:** [thisisbribery.com/stages](https://www.thisisbribery.com/stages/), where you can also play the update audio straight from the page.
+**Web page:** [thisisbribery.com/bribestages](https://www.thisisbribery.com/bribestages/), where you can also play the update audio straight from the page.
 
 **Support:** find it useful? [Buy me a coffee on Ko-fi](https://ko-fi.com/thisisbribery).
 
 ## Download
 
-Get the firmware from the [v1.0 release](https://github.com/thisisbribery/qiemem-bribery-edition/releases/tag/v1.0) or [firmware/](firmware/), or right-click a link and choose Save Link As:
-- [qiemem-bribery-edition-v1.0.wav](https://github.com/thisisbribery/qiemem-bribery-edition/raw/main/firmware/qiemem-bribery-edition-v1.0.wav), for a module mounted normally.
-- [qiemem-bribery-edition-v1.0-flipped.wav](https://github.com/thisisbribery/qiemem-bribery-edition/raw/main/firmware/qiemem-bribery-edition-v1.0-flipped.wav), for a module mounted upside down.
+Get the firmware from the [v1.0 release](https://github.com/thisisbribery/bribestages/releases/tag/v1.0) or [firmware/](firmware/), or right-click a link and choose Save Link As:
+- [qiemem-bribery-edition-v1.0.wav](https://github.com/thisisbribery/bribestages/raw/main/firmware/qiemem-bribery-edition-v1.0.wav), for a module mounted normally.
+- [qiemem-bribery-edition-v1.0-flipped.wav](https://github.com/thisisbribery/bribestages/raw/main/firmware/qiemem-bribery-edition-v1.0-flipped.wav), for a module mounted upside down.
 
 ## Why
 
