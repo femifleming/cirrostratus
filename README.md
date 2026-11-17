@@ -14,9 +14,11 @@ Everything qiemem's firmware does still works.
 
 ## Download
 
-Get the firmware from the [v1.0 release](https://github.com/thisisbribery/bribestages/releases/tag/v1.0) or [firmware/](firmware/), or right-click a link and choose Save Link As:
-- [qiemem-bribery-edition-v1.0.wav](https://github.com/thisisbribery/bribestages/raw/main/firmware/qiemem-bribery-edition-v1.0.wav), for a module mounted normally.
-- [qiemem-bribery-edition-v1.0-flipped.wav](https://github.com/thisisbribery/bribestages/raw/main/firmware/qiemem-bribery-edition-v1.0-flipped.wav), for a module mounted upside down.
+Get the firmware from the [v1.1 release](https://github.com/thisisbribery/bribestages/releases/tag/v1.1) or [firmware/](firmware/), or right-click a link and choose Save Link As:
+- [bribestages-v1.1.wav](https://github.com/thisisbribery/bribestages/raw/main/firmware/bribestages-v1.1.wav), for a module mounted normally.
+- [bribestages-v1.1-flipped.wav](https://github.com/thisisbribery/bribestages/raw/main/firmware/bribestages-v1.1-flipped.wav), for a module mounted upside down.
+
+Older versions are on the [releases page](https://github.com/thisisbribery/bribestages/releases).
 
 ## Why
 
@@ -43,7 +45,7 @@ The module updates from an audio file. Its updater is built in and can't be dama
 
 **Upside-down module:** use the `-flipped` file. Everything is mirrored as you look at it: patch into the leftmost segment's CV input, hold the leftmost button, set the level with the leftmost slider.
 
-**Your settings:** coming from qiemem v1.3.0, your segment types and mode are kept. Coming from stock Mutable firmware, settings reset, as with any qiemem install. To go back, flash [qiemem's own v1.3.0 release](https://github.com/qiemem/eurorack/releases) the same way.
+**Your settings:** coming from an earlier BRIBESTAGES (or Qiemem Bribery Edition) version or from qiemem v1.3.0, your segment types, links and mode are kept. Coming from stock Mutable firmware, settings reset, as with any qiemem install. To go back, flash [qiemem's own v1.3.0 release](https://github.com/qiemem/eurorack/releases) the same way.
 
 ## Segment linking
 
@@ -182,6 +184,11 @@ Host tests, no hardware needed:
 sh stages/test/links/run.sh
 ```
 They run the real firmware code with simulated buttons, gates and audio.
+
+## Changelog
+
+- **v1.1:** Sync LFO segments. Renamed from Qiemem Bribery Edition to BRIBESTAGES.
+- **v1.0:** segment linking and Follow segments on qiemem v1.3.0.
 
 ## Credits and licence
 
