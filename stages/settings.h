@@ -70,11 +70,22 @@ struct PersistentData {
 //  - b00000011 (0x0300) (8)  ->  stages range
 //  - b00001100 (0x0600) (10) ->  ouroboros range
 //  - b00110000 (0x0c00) (12) ->  quantization scale
-//  - b01000000 (0x4000) (14) ->  envelope follower segment (single module)
+//  - b01000000 (0x4000) (14) ->  envelope follower segment (single module),
+//                                or Sync LFO with type bits 01
 //  - b10000000 (0x8000) (15) ->  linked to the next segment (single module)
 //
 
 const uint16_t kFollowBit = 0x4000;
+// The follow bit with type bits 01 is a Sync LFO segment (a follower always
+// has type bits 00). Range bits 0x0300 hold its phase offset.
+const uint16_t kSyncLfoType = 0x0001;
+
+inline bool is_follower_config(uint16_t c) {
+  return (c & kFollowBit) && (c & 0x03) == 0;
+}
+inline bool is_sync_lfo_config(uint16_t c) {
+  return (c & kFollowBit) && (c & 0x03) == kSyncLfoType;
+}
 const uint16_t kLinkBit = 0x8000;
 
 #define is_bipolar(seg_config) seg_config & 0x08

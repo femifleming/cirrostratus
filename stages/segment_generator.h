@@ -56,6 +56,9 @@ const int kMaxNumLocalSegments = 6;
 
 const size_t kMaxDelay = 576;
 
+// Sync LFO tempo before any clock arrives: 120 BPM.
+const float kSyncDefaultPeriod = kSampleRate * 0.5f;
+
 #define DECLARE_PROCESS_FN(X) void Process ## X \
       (const stmlib::GateFlags* gate_flags, Output* out, size_t size);
 
@@ -225,6 +228,35 @@ class SegmentGenerator {
     return follow_env_ > 1.0f ? 1.0f : follow_env_;
   }
 
+  // Sync LFO: each segment of a group runs its own LFO, all locked to one
+  // clock. The group's first segment (the master) reads the clock from its
+  // gate input and shares it; every segment then picks a division or a
+  // multiplication of it with its slider, a shape with its pot, and a phase
+  // offset (0, 90, 180 or 270 degrees) stored in its range bits.
+  void ConfigureSyncLFO(
+      SegmentGenerator* master, bool bipolar, int phase_offset);
+
+  // Unipolar LFO level of the last block, 0 to 1 (for the slider LED).
+  inline float sync_level() const { return sync_level_; }
+  // True once after the LFO started a new cycle.
+  inline bool take_sync_wrap() {
+    bool w = sync_wrapped_;
+    sync_wrapped_ = false;
+    return w;
+  }
+  // -1 when dividing the clock, 0 at x1, +1 when multiplying.
+  inline int sync_ratio_class() const {
+    return sync_ratio_ < kSyncUnityRatio ? -1
+        : (sync_ratio_ > kSyncUnityRatio ? 1 : 0);
+  }
+  inline int sync_ratio_index() const { return sync_ratio_; }
+  // Clock period in samples, as tracked by the group's master.
+  inline float sync_period() const { return sync_clock_.period; }
+
+  static const int kNumSyncRatios = 15;
+  static const int kSyncUnityRatio = 7;
+  static const int kSyncMinPeriod = 32;  // 1 ms: faster edges are bounces.
+
   inline void ConfigureSlave(int i) {
     monitored_segment_ = i;
     process_fn_ = &SegmentGenerator::ProcessSlave;
@@ -275,6 +307,7 @@ class SegmentGenerator {
       || process_fn_ == &SegmentGenerator::ProcessTapLFO
       || process_fn_ == &SegmentGenerator::ProcessTuring
       || process_fn_ == &SegmentGenerator::ProcessFollower
+      || process_fn_ == &SegmentGenerator::ProcessSyncLFO
     );
   }
 
@@ -307,6 +340,9 @@ class SegmentGenerator {
   DECLARE_PROCESS_FN(ClockedSampleAndHold);
   DECLARE_PROCESS_FN(Slave);
   DECLARE_PROCESS_FN(Follower);
+  DECLARE_PROCESS_FN(SyncLFO);
+
+  void UpdateSyncClock(const stmlib::GateFlags* gate_flags, size_t size);
 
   void ProcessRandomFromPhase(float smoothness, Output* in_out, size_t size);
 
@@ -401,6 +437,32 @@ class SegmentGenerator {
   float follow_env_;
   float follow_gain_;
   bool follow_invert_;
+
+  // Sync LFO clock, filled in by the group's master each block and read by
+  // every segment of the group (masters run first: they are leftmost).
+  struct SyncClock {
+    float phase[8];      // 0 to 1 through the current clock period.
+    uint8_t count[8];    // Clock periods since the start, wraps at 96.
+    float period;        // Samples per clock period.
+  };
+  static const int kSyncCountWrap = 96;  // LCM of the divisions.
+  static const int8_t kSyncRatios[kNumSyncRatios];
+
+  SyncClock sync_clock_;
+  const SyncClock* sync_source_;
+  float sync_master_phase_;
+  uint8_t sync_master_count_;
+  uint32_t sync_since_tick_;
+  bool sync_wrapped_since_tick_;
+  bool sync_stale_;
+  int sync_ratio_;
+  float sync_offset_;
+  bool sync_bipolar_;
+  float sync_prev_t_;
+  float sync_random_;
+  float sync_level_;
+  bool sync_wrapped_;
+  stmlib::HysteresisQuantizer2 sync_ratio_quantizer_;
 
   DISALLOW_COPY_AND_ASSIGN(SegmentGenerator);
 };

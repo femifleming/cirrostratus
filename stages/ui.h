@@ -73,6 +73,14 @@ class Ui {
   }
 
   // Envelope follower level (0 to 1) and output (-1 to 1), for the LEDs.
+  void set_sync_lfo(int i, float level, bool new_cycle, int ratio_class) {
+    sync_level_[i] = static_cast<uint8_t>(level * 15.0f + 0.5f);
+    sync_class_[i] = static_cast<int8_t>(ratio_class);
+    if (new_cycle) {
+      sync_flash_[i] = kSyncFlashDuration;
+    }
+  }
+
   void set_follow_level(int i, float level, float output) {
     follow_level_[i] = static_cast<uint8_t>(level * 15.0f + 0.5f);
     follow_output_[i] = static_cast<uint8_t>(fabsf(output) * 15.0f + 0.5f);
@@ -123,6 +131,10 @@ class Ui {
   uint32_t discrete_change_time_[kNumChannels];
   uint8_t follow_level_[kNumChannels];
   uint8_t follow_output_[kNumChannels];
+  static const uint8_t kSyncFlashDuration = 40;  // ms
+  uint8_t sync_level_[kNumChannels];
+  int8_t sync_class_[kNumChannels];
+  volatile uint8_t sync_flash_[kNumChannels];
 
   Settings* settings_;
   ChainState* chain_state_;

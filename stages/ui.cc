@@ -89,6 +89,9 @@ void Ui::Init(Settings* settings, ChainState* chain_state, CvReader* cv_reader) 
   fill(&slider_led_counter_[0], &slider_led_counter_[kNumLEDs], 0);
   fill(&follow_level_[0], &follow_level_[kNumChannels], 0);
   fill(&follow_output_[0], &follow_output_[kNumChannels], 0);
+  fill(&sync_level_[0], &sync_level_[kNumChannels], 0);
+  fill(&sync_class_[0], &sync_class_[kNumChannels], 0);
+  for (size_t i = 0; i < kNumChannels; ++i) sync_flash_[i] = 0;
 }
 
 void Ui::Poll() {
@@ -134,8 +137,9 @@ void Ui::Poll() {
 
           changing_slider_prop_ |= 1 << i;
 
-          if (chain_state_->follower(i)) {
+          if (chain_state_->follower(i) || chain_state_->sync_lfo(i)) {
             // Follower input gain: x1, x2, x4, x8 from bottom to top.
+            // Sync LFO phase offset: 0, 90, 180, 270 degrees.
             seg_config[i] &= ~0x0300;
             seg_config[i] |= static_cast<uint16_t>(
                 min(3, static_cast<int>(4.0f * slider))) << 8;
@@ -482,6 +486,30 @@ void Ui::UpdateLEDs() {
             brightness = 0xf;
           }
         }
+        if (chain_state_->sync_lfo(i)) {
+          // Sync LFO. Button LED: a flash at the start of every cycle, green
+          // when multiplying the clock, yellow at x1, red when dividing.
+          // Between flashes: off, or a dim glow when bipolar.
+          // While setting the phase offset:
+          // green 0, yellow 90, red 180, red / green 270 degrees.
+          if (changing_slider_prop_ & (1 << i)) {
+            const uint8_t offset = (configuration >> 8) & 0x3;
+            color = offset == 3
+                ? (((ms >> 7) & 1) ? LED_COLOR_RED : LED_COLOR_GREEN)
+                : palette_[offset];
+            brightness = 0xf;
+          } else {
+            const int8_t c = sync_class_[i];
+            color = c > 0 ? LED_COLOR_GREEN
+                : (c < 0 ? LED_COLOR_RED : LED_COLOR_YELLOW);
+            if (sync_flash_[i]) {
+              sync_flash_[i] = sync_flash_[i] - 1;
+              brightness = 0xf;
+            } else {
+              brightness = is_bipolar(configuration) ? 0x1 : 0;
+            }
+          }
+        }
         uint32_t discrete_state_change_dur = ms - discrete_change_time_[i];
 
         if (discrete_state_change_dur <= kDiscreteStateBrightDur) {
@@ -495,9 +523,11 @@ void Ui::UpdateLEDs() {
         leds_.set(
             LED_GROUP_UI + i,
             (brightness >= pwm && brightness != 0) ? color : LED_COLOR_OFF);
-        if (chain_state_->follower(i)) {
+        if (chain_state_->follower(i) || chain_state_->sync_lfo(i)) {
           // Slider LED brightness follows the output.
-          const uint8_t out = follow_output_[i];
+          const uint8_t out = chain_state_->sync_lfo(i)
+              ? sync_level_[i]
+              : follow_output_[i];
           leds_.set(
               LED_GROUP_SLIDER + i,
               (out > pwm) ? LED_COLOR_GREEN : LED_COLOR_OFF);

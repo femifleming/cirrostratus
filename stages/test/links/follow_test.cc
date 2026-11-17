@@ -63,11 +63,11 @@ int main() {
   cs.Init(&l, &r, st);
   tick_ms(2100);
 
-  // 1. Stages mode tap cycle: ramp, step, hold, follow, ramp.
+  // 1. Stages mode tap cycle: ramp, step, hold, follow, sync LFO, ramp.
   tap(1); tap(1); tap(1);
   check((cfg(1) & kFollowBit) && (cfg(1) & 3) == 0, "third tap after hold makes segment 2 a follower");
   check(cs.follower(1) && !cs.follower(0), "follower() reports segment 2 only");
-  tap(1);
+  tap(1); tap(1);  // follow -> sync LFO -> ramp
   check(!(cfg(1) & kFollowBit) && (cfg(1) & 3) == 0 && !cs.follower(1), "next tap goes back to ramp");
 
   // 2. Links next to a follower are ignored but kept.
@@ -160,8 +160,8 @@ int main() {
   st.mutable_state()->multimode = MULTI_MODE_STAGES_ADVANCED;
   cs.start_reinit(); tick_ms(2700);
   check(cs.follower(1), "follower survives a mode change");
-  tap(1); tap(1); tap(1); tap(1);
-  check((cfg(1) & 3) == 3 && !(cfg(1) & kFollowBit), "advanced mode: fourth tap from follow is random");
+  tap(1); tap(1); tap(1); tap(1); tap(1);
+  check((cfg(1) & 3) == 3 && !(cfg(1) & kFollowBit), "advanced mode: fifth tap from follow (via sync LFO) is random");
   tap(1);
   check(cs.follower(1), "advanced mode: random -> follow");
 

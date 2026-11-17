@@ -131,6 +131,24 @@ void SegmentGenerator::Init(MultiMode multimode, stmlib::HysteresisQuantizer2* s
   follow_gain_ = kFollowBaseGain;
   follow_invert_ = false;
 
+  fill(&sync_clock_.phase[0], &sync_clock_.phase[8], 0.0f);
+  fill(&sync_clock_.count[0], &sync_clock_.count[8], 0);
+  sync_clock_.period = kSyncDefaultPeriod;
+  sync_source_ = &sync_clock_;
+  sync_master_phase_ = 0.0f;
+  sync_master_count_ = 0;
+  sync_since_tick_ = 0;
+  sync_wrapped_since_tick_ = false;
+  sync_stale_ = true;
+  sync_ratio_ = kSyncUnityRatio;
+  sync_offset_ = 0.0f;
+  sync_bipolar_ = false;
+  sync_prev_t_ = 0.0f;
+  sync_random_ = Random::GetFloat();
+  sync_level_ = 0.0f;
+  sync_wrapped_ = false;
+  sync_ratio_quantizer_.Init(kNumSyncRatios, 0.1f, false);
+
   quantized_output_ = false;
   up_down_counter_ = inhibit_clock_ = 0;
   reset_ = false;
@@ -1207,6 +1225,175 @@ void SegmentGenerator::ProcessFollower(
     ++out;
   }
   lp_ = target;
+}
+
+// Sync LFO.
+//
+// Slider (plus CV): /32 /16 /8 /6 /4 /3 /2 x1 x2 x3 x4 x6 x8 x16 x32 of the
+// clock, divisions in the lower half. Pot: shape, morphing sine, triangle,
+// saw (falling), ramp (rising), square, random. Hold + slider: phase offset.
+// Hold + pot: bipolar.
+//
+// The clock is the gate of the group's first segment. Each rising edge is one
+// clock period. With no clock, or when the clock stops, the LFOs keep running
+// at the last tempo (120 BPM until a clock has been seen). When a clock starts
+// again after a stop, every LFO restarts from the top, so divisions line up
+// with the first clock.
+
+/* static */
+const int8_t SegmentGenerator::kSyncRatios[kNumSyncRatios] = {
+  -32, -16, -8, -6, -4, -3, -2, 1, 2, 3, 4, 6, 8, 16, 32
+};
+
+void SegmentGenerator::ConfigureSyncLFO(
+    SegmentGenerator* master, bool bipolar, int phase_offset) {
+  const bool was_sync = process_fn_ == &SegmentGenerator::ProcessSyncLFO;
+  if (!was_sync) {
+    sync_ratio_quantizer_.Init(kNumSyncRatios, 0.1f, false);
+    sync_prev_t_ = 0.0f;
+    sync_random_ = Random::GetFloat();
+  }
+  if (master == this && (!was_sync || sync_source_ != &sync_clock_)) {
+    // Newly in charge of the clock. A segment that was following another
+    // master keeps that master's tempo.
+    if (was_sync) {
+      sync_clock_.period = sync_source_->period;
+    }
+    sync_master_phase_ = 0.0f;
+    sync_master_count_ = 0;
+    sync_since_tick_ = 0;
+    sync_wrapped_since_tick_ = false;
+    sync_stale_ = true;
+  }
+  sync_source_ = &master->sync_clock_;
+  sync_bipolar_ = bipolar;
+  sync_offset_ = 0.25f * static_cast<float>(phase_offset & 3);
+  process_fn_ = &SegmentGenerator::ProcessSyncLFO;
+  active_segment_ = 0;
+  num_segments_ = 1;
+}
+
+void SegmentGenerator::UpdateSyncClock(
+    const GateFlags* gate_flags, size_t size) {
+  float period = sync_clock_.period;
+  float increment = 1.0f / period;
+  for (size_t i = 0; i < size; ++i) {
+    ++sync_since_tick_;
+    const bool tick = (gate_flags[i] & GATE_FLAG_RISING) &&
+        sync_since_tick_ >= kSyncMinPeriod;
+    if (tick) {
+      if (sync_stale_) {
+        // The clock (re)starts: everything from the top.
+        sync_master_count_ = 0;
+      } else {
+        period = static_cast<float>(sync_since_tick_);
+        increment = 1.0f / period;
+        if (!sync_wrapped_since_tick_) {
+          // On time or early. (When late, the free-running phase has
+          // already moved on to the next period.)
+          if (++sync_master_count_ >= kSyncCountWrap) {
+            sync_master_count_ = 0;
+          }
+        }
+      }
+      sync_master_phase_ = 0.0f;
+      sync_since_tick_ = 0;
+      sync_wrapped_since_tick_ = false;
+      sync_stale_ = false;
+    } else {
+      sync_master_phase_ += increment;
+      if (sync_master_phase_ >= 1.0f) {
+        sync_master_phase_ -= 1.0f;
+        if (++sync_master_count_ >= kSyncCountWrap) {
+          sync_master_count_ = 0;
+        }
+        sync_wrapped_since_tick_ = true;
+      }
+      if (static_cast<float>(sync_since_tick_) > 4.0f * period) {
+        // No clock for 4 periods: it has stopped (or isn't patched).
+        sync_stale_ = true;
+      }
+    }
+    sync_clock_.phase[i] = sync_master_phase_;
+    sync_clock_.count[i] = sync_master_count_;
+  }
+  sync_clock_.period = period;
+}
+
+static inline float SyncTriangle(float t, float peak) {
+  return t < peak ? t / peak : (1.0f - t) / (1.0f - peak);
+}
+
+void SegmentGenerator::ProcessSyncLFO(
+    const GateFlags* gate_flags, SegmentGenerator::Output* out, size_t size) {
+  if (sync_source_ == &sync_clock_) {
+    UpdateSyncClock(gate_flags, size);
+  }
+  const SyncClock& clock = *sync_source_;
+
+  float ratio_cv = parameters_[0].primary;
+  CONSTRAIN(ratio_cv, 0.0f, 1.0f);
+  sync_ratio_ = sync_ratio_quantizer_.Process(ratio_cv);
+  const int ratio = kSyncRatios[sync_ratio_];
+
+  float shape = parameters_[0].secondary * 5.0f;
+  CONSTRAIN(shape, 0.0f, 5.0f);
+  const int zone = shape >= 4.0f ? 4 : static_cast<int>(shape);
+  const float blend = shape - static_cast<float>(zone);
+  // Triangle peak: 0.5 is a triangle, 0 a falling saw, 1 a rising ramp.
+  const float peak = zone == 1 ? 0.5f * (1.0f - blend) : blend;
+
+  const float amplitude = sync_bipolar_ ? 10.0f / 8.0f : 1.0f;
+  const float offset = sync_bipolar_ ? -10.0f / 16.0f : 0.0f;
+
+  float v = 0.0f;
+  for (size_t i = 0; i < size; ++i) {
+    float t;
+    if (ratio > 0) {
+      t = clock.phase[i] * static_cast<float>(ratio);
+      t -= static_cast<float>(static_cast<int>(t));
+    } else {
+      const int d = -ratio;
+      t = (static_cast<float>(clock.count[i] % d) + clock.phase[i]) /
+          static_cast<float>(d);
+    }
+    t += sync_offset_;
+    if (t >= 1.0f) {
+      t -= 1.0f;
+    }
+    if (t < sync_prev_t_ - 0.5f) {
+      // New cycle.
+      sync_random_ = Random::GetFloat();
+      sync_wrapped_ = true;
+    }
+    sync_prev_t_ = t;
+
+    const float square = t < 0.5f ? 1.0f : 0.0f;
+    switch (zone) {
+      case 0:
+        {
+          const float sine = 0.5f + 0.5f * Interpolate(
+              lut_sine, t < 0.25f ? t + 0.75f : t - 0.25f, 1024.0f);
+          v = Crossfade(sine, SyncTriangle(t, 0.5f), blend);
+        }
+        break;
+      case 1:
+      case 2:
+        v = SyncTriangle(t, peak);
+        break;
+      case 3:
+        v = Crossfade(t, square, blend);
+        break;
+      default:
+        v = Crossfade(square, sync_random_, blend);
+        break;
+    }
+    out[i].value = amplitude * v + offset;
+    out[i].phase = t;
+    out[i].segment = t < 0.5f ? 0 : 1;
+  }
+  sync_level_ = v;
+  active_segment_ = 0;
 }
 
 void SegmentGenerator::ProcessSlave(

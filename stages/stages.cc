@@ -146,6 +146,10 @@ void Process(IOBuffer::Block* block, size_t size) {
           channel,
           segment_generator[channel].follow_level(),
           out[size - 1].value);
+    } else if (chain_state.sync_lfo(channel)) {
+      SegmentGenerator& g = segment_generator[channel];
+      ui.set_sync_lfo(
+          channel, g.sync_level(), g.take_sync_wrap(), g.sync_ratio_class());
     } else {
       ui.set_slider_led(channel, led_state, 5);
     }

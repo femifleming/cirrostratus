@@ -5,9 +5,9 @@
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../../.." && pwd)
-for TEST in link_test follow_test; do
+for TEST in link_test follow_test sync_test; do
   OUT=${TMPDIR:-/tmp}/stages_$TEST
-  g++ -std=gnu++11 -DTEST -O1 -Wall -Wno-unused-variable -I"$HERE/stub" -I"$REPO" -o "$OUT" \
+  g++ -std=gnu++14 -DTEST -O1 -Wall -Wno-unused-variable -I"$HERE/stub" -I"$REPO" -o "$OUT" \
     "$HERE/$TEST.cc" \
     "$REPO/stages/chain_state.cc" "$REPO/stages/segment_generator.cc" \
     "$REPO/stages/quantizer.cc" "$REPO/stages/braids_quantizer.cc" \

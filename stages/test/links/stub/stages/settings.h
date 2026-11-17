@@ -14,6 +14,13 @@ namespace stages {
 
 const uint16_t kFollowBit = 0x4000;
 const uint16_t kLinkBit = 0x8000;
+const uint16_t kSyncLfoType = 0x0001;
+inline bool is_follower_config(uint16_t c) {
+  return (c & kFollowBit) && (c & 0x03) == 0;
+}
+inline bool is_sync_lfo_config(uint16_t c) {
+  return (c & kFollowBit) && (c & 0x03) == kSyncLfoType;
+}
 
 struct State {
   uint16_t segment_configuration[kNumChannels];

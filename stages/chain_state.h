@@ -122,6 +122,10 @@ class ChainState {
   // Envelope follower segments (link mode only). A follower always stands
   // alone: stored links into or out of it are ignored while it is one.
   inline bool follower(size_t i) const { return follower_[i]; }
+  // Sync LFO segments (link mode only): each runs its own LFO, locked to the
+  // clock in the gate of its group's first segment. Sync LFOs only link to
+  // other Sync LFOs.
+  inline bool sync_lfo(size_t i) const { return sync_lfo_[i]; }
   inline uint8_t link_flash_id() const { return link_flash_id_; }
   inline uint8_t link_flash_mask() const { return link_flash_mask_; }
   inline bool link_flash_red() const { return link_flash_red_; }
@@ -401,7 +405,9 @@ class ChainState {
   bool free_running_[kNumChannels];
   bool restart_[kNumChannels];
   bool follower_[kNumChannels];
+  bool sync_lfo_[kNumChannels];
   uint8_t follows_;  // Segments stored as followers, in link mode.
+  uint8_t syncs_;  // Segments stored as Sync LFOs, in link mode.
   int8_t anchor_;
   int8_t combo_anchor_[kNumChannels];
   uint8_t link_flash_id_;

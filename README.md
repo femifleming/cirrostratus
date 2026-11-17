@@ -1,9 +1,10 @@
 # BRIBESTAGES
 
-Formerly Qiemem Bribery Edition. Custom firmware for the Mutable Instruments Stages module. It's [qiemem's bipolar multi-mode firmware](https://github.com/qiemem/eurorack/tree/bipolar/stages) v1.3.0 with two additions:
+Formerly Qiemem Bribery Edition. Custom firmware for the Mutable Instruments Stages module. It's [qiemem's bipolar multi-mode firmware](https://github.com/qiemem/eurorack/tree/bipolar/stages) v1.3.0 with three additions:
 
 - **Segment linking:** you choose which segments form an envelope with the buttons, and patching cables no longer changes your groups.
 - **Follow segments:** an envelope follower. Patch audio into a segment and its output follows the loudness.
+- **Sync LFO segments:** link several and each one becomes its own LFO, all locked to one clock in the first segment. Every segment picks its own division or multiplication, shape and phase.
 
 Everything qiemem's firmware does still works.
 
@@ -73,8 +74,8 @@ Linking works in the three segment generator modes (Stages, Advanced, Slow LFO) 
 Patch audio into a segment's CV jack and the segment's output becomes the envelope of that audio.
 
 **Making one:** tap the segment's button past the last type.
-- Stages and Slow LFO modes: ramp, step, hold, **follow**, back to ramp.
-- Advanced mode: ramp, step, hold, random, **follow**, back to ramp.
+- Stages and Slow LFO modes: ramp, step, hold, **follow**, sync LFO, back to ramp.
+- Advanced mode: ramp, step, hold, random, **follow**, sync LFO, back to ramp.
 
 Follow works where linking works. In other modes, a stored Follow segment runs as a ramp.
 
@@ -99,6 +100,44 @@ Follow works where linking works. In other modes, a stored Follow segment runs a
 - The jack is read 3906 times a second, so pure sine tones at exact multiples of 1953 Hz read low. Real audio almost never sits there.
 - With a very short release, low notes ripple: a 50 Hz bass makes the envelope wobble at 100 Hz. Raise the release to smooth it.
 
+## Sync LFO segments
+
+One clock in, a bank of LFOs out. Make a few segments Sync LFOs and link them: each segment then runs its own LFO from its own output, and all of them are locked to the clock patched into the first segment's gate. Set one to the clock, one to x2, one to /4 and they stay in step for as long as the clock runs.
+
+**Making one:** tap the segment's button past Follow.
+- Stages and Slow LFO modes: ramp, step, hold, follow, **sync LFO**, back to ramp.
+- Advanced mode: ramp, step, hold, random, follow, **sync LFO**, back to ramp.
+
+Then link them as usual: hold the first, tap the last. Link first and change the types after if you like: the stored links come back once both neighbours are Sync LFOs.
+
+**Example:** clock into segment 1's gate. Make segments 1 to 4 Sync LFOs, hold button 1 and tap button 4. Four LFOs come out of outputs 1 to 4, all on that clock.
+
+| Control | Does |
+|---|---|
+| Gate jack, first segment of the group | Clock in. Each rising edge is one clock period. |
+| Gate jack, other segments | Ignored. |
+| Slider (plus CV) | Rate against the clock: /32, /16, /8, /6, /4, /3, /2 in the lower half, x1 in the middle, x2, x3, x4, x6, x8, x16, x32 in the upper half. |
+| Pot | Shape, morphing smoothly from sine to triangle to saw (falling) to ramp (rising) to square to random. Random picks a new level every cycle and holds it. |
+| Hold button + turn pot | Bipolar: -5 V to +5 V instead of 0 to 8 V. Same gesture as qiemem's bipolar toggle. |
+| Hold button + move slider | Phase offset in four zones, bottom to top: 0, 90, 180, 270 degrees. Two LFOs at the same rate, one at 90, give you a quadrature pair. |
+| Output | That segment's LFO: 0 to 8 V, or -5 V to +5 V bipolar. |
+
+**Clock:**
+- With no clock, or when the clock stops, the LFOs keep going at the last tempo. Before any clock has arrived it's 120 BPM (2 Hz).
+- When the clock starts again after stopping for 4 beats or more, every LFO restarts from the top, so divisions line up with the first clock of the new run.
+- A tempo change is followed from the next clock.
+- A segment that isn't linked is a group of one: its own gate is its clock.
+
+**Lights:**
+- The button flashes at the start of every cycle of that LFO: green when it multiplies the clock, yellow at x1, red when it divides. Between flashes it's dark, or a dim glow when bipolar.
+- While you set the phase it shows the zone: green 0, yellow 90, red 180, red and green alternating 270.
+- The slider light follows the LFO.
+- Linked groups do the usual triple yellow flash.
+
+**With links:** a Sync LFO only links to other Sync LFOs. Hold + tap from a Sync LFO to any other type does nothing, and a stored link between a Sync LFO and another type is ignored but kept. Holding a Sync LFO's button for 0.5 s does nothing: it has no loop.
+
+**Limits:** Sync LFOs work where linking works (Stages, Advanced and Slow LFO modes, one module). In other modes, or with two Stages chained, a stored Sync LFO runs as a ramp.
+
 ## Everything else
 
 All of qiemem's features are unchanged: bipolar segments, slow and audio-rate LFOs, re-trigger control, 6EG mode, Ouroboros and the rest. Their docs are in [stages/README.md](stages/README.md), with a cheat sheet in [stages/resources/](stages/resources/).
@@ -113,11 +152,11 @@ All of qiemem's features are unchanged: bipolar segments, slow and audio-rate LF
 | `tools/qpsk.py` | Turns a firmware .bin into an update .wav, and checks one. |
 
 The changed files, against qiemem v1.3.0:
-- `stages/chain_state.cc/.h`: link and unlink gestures, groups set by links instead of gate jacks, free-running groups, Follow in the type cycle, followers stand alone.
-- `stages/segment_generator.cc/.h`: the envelope follower.
-- `stages/settings.h`: links and Follow are stored in two spare bits of each segment's settings, so qiemem settings carry over.
-- `stages/ui.cc/.h`: link flashes, the two-button mode-change guard, Follow lights and gain.
-- `stages/stages.cc`: free-run gate, follower input and lights.
+- `stages/chain_state.cc/.h`: link and unlink gestures, groups set by links instead of gate jacks, free-running groups, Follow and Sync LFO in the type cycle, followers stand alone, Sync LFO groups.
+- `stages/segment_generator.cc/.h`: the envelope follower, and the Sync LFO clock and shapes.
+- `stages/settings.h`: links and Follow are stored in two spare bits of each segment's settings, so qiemem settings carry over. A Sync LFO is the Follow bit with a different type.
+- `stages/ui.cc/.h`: link flashes, the two-button mode-change guard, Follow lights and gain, Sync LFO lights and phase.
+- `stages/stages.cc`: free-run gate, follower input and lights, Sync LFO lights.
 - `stages/io_buffer.h`, `stages/cv_reader.cc`: an unsmoothed CV reading for the follower.
 - `stages/test/links/`: host tests.
 

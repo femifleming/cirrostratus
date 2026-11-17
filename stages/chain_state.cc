@@ -101,7 +101,9 @@ void ChainState::Reinit(const Settings& settings) {
   fill(&free_running_[0], &free_running_[kNumChannels], false);
   fill(&restart_[0], &restart_[kNumChannels], false);
   fill(&follower_[0], &follower_[kNumChannels], false);
+  fill(&sync_lfo_[0], &sync_lfo_[kNumChannels], false);
   follows_ = 0;
+  syncs_ = 0;
   anchor_ = -1;
   fill(&combo_anchor_[0], &combo_anchor_[kNumChannels], -1);
   link_flash_id_ = 0;
@@ -314,6 +316,7 @@ void ChainState::Configure(
   }
   fill(&free_running_[0], &free_running_[kNumChannels], false);
   fill(&follower_[0], &follower_[kNumChannels], false);
+  fill(&sync_lfo_[0], &sync_lfo_[kNumChannels], false);
   configured_links_ = 0xff;
 
   segment::Configuration configuration[kMaxNumChannels];
@@ -417,6 +420,8 @@ void ChainState::ConfigureLinked(
     const size_t end = group_end(i);
     const int num_segments = end - i + 1;
     const bool patched = local_channel(i)->input_patched();
+    // Groups never mix Sync LFOs with other segments.
+    const bool sync_group = (syncs_ >> i) & 1;
     bool dirty = links_changed;
     Loop loop;
     loop.start = -1;
@@ -444,16 +449,28 @@ void ChainState::ConfigureLinked(
       dirty |= signature != linked_config_[s];
       linked_config_[s] = signature;
 
-      binding_[num_bindings_].generator = i;
+      // A Sync LFO segment has its own generator; others feed the group's.
+      binding_[num_bindings_].generator = sync_group ? s : i;
       binding_[num_bindings_].source = s;
-      binding_[num_bindings_].destination = k;
+      binding_[num_bindings_].destination = sync_group ? 0 : k;
       ++num_bindings_;
       ++num_internal_bindings_;
       free_running_[s] = false;
       follower_[s] = false;
+      sync_lfo_[s] = sync_group;
     }
 
-    if (num_segments == 1 && (local_configs[i] & kFollowBit)) {
+    if (sync_group) {
+      // One LFO per segment, clocked by the first segment's gate.
+      for (int k = 0; k < num_segments; ++k) {
+        const size_t s = i + k;
+        segment_generator[s].ConfigureSyncLFO(
+            &segment_generator[i],
+            configuration[k].bipolar,
+            (local_configs[s] >> 8) & 0x03);
+        loop_status_[s] = LOOP_STATUS_NONE;
+      }
+    } else if (num_segments == 1 && (local_configs[i] & kFollowBit)) {
       // Envelope follower. Its gate input freezes the envelope.
       segment_generator[i].ConfigureFollower(configuration[0]);
       follower_[i] = true;
@@ -507,7 +524,8 @@ inline void ChainState::UpdateLocalState(
     size_t channel = local_channel_index(i);
     dirty_[channel] = local_channel(i)->UpdateFlags(
         index_,
-        config,
+        // Followers and Sync LFOs run as ramps outside link mode.
+        (config & kFollowBit) ? (config & ~0x03) : config,
         input_patched)
       || (config != last_local_config_[i]); // Check props that are not transmitted
     if (dirty_[channel]
@@ -784,8 +802,8 @@ void ChainState::PollSwitchesLinked() {
             request_.request = REQUEST_SET_SEGMENT_TYPE;
             request_.argument[0] = i;
           } else if (*t < kLongPressDurationForMultiModeToggle &&
-                     !((follows_ >> i) & 1)) {
-            // (A follower has no loop.)
+                     !(((follows_ | syncs_) >> i) & 1)) {
+            // (Followers and Sync LFOs have no loop.)
             request_.request = REQUEST_SET_LOOP;
             request_.argument[0] = group_start(i);
             request_.argument[1] = i;
@@ -799,11 +817,21 @@ void ChainState::PollSwitchesLinked() {
         const size_t lo = min(static_cast<size_t>(a), i);
         const size_t hi = max(static_cast<size_t>(a), i);
         bool has_follower = false;
+        int num_sync = 0;
         for (size_t k = lo; k <= hi; ++k) {
           has_follower = has_follower || ((follows_ >> k) & 1);
+          num_sync += (syncs_ >> k) & 1;
         }
         if (has_follower) {
           // Followers stand alone: nothing to link or loop.
+        } else if (num_sync) {
+          // Sync LFOs link only to each other, and have no loop.
+          if (num_sync == static_cast<int>(hi - lo + 1) &&
+              group_start(lo) != group_start(hi)) {
+            request_.request = REQUEST_LINK;
+            request_.argument[0] = lo;
+            request_.argument[1] = hi;
+          }
         } else if (group_start(lo) == group_start(hi)) {
           request_.request = REQUEST_SET_LOOP;
           request_.argument[0] = group_start(lo);
@@ -883,11 +911,14 @@ void ChainState::HandleRequest(Settings* settings) {
 
     if (request_.request == REQUEST_SET_SEGMENT_TYPE) {
       if (channel == request_.argument[0]) {
-        const bool was_follower = config & kFollowBit;
+        const bool was_follower = is_follower_config(config);
+        const bool was_sync = is_sync_lfo_config(config);
         config &= ~(0xff00 & ~kLinkBit); // Reset LFO range and follow, keep the link
         config &= ~0b10001011; // Reset type, bipolar, and input patched behavior bits
-        if (was_follower) {
-          // Follower -> ramp. Outside link mode a follower runs as a ramp,
+        if (was_follower && link_mode_) {
+          config |= kFollowBit | kSyncLfoType; // Follower -> Sync LFO
+        } else if (was_follower || was_sync) {
+          // -> ramp. Outside link mode followers and Sync LFOs run as ramps,
           // so move on to step there.
           config |= link_mode_ ? 0 : 1;
         } else if (link_mode_ && type_bits + 1 == num_types) {
@@ -939,17 +970,22 @@ void ChainState::Update(
       settings->in_seg_gen_mode();
   links_ = 0;
   follows_ = 0;
+  syncs_ = 0;
   for (size_t k = 0; k < kNumChannels; ++k) {
     const uint16_t config = settings->state().segment_configuration[k];
     if (k < kNumChannels - 1 && (config & kLinkBit)) {
       links_ |= 1 << k;
     }
-    if (link_mode_ && (config & kFollowBit)) {
+    if (link_mode_ && is_follower_config(config)) {
       follows_ |= 1 << k;
     }
+    if (link_mode_ && is_sync_lfo_config(config)) {
+      syncs_ |= 1 << k;
+    }
   }
-  // Link bit k joins segments k and k + 1: drop it if either is a follower.
-  links_ &= ~(follows_ | (follows_ >> 1));
+  // Link bit k joins segments k and k + 1: drop it if either is a follower,
+  // or if only one of them is a Sync LFO.
+  links_ &= ~(follows_ | (follows_ >> 1) | (syncs_ ^ (syncs_ >> 1)));
 
   switch (status_) {
     case CHAIN_DISCOVERING_NEIGHBORS:
