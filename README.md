@@ -7,6 +7,8 @@ Custom firmware for the Mutable Instruments Stages module. It's [qiemem's bipola
 
 Everything qiemem's firmware does still works.
 
+**Web page:** [thisisbribery.com/stages](https://www.thisisbribery.com/stages/), where you can also play the update audio straight from the page.
+
 ## Download
 
 Get the firmware from the [v1.0 release](https://github.com/thisisbribery/qiemem-bribery-edition/releases/tag/v1.0) or [firmware/](firmware/), or right-click a link and choose Save Link As:
