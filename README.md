@@ -26,6 +26,8 @@ On stock Stages, the gate jacks decide how segments group together: a segment wi
 
 I also wanted an envelope follower in the case without giving up a module for one. Stages segments can already read audio through their CV jacks, so any segment can now be one.
 
+And sometimes I want several LFOs that move together, like a slow one and a fast one on the same beat, without multing a clock out to every gate jack and burning a cable and a mult on it. Sync LFOs take one clock into the first segment and give every linked segment its own LFO at its own division or multiple, all locked to that clock.
+
 ## Install
 
 The module updates from an audio file. Its updater is built in and can't be damaged by a failed attempt, so you can always try again.
