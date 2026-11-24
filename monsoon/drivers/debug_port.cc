@@ -26,11 +26,11 @@
 //
 // UART driver for conversing with the factory testing program.
 
-#include "clouds/drivers/debug_port.h"
+#include "monsoon/drivers/debug_port.h"
 
 #include <stm32f4xx_conf.h>
 
-namespace clouds {
+namespace monsoon {
 
 void DebugPort::Init() {
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
@@ -61,4 +61,4 @@ void DebugPort::Init() {
   USART_Cmd(USART1, ENABLE);
 }
 
-}  // namespace clouds
+}  // namespace monsoon

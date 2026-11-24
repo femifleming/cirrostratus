@@ -26,9 +26,9 @@
 //
 // System level initialization.
 
-#include "clouds/drivers/system.h"
+#include "monsoon/drivers/system.h"
 
-namespace clouds {
+namespace monsoon {
 
 void System::Init(bool application) {
   if (application) {
@@ -40,4 +40,4 @@ void System::StartTimers() {
   SysTick_Config(F_CPU / 1000);
 }
 
-}  // namespace clouds
+}  // namespace monsoon

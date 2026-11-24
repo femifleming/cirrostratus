@@ -34,9 +34,9 @@ enum EnvTarget {
   ENV_TARGET_LAST
 };
 
+// How strongly the input envelope pushes each output knob (-1..+1).
 struct EnvRouting {
-  int8_t polarity[ENV_TARGET_LAST];  // -1, 0, +1
-  float depth;                       // 0..1
+  float amount[ENV_TARGET_LAST];
 };
 
 class Engine {

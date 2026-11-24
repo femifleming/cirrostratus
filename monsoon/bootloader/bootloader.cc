@@ -25,19 +25,19 @@
 #include "stmlib/system/bootloader_utils.h"
 #include "stmlib/system/system_clock.h"
 
-#include "clouds/drivers/codec.h"
-#include "clouds/drivers/leds.h"
-#include "clouds/drivers/switches.h"
-#include "clouds/drivers/system.h"
-#include "clouds/drivers/version.h"
-#include "clouds/meter.h"
+#include "monsoon/drivers/codec.h"
+#include "monsoon/drivers/leds.h"
+#include "monsoon/drivers/switches.h"
+#include "monsoon/drivers/system.h"
+#include "monsoon/drivers/version.h"
+#include "monsoon/meter.h"
 
 #include "stm_audio_bootloader/qpsk/packet_decoder.h"
 #include "stm_audio_bootloader/qpsk/demodulator.h"
 
 #include <cstring>
 
-using namespace clouds;
+using namespace monsoon;
 using namespace stmlib;
 using namespace stm_audio_bootloader;
 

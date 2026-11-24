@@ -26,14 +26,14 @@
 //
 // Driver for the gate inputs.
 
-#ifndef CLOUDS_DRIVERS_GATE_INPUT_H_
-#define CLOUDS_DRIVERS_GATE_INPUT_H_
+#ifndef MONSOON_DRIVERS_GATE_INPUT_H_
+#define MONSOON_DRIVERS_GATE_INPUT_H_
 
 #include "stmlib/stmlib.h"
 
 #include <stm32f4xx_conf.h>
 
-namespace clouds {
+namespace monsoon {
 
 class GateInput {
  public:
@@ -67,6 +67,6 @@ class GateInput {
   DISALLOW_COPY_AND_ASSIGN(GateInput);
 };
 
-}  // namespace clouds
+}  // namespace monsoon
 
-#endif  // CLOUDS_DRIVERS_GATE_INPUT_H_
+#endif  // MONSOON_DRIVERS_GATE_INPUT_H_

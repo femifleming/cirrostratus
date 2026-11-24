@@ -114,7 +114,7 @@ class SampleBuffer {
 
   // Hermite-interpolated read at a fractional position (wraps).
   inline float Read(int channel, float position) const {
-    float fl = floorf(position);
+    float fl = FastFloor(position);
     int32_t i = static_cast<int32_t>(fl);
     float t = position - fl;
     return Hermite(At(channel, i - 1), At(channel, i), At(channel, i + 1),

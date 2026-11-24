@@ -26,11 +26,11 @@
 //
 // Driver for the gate inputs.
 
-#include "clouds/drivers/gate_input.h"
+#include "monsoon/drivers/gate_input.h"
 
 #include <algorithm>
 
-namespace clouds {
+namespace monsoon {
 
 using namespace std;
 
@@ -57,4 +57,4 @@ void GateInput::Read() {
   trigger_ = !GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_6);
 }
 
-}  // namespace clouds
+}  // namespace monsoon

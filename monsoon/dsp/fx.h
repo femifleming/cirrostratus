@@ -122,7 +122,8 @@ class Spread {
 class Fdn {
  public:
   static const int kLines = 8;
-  static size_t MemoryBytes();
+  static const size_t kBufferSize = 16384;  // int16, power of two
+  static size_t MemoryBytes() { return kBufferSize * sizeof(int16_t); }
 
   bool Init(Arena* arena);
   // amount 0..1 sets both send level and decay time; freeze = infinite.
@@ -130,13 +131,12 @@ class Fdn {
   void Clear();
 
  private:
-  inline float ReadLine(int i, float delay) const;
-  int16_t* line_[kLines];
-  size_t length_[kLines];
-  size_t write_[kLines];
+  // All eight lines share one ring buffer and one write pointer (the
+  // Clouds FxEngine layout): line i lives at offset base_[i].
+  int16_t* buffer_;
+  uint32_t write_ptr_;
+  uint32_t base_[kLines];
   float lp_[kLines];
-  float gain_[kLines];
-  float damp_coef_;
   float lfo_phase_[2];
   float amount_smoothed_;
   Allpass<160> in_ap_[4];

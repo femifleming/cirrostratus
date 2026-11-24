@@ -26,8 +26,8 @@
 //
 // Driver for the debug (timing) pin.
 
-#ifndef CLOUDS_DRIVERS_DEBUG_PIN_H_
-#define CLOUDS_DRIVERS_DEBUG_PIN_H_
+#ifndef MONSOON_DRIVERS_DEBUG_PIN_H_
+#define MONSOON_DRIVERS_DEBUG_PIN_H_
 
 #include "stmlib/stmlib.h"
 
@@ -35,7 +35,7 @@
 #include <stm32f4xx_conf.h>
 #endif 
 
-namespace clouds {
+namespace monsoon {
 
 class DebugPin {
  public:
@@ -71,6 +71,6 @@ class DebugPin {
 #define TIC DebugPin::High();
 #define TOC DebugPin::Low();
 
-}  // namespace clouds
+}  // namespace monsoon
 
-#endif  // CLOUDS_DRIVERS_DEBUG_PIN_H_
+#endif  // MONSOON_DRIVERS_DEBUG_PIN_H_

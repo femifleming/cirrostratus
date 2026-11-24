@@ -4,3 +4,4 @@ build/
 *.wav
 !docs/*.wav
 .DS_Store
+.claude/

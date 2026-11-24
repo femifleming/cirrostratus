@@ -32,3 +32,9 @@ clean:
 	rm -rf $(BUILD)
 
 .PHONY: all test render clean
+
+BOOT_SRC := $(ROOT)/stm_audio_bootloader/qpsk/demodulator.cc \
+            $(ROOT)/stm_audio_bootloader/qpsk/packet_decoder.cc \
+            $(ROOT)/stmlib/utils/random.cc
+$(BUILD)/bootloader_sim: bootloader_sim.cc $(BOOT_SRC) | $(BUILD)
+	$(CXX) $(CXXFLAGS) -Wno-sign-compare -Wno-unused-variable $(BOOT_SRC) bootloader_sim.cc -o $@

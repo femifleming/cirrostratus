@@ -26,14 +26,14 @@
 //
 // Driver for the 4 bicolor LEDs controlled by a 595.
 
-#ifndef CLOUDS_DRIVERS_LEDS_H_
-#define CLOUDS_DRIVERS_LEDS_H_
+#ifndef MONSOON_DRIVERS_LEDS_H_
+#define MONSOON_DRIVERS_LEDS_H_
 
 #include <stm32f4xx_conf.h>
 
 #include "stmlib/stmlib.h"
 
-namespace clouds {
+namespace monsoon {
 
 class Leds {
  public:
@@ -104,6 +104,6 @@ class Leds {
   DISALLOW_COPY_AND_ASSIGN(Leds);
 };
 
-}  // namespace clouds
+}  // namespace monsoon
 
-#endif  // CLOUDS_DRIVERS_LEDS_H_
+#endif  // MONSOON_DRIVERS_LEDS_H_

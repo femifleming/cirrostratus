@@ -122,10 +122,16 @@ inline float Hermite(float xm1, float x0, float x1, float x2, float t) {
   return ((((a * t) - b_neg) * t + c) * t + x0);
 }
 
+// floor() for |x| < 2^31 with a single float->int conversion.
+inline float FastFloor(float x) {
+  float f = static_cast<float>(static_cast<int32_t>(x));
+  return f > x ? f - 1.0f : f;
+}
+
 // Fast sine/cosine from a 1024-point table (phase in cycles, any value).
 extern const float kSineTable[1025];
 inline float FastSin(float phase) {
-  phase -= floorf(phase);
+  phase -= FastFloor(phase);
   float idx = phase * 1024.0f;
   int i = static_cast<int>(idx);
   float f = idx - i;

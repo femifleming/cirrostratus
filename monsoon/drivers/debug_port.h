@@ -26,14 +26,14 @@
 //
 // UART driver for conversing with the factory testing program.
 
-#ifndef CLOUDS_DRIVERS_DEBUG_PORT_H_
-#define CLOUDS_DRIVERS_DEBUG_PORT_H_
+#ifndef MONSOON_DRIVERS_DEBUG_PORT_H_
+#define MONSOON_DRIVERS_DEBUG_PORT_H_
 
 #include "stmlib/stmlib.h"
 
 #include <stm32f4xx_conf.h>
 
-namespace clouds {
+namespace monsoon {
 
 class DebugPort {
  public:
@@ -63,6 +63,6 @@ class DebugPort {
   DISALLOW_COPY_AND_ASSIGN(DebugPort);
 };
 
-}  // namespace clouds
+}  // namespace monsoon
 
-#endif  // CLOUDS_DRIVERS_DEBUG_PORT_H_
+#endif  // MONSOON_DRIVERS_DEBUG_PORT_H_

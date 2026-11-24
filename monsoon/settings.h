@@ -1,39 +1,15 @@
-// Copyright 2014 Olivier Gillet.
-//
-// Author: Olivier Gillet (pichenettes@mutable-instruments.net)
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-// 
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-// 
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-// 
-// See http://creativecommons.org/licenses/MIT/ for more information.
-//
-// -----------------------------------------------------------------------------
-//
-// Settings storage.
+// Persistent settings (calibration, current mode, per-mode options and
+// envelope routing) and the four 128 KB save slots.
 
-#ifndef CLOUDS_SETTINGS_H_
-#define CLOUDS_SETTINGS_H_
+#ifndef MONSOON_SETTINGS_H_
+#define MONSOON_SETTINGS_H_
 
 #include "stmlib/stmlib.h"
 
-#include "clouds/drivers/adc.h"
+#include "monsoon/drivers/adc.h"
+#include "monsoon/dsp/engine.h"
 
-namespace clouds {
+namespace monsoon {
 
 struct CalibrationData {
   float pitch_offset;
@@ -41,71 +17,54 @@ struct CalibrationData {
   float offset[ADC_CHANNEL_LAST];
 };
 
-struct State {
-  uint8_t quality;
-  uint8_t playback_mode;
-  uint8_t padding;
-};
+const int kNumSlots = 4;
+const size_t kSlotBytes = 0x20000;  // one 128 KB flash sector each
 
 struct SettingsData {
-  CalibrationData calibration_data; // 48 bytes
-  State state;  // 8 bytes
-  uint8_t padding[8];
+  CalibrationData calibration_data;
+  uint32_t magic;
+  uint8_t mode;
+  uint8_t display;
+  uint8_t option[MODE_LAST];
+  int8_t env[MODE_LAST][ENV_TARGET_LAST];  // -2..+2 (half steps)
+  uint8_t padding[3];
 };
-
-class PersistentBlock;
 
 class Settings {
  public:
   Settings() { }
   ~Settings() { }
-  
+
   void Init();
   void Save();
-  
-  inline const uint32_t* sample_flash_data(uint32_t index) const {
-    return (const uint32_t*)(mutable_sample_flash_data(index));
-  }
 
-  inline uint32_t* mutable_sample_flash_data(uint32_t index) const {
-    return (uint32_t*)(0x08080000 + index * 0x0020000);
+  // Save slots live in flash sectors 8-11 (0x08080000-0x080FFFFF), the same
+  // place stock Clouds/Monsoon keeps them.
+  inline const uint8_t* slot_data(int index) const {
+    return reinterpret_cast<const uint8_t*>(0x08080000 + index * kSlotBytes);
   }
+  // Writes chunks (each padded to 4 bytes) into a slot. Takes ~1-2 s.
+  void WriteSlot(int index, const PersistentChunk* chunks, size_t n);
 
-  inline uint32_t sample_flash_sector(uint32_t index) {
-    return index + 8;
-  }
-  
-  void SaveSampleMemory(
-      uint32_t index,
-      PersistentBlock* blocks,
-      size_t num_blocks);
-  
-  inline CalibrationData* mutable_calibration_data() {
+  CalibrationData* mutable_calibration_data() {
     return &data_.calibration_data;
   }
-  
-  inline State* mutable_state() {
-    return &data_.state;
-  }
+  SettingsData* mutable_data() { return &data_; }
+  const SettingsData& data() const { return data_; }
 
-  inline const State& state() const {
-    return data_.state;
-  }
-  
-  // True when no calibration data has been found on flash sector 1, that is
-  // to say when the module has just been flashed.
-  inline bool freshly_baked() const {
-    return freshly_baked_;
-  }
-  
+  EnvRouting env_routing(int mode) const;
+  bool freshly_baked() const { return freshly_baked_; }
+  bool imported_calibration() const { return imported_calibration_; }
+
  private:
-  bool freshly_baked_;
   SettingsData data_;
   uint16_t version_token_;
-  
+  bool freshly_baked_;
+  bool imported_calibration_;
+
   DISALLOW_COPY_AND_ASSIGN(Settings);
 };
 
-}  // namespace clouds
+}  // namespace monsoon
 
-#endif  // CLOUDS_SETTINGS_H_
+#endif  // MONSOON_SETTINGS_H_

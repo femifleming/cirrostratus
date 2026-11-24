@@ -26,15 +26,15 @@
 //
 // WM8371 Codec support.
 
-#ifndef CLOUDS_DRIVERS_CODEC_H_
-#define CLOUDS_DRIVERS_CODEC_H_
+#ifndef MONSOON_DRIVERS_CODEC_H_
+#define MONSOON_DRIVERS_CODEC_H_
 
 #include <stm32f4xx_conf.h>
 
 #include "stmlib/stmlib.h"
 #include "stmlib/utils/ring_buffer.h"
 
-namespace clouds {
+namespace monsoon {
 
 const size_t kMaxCodecBlockSize = 32;
 
@@ -97,6 +97,6 @@ class Codec {
   DISALLOW_COPY_AND_ASSIGN(Codec);
 };
 
-}  // namespace clouds
+}  // namespace monsoon
 
-#endif  // CLOUDS_DRIVERS_CODEC_H_
+#endif  // MONSOON_DRIVERS_CODEC_H_

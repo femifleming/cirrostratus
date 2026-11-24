@@ -26,14 +26,14 @@
 //
 // Driver for the front panel switches.
 
-#ifndef CLOUDS_DRIVERS_SWITCHES_H_
-#define CLOUDS_DRIVERS_SWITCHES_H_
+#ifndef MONSOON_DRIVERS_SWITCHES_H_
+#define MONSOON_DRIVERS_SWITCHES_H_
 
 #include "stmlib/stmlib.h"
 
 #include <stm32f4xx_conf.h>
 
-namespace clouds {
+namespace monsoon {
 
 const uint8_t kNumSwitches = 3;
 
@@ -72,6 +72,6 @@ class Switches {
   DISALLOW_COPY_AND_ASSIGN(Switches);
 };
 
-}  // namespace clouds
+}  // namespace monsoon
 
-#endif  // CLOUDS_DRIVERS_SWITCHES_H_
+#endif  // MONSOON_DRIVERS_SWITCHES_H_

@@ -26,7 +26,7 @@
 //
 // WM8371 Codec support.
 
-#include "clouds/drivers/codec.h"
+#include "monsoon/drivers/codec.h"
 
 #include <string.h>
 
@@ -106,7 +106,7 @@
   while (x) { if ((timeout--) == 0) return false; } \
 }
 
-namespace clouds {
+namespace monsoon {
 
 /* static */
 Codec* Codec::instance_;
@@ -543,7 +543,7 @@ void Codec::Fill(size_t offset) {
   }
 }
 
-}  // namespace clouds
+}  // namespace monsoon
 
 extern "C" {
 // Do not call into the firmware library to save on calls/jumps.
@@ -553,11 +553,11 @@ extern "C" {
 void DMA1_Stream3_IRQHandler(void) {
   if (AUDIO_I2S_EXT_DMA_REG->AUDIO_I2S_EXT_DMA_ISR & AUDIO_I2S_EXT_DMA_FLAG_TC) {
     AUDIO_I2S_EXT_DMA_REG->AUDIO_I2S_EXT_DMA_IFCR = AUDIO_I2S_EXT_DMA_FLAG_TC;
-    clouds::Codec::GetInstance()->Fill(1);
+    monsoon::Codec::GetInstance()->Fill(1);
   }
   if (AUDIO_I2S_EXT_DMA_REG->AUDIO_I2S_EXT_DMA_ISR & AUDIO_I2S_EXT_DMA_FLAG_HT) {
     AUDIO_I2S_EXT_DMA_REG->AUDIO_I2S_EXT_DMA_IFCR = AUDIO_I2S_EXT_DMA_FLAG_HT;
-    clouds::Codec::GetInstance()->Fill(0);
+    monsoon::Codec::GetInstance()->Fill(0);
   }
 }
   

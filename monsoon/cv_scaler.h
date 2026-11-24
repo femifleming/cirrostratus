@@ -1,113 +1,86 @@
-// Copyright 2014 Olivier Gillet.
-//
-// Author: Olivier Gillet (pichenettes@mutable-instruments.net)
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-// 
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-// 
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-// 
-// See http://creativecommons.org/licenses/MIT/ for more information.
-//
-// -----------------------------------------------------------------------------
-//
-// Calibration settings.
+// Reads pots, CVs and gates and turns them into monsoon::Controls.
+// Channel order, flips and offsets follow Tom Burns' Monsoon port of the
+// Clouds firmware, so the panel behaves exactly as with stock firmware.
 
-#ifndef CLOUDS_CV_SCALER_H_
-#define CLOUDS_CV_SCALER_H_
+#ifndef MONSOON_CV_SCALER_H_
+#define MONSOON_CV_SCALER_H_
 
 #include "stmlib/stmlib.h"
 
-#include "clouds/settings.h"
-#include "clouds/drivers/adc.h"
-#include "clouds/drivers/gate_input.h"
-#include "clouds/dsp/parameters.h"
+#include "monsoon/drivers/adc.h"
+#include "monsoon/drivers/gate_input.h"
+#include "monsoon/dsp/core.h"
+#include "monsoon/settings.h"
 
-namespace clouds {
-
-struct CvTransformation {
-  bool flip;
-  bool remove_offset;
-  float filter_coefficient;
-};
+namespace monsoon {
 
 class CvScaler {
  public:
   CvScaler() { }
   ~CvScaler() { }
-  
-  void Init(CalibrationData* calibration_data);
-  void Read(Parameters* parameters);
-  
-  void CalibrateC1() {
-    cv_c1_ = adc_.float_value(ADC_V_OCT_CV);
-  }
 
+  void Init(CalibrationData* calibration_data);
+  void Read(Controls* controls);
+
+  // While the mode menu is open, POSITION picks a mode: the sound keeps the
+  // last position value instead of following the slider.
+  void set_hold_position(bool hold) { hold_position_ = hold; }
+  float raw_position() const { return smoothed_[ADC_POSITION_POTENTIOMETER_CV]; }
+
+  void ToggleFreezeButton() { freeze_button_ = !freeze_button_; }
+  bool freeze() const { return freeze_; }
+
+  void CalibrateC1() { cv_c1_ = adc_.float_value(ADC_V_OCT_CV); }
   void CalibrateOffsets() {
     for (size_t i = 0; i < ADC_CHANNEL_LAST; ++i) {
       calibration_data_->offset[i] = adc_.float_value(i);
     }
   }
-  
   bool CalibrateC3() {
-    float c3 = adc_.float_value(ADC_V_OCT_CV);  // 0.4848 v0.1 ; 0.3640 v0.2
-    float c1 = cv_c1_;  // 0.6666 v0.1 ; 0.6488 v0.2
+    float c3 = adc_.float_value(ADC_V_OCT_CV);
+    float c1 = cv_c1_;
     float delta = c3 - c1;
     if (delta > -0.5f && delta < -0.0f) {
       calibration_data_->pitch_scale = 24.0f / (c3 - c1);
-      calibration_data_->pitch_offset = 12.0f - \
+      calibration_data_->pitch_offset = 12.0f -
           calibration_data_->pitch_scale * c1;
       return true;
-    } else {
-      return false;
     }
-  }
-  
-  inline uint8_t adc_value(size_t index) const {
-    return adc_.value(index) >> 8;
-  }
-  
-  inline bool gate(size_t index) const {
-    return index == 0 ? gate_input_.freeze() : gate_input_.trigger();
+    return false;
   }
 
-  float previous_dry_wet;
-  float previous_reverb;
-  float previous_feedback;
-  float previous_stereo;
+  // Output-section values (for the DISP page).
+  float wet() const { return last_.blend; }
+  float stereo() const { return last_.spread; }
+  float feedback() const { return last_.feedback; }
+  float reverb() const { return last_.reverb; }
 
  private:
+  struct Transformation {
+    bool flip;
+    bool remove_offset;
+    float filter_coefficient;
+  };
   static const int kAdcLatency = 5;
-  
+  static const Transformation transformations_[ADC_CHANNEL_LAST];
+
   Adc adc_;
   GateInput gate_input_;
   CalibrationData* calibration_data_;
-  
-  float smoothed_adc_value_[ADC_CHANNEL_LAST];
-  static CvTransformation transformations_[ADC_CHANNEL_LAST];
-  
+  float smoothed_[ADC_CHANNEL_LAST];
   float note_;
   float cv_c1_;
-  
+  float held_position_;
+  bool hold_position_;
+  bool freeze_button_;
+  bool freeze_;
   bool previous_trigger_[kAdcLatency];
   bool previous_gate_[kAdcLatency];
-  
+  Controls last_;
+
   DISALLOW_COPY_AND_ASSIGN(CvScaler);
 };
 
-}  // namespace clouds
+}  // namespace monsoon
 
-#endif  // CLOUDS_CV_SCALER_H_
+#endif  // MONSOON_CV_SCALER_H_

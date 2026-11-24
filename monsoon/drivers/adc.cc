@@ -26,11 +26,11 @@
 //
 // Driver for ADC.
 
-#include "clouds/drivers/adc.h"
+#include "monsoon/drivers/adc.h"
 
 #include <stm32f4xx_conf.h>
 
-namespace clouds {
+namespace monsoon {
   
 void Adc::Init() {
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_DMA2, ENABLE);
@@ -125,4 +125,4 @@ void Adc::DeInit() {
   ADC_DeInit();
 }
 
-}  // namespace clouds
+}  // namespace monsoon

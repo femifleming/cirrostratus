@@ -22,13 +22,17 @@ Source of truth for the modes. The manual (MANUAL.md) is written from this.
 
 | Field | Panel | Range |
 |---|---|---|
-| position | POSITION knob + CV | 0..1 |
-| size | SIZE knob + CV | 0..1 |
-| density | DENSITY knob + CV | 0..1 |
-| texture | TEXTURE knob + CV | 0..1 |
-| pitch | PITCH knob + V/OCT | semitones, −48..+48, 0 at noon |
-| blend / spread / feedback / reverb | the 4 sliders + CV | 0..1 |
+| position | POSITION slider + CV | 0..1 |
+| density | DENSITY slider + CV | 0..1 |
+| size | SIZE slider + CV | 0..1 |
+| texture | TEXTURE slider + CV | 0..1 |
+| pitch | TUNE knob + V/OCT | semitones, −48..+48, 0 at noon |
+| blend / spread / feedback / reverb | WET / STER / FDB / RVB knobs + CV | 0..1 |
 | freeze | FREEZE button toggle or FREEZE gate | bool |
+
+Panel buttons: DISP (top left), WRITE (pencil, top right), FREEZE (big).
+In the text below "PITCH" means the TUNE knob + V/OCT input, and the
+output-section names refer to the four small knobs.
 | trigger | TRIG input rising edge this block | bool |
 | gate | TRIG input level | bool |
 | option | chosen in the mode menu | 0..num_options−1 |
@@ -44,17 +48,17 @@ red for i ≥ 4. For buffer modes with a mono choice: options 0–3 stereo,
 
 1. Input + feedback → mode. Feedback = wet output → 25 Hz HP →
    ResonanceTamer (two adaptive notches; depth rises with how much of the
-   loop's energy sits in narrow peaks, scaled by the FEEDBACK slider) →
+   loop's energy sits in narrow peaks, scaled by the FDB knob) →
    soft clip. Gain curve: smoothstep(feedback).
 2. Wet → DC blocker → Spread: 0 = mono, 0.5 = as produced, 1 = wide
    (side gain up to 1.6 + mono-compatible allpass decorrelation + ≤0.35 ms
    Haas at the very top).
 3. Blend: equal power dry/wet.
 4. Reverb: 8-line FDN with 16-bit lines (≈ 15 k samples), modulated, T60
-   0.5–16.5 s from the REVERB slider, which also sets the send level.
+   0.5–16.5 s from the RVB knob, which also sets the send level.
 5. Limiter (−1 dBFS, transparent below −2 dBFS) → TPDF dither → codec.
 
-Envelope follower: input level can push any of the 4 slider values up or
+Envelope follower: input level can push any of the 4 output knobs up or
 down (per-mode routing, set in the ENV page).
 
 ## Modes

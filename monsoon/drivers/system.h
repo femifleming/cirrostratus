@@ -26,14 +26,14 @@
 //
 // System-level initialization.
 
-#ifndef CLOUDS_DRIVERS_SYSTEM_H_
-#define CLOUDS_DRIVERS_SYSTEM_H_
+#ifndef MONSOON_DRIVERS_SYSTEM_H_
+#define MONSOON_DRIVERS_SYSTEM_H_
 
 #include <stm32f4xx_conf.h>
 
 #include "stmlib/stmlib.h"
 
-namespace clouds {
+namespace monsoon {
 
 class System {
  public:
@@ -47,6 +47,6 @@ class System {
   DISALLOW_COPY_AND_ASSIGN(System);
 };
 
-}  // namespace clouds
+}  // namespace monsoon
 
-#endif  // CLOUDS_DRIVERS_SYSTEM_H_
+#endif  // MONSOON_DRIVERS_SYSTEM_H_

@@ -1,172 +1,107 @@
-// Copyright 2014 Olivier Gillet.
-//
-// Author: Olivier Gillet (pichenettes@mutable-instruments.net)
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-// 
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-// 
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-// 
-// See http://creativecommons.org/licenses/MIT/ for more information.
-//
-// -----------------------------------------------------------------------------
-//
-// Calibration settings.
-
-#include "clouds/cv_scaler.h"
+#include "monsoon/cv_scaler.h"
 
 #include <algorithm>
-#include <cmath>
 
-#include "stmlib/dsp/dsp.h"
-
-#include "clouds/resources.h"
-
-namespace clouds {
+namespace monsoon {
 
 using namespace std;
 
-/* static */
-CvTransformation CvScaler::transformations_[ADC_CHANNEL_LAST] = {
-  // ADC_POSITION_POTENTIOMETER_CV,
-  { true, false, 0.05f },
-  // ADC_DENSITY_POTENTIOMETER_CV,
-  { true, false, 0.01f },
-  // ADC_SIZE_POTENTIOMETER,
-  { false, false, 0.01f },
-  // ADC_SIZE_CV,
-  { false, true, 0.1f },
-  // ADC_PITCH_POTENTIOMETER,
-  { false, false, 0.01f },
-  // ADC_V_OCT_CV,
-  { false, false, 1.00f },
-  // ADC_WET_POTENTIOMETER,
-  { false, false, 0.05f },
-  // ADC_WET_CV,
-  { false, true, 0.2f },
-  //ADC_FEEDBACK_POTENTIOMETER_CV,
-  { true, false, 0.01f },
-  //ADC_STEREO_POTENTIOMETER_CV,
-  { true, false, 0.01f },
-  //ADC_REVERB_POTENTIOMETER_CV,
-  { true, false, 0.01f },
-  // ADC_TEXTURE_POTENTIOMETER,
-  { false, false, 0.01f },
-  // ADC_TEXTURE_CV,
-  { false, true, 0.01f }
+// Same table as the Monsoon build of Clouds (boourns/eurorack).
+const CvScaler::Transformation CvScaler::transformations_[ADC_CHANNEL_LAST] = {
+  { true, false, 0.05f },   // POSITION pot+CV
+  { true, false, 0.01f },   // DENSITY pot+CV
+  { false, false, 0.01f },  // SIZE pot
+  { false, true, 0.1f },    // SIZE CV
+  { false, false, 0.01f },  // PITCH pot
+  { false, false, 1.00f },  // V/OCT
+  { false, false, 0.05f },  // WET pot
+  { false, true, 0.2f },    // WET CV
+  { true, false, 0.01f },   // STEREO pot+CV
+  { true, false, 0.01f },   // FEEDBACK pot+CV
+  { true, false, 0.01f },   // REVERB pot+CV
+  { false, false, 0.01f },  // TEXTURE pot
+  { false, true, 0.01f },   // TEXTURE CV
 };
+
+// TUNE knob: -48..+48 semitones with gentle "magnetic" plateaus on each
+// semitone, so it is easy to land on exact intervals.
+static float KnobToSemitones(float k) {
+  float x = (k - 0.5f) * 96.0f;
+  float n = floorf(x + 0.5f);
+  float f = x - n;  // -0.5..0.5
+  return n + 4.0f * f * f * f;
+}
 
 void CvScaler::Init(CalibrationData* calibration_data) {
   adc_.Init();
   gate_input_.Init();
   calibration_data_ = calibration_data;
-  fill(&smoothed_adc_value_[0], &smoothed_adc_value_[ADC_CHANNEL_LAST], 0.0f);
+  fill(&smoothed_[0], &smoothed_[ADC_CHANNEL_LAST], 0.0f);
   note_ = 0.0f;
-  
+  cv_c1_ = 0.0f;
+  held_position_ = 0.0f;
+  hold_position_ = false;
+  freeze_button_ = false;
+  freeze_ = false;
   fill(&previous_trigger_[0], &previous_trigger_[kAdcLatency], false);
   fill(&previous_gate_[0], &previous_gate_[kAdcLatency], false);
+  memset(&last_, 0, sizeof(last_));
 }
 
-void CvScaler::Read(Parameters* parameters) {
-
+void CvScaler::Read(Controls* c) {
   for (size_t i = 0; i < ADC_CHANNEL_LAST; ++i) {
-    const CvTransformation& transformation = transformations_[i];
-    
+    const Transformation& t = transformations_[i];
     float value = adc_.float_value(i);
-    if (transformation.flip) {
-      value = 1.0f - value;
-    }
-    if (transformation.remove_offset) {
-      value -= calibration_data_->offset[i];
-    }
-
-    smoothed_adc_value_[i] += transformation.filter_coefficient * \
-        (value - smoothed_adc_value_[i]);
+    if (t.flip) value = 1.0f - value;
+    if (t.remove_offset) value -= calibration_data_->offset[i];
+    smoothed_[i] += t.filter_coefficient * (value - smoothed_[i]);
   }
-  
-  parameters->position = smoothed_adc_value_[ADC_POSITION_POTENTIOMETER_CV];
-  
-  float texture = smoothed_adc_value_[ADC_TEXTURE_POTENTIOMETER];
-  texture -= smoothed_adc_value_[ADC_TEXTURE_CV] * 2.0f;
-  CONSTRAIN(texture, 0.0f, 1.0f);
-  parameters->texture = texture;
 
-  float density = smoothed_adc_value_[ADC_DENSITY_POTENTIOMETER_CV];
-  CONSTRAIN(density, 0.0f, 1.0f);
-  parameters->density = density;
+  float position = Clamp(smoothed_[ADC_POSITION_POTENTIOMETER_CV], 0.0f, 1.0f);
+  if (hold_position_) {
+    position = held_position_;
+  } else {
+    held_position_ = position;
+  }
+  c->position = position;
+  c->density = Clamp(smoothed_[ADC_DENSITY_POTENTIOMETER_CV], 0.0f, 1.0f);
+  c->size = Clamp(smoothed_[ADC_SIZE_POTENTIOMETER] - smoothed_[ADC_SIZE_CV],
+                  0.0f, 1.0f);
+  c->texture = Clamp(smoothed_[ADC_TEXTURE_POTENTIOMETER] -
+                     smoothed_[ADC_TEXTURE_CV] * 2.0f, 0.0f, 1.0f);
+  c->blend = Clamp(smoothed_[ADC_WET_POTENTIOMETER] - smoothed_[ADC_WET_CV],
+                   0.0f, 1.0f);
+  c->spread = Clamp(smoothed_[ADC_STEREO_POTENTIOMETER_CV], 0.0f, 1.0f);
+  c->feedback = Clamp(smoothed_[ADC_FEEDBACK_POTENTIOMETER_CV], 0.0f, 1.0f);
+  c->reverb = Clamp(smoothed_[ADC_REVERB_POTENTIOMETER_CV], 0.0f, 1.0f);
 
-  parameters->size = smoothed_adc_value_[ADC_SIZE_POTENTIOMETER];
-  parameters->size -= smoothed_adc_value_[ADC_SIZE_CV];
-  CONSTRAIN(parameters->size, 0.0f, 1.0f);
-  
-  // reworked for uBurst expanded
-
-  parameters->dry_wet = smoothed_adc_value_[ADC_WET_POTENTIOMETER];
-  parameters->dry_wet -= smoothed_adc_value_[ADC_WET_CV];
-  CONSTRAIN(parameters->dry_wet, 0.0f, 1.0f);
-  previous_dry_wet = parameters->dry_wet;
-
-  float reverb = smoothed_adc_value_[ADC_REVERB_POTENTIOMETER_CV];
-  CONSTRAIN(reverb, 0.0f, 1.0f);
-  parameters->reverb = reverb;
-  previous_reverb = reverb;
-
-  float feedback = smoothed_adc_value_[ADC_FEEDBACK_POTENTIOMETER_CV];
-  CONSTRAIN(feedback, 0.0f, 1.0f);
-  parameters->feedback = feedback;
-  previous_feedback = feedback;
-
-  float stereo = smoothed_adc_value_[ADC_STEREO_POTENTIOMETER_CV];
-  CONSTRAIN(stereo, 0.0f, 1.0f);
-  parameters->stereo_spread = stereo;
-  previous_stereo = stereo;
-  
-  parameters->pitch = stmlib::Interpolate(
-      lut_quantized_pitch,
-      smoothed_adc_value_[ADC_PITCH_POTENTIOMETER],
-      1024.0f);
-  
-  float note = calibration_data_->pitch_offset;
-  note += smoothed_adc_value_[ADC_V_OCT_CV] * calibration_data_->pitch_scale;
-  if (fabs(note - note_) > 0.5f) {
+  float note = calibration_data_->pitch_offset +
+      smoothed_[ADC_V_OCT_CV] * calibration_data_->pitch_scale;
+  if (fabsf(note - note_) > 0.5f) {
     note_ = note;
   } else {
-    ONE_POLE(note_, note, 0.2f)
+    note_ += 0.2f * (note - note_);
   }
-  
-  parameters->pitch += note_;
-  CONSTRAIN(parameters->pitch, -48.0f, 48.0f);
-  
+  c->pitch = Clamp(KnobToSemitones(smoothed_[ADC_PITCH_POTENTIOMETER]) + note_,
+                   -48.0f, 48.0f);
+
+  // FREEZE gate inverts the button state, so both work together.
   gate_input_.Read();
-  if (gate_input_.freeze_rising_edge()) {
-    parameters->freeze = true;
-  } else if (gate_input_.freeze_falling_edge()) {
-    parameters->freeze = false;
-  }
-  
-  parameters->trigger = previous_trigger_[0];
-  parameters->gate = previous_gate_[0];
+  freeze_ = freeze_button_ != gate_input_.freeze();
+  c->freeze = freeze_;
+
+  // TRIG is delayed to line up with the (slower) ADC readings.
+  c->trigger = previous_trigger_[0];
+  c->gate = previous_gate_[0];
   for (int i = 0; i < kAdcLatency - 1; ++i) {
     previous_trigger_[i] = previous_trigger_[i + 1];
     previous_gate_[i] = previous_gate_[i + 1];
   }
   previous_trigger_[kAdcLatency - 1] = gate_input_.trigger_rising_edge();
   previous_gate_[kAdcLatency - 1] = gate_input_.gate();
-  
+
+  last_ = *c;
   adc_.Convert();
 }
 
-}  // namespace clouds
+}  // namespace monsoon

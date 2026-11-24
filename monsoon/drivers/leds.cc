@@ -26,11 +26,11 @@
 //
 // Driver for the 4 bicolor LEDs controlled by a 595.
 
-#include "clouds/drivers/leds.h"
+#include "monsoon/drivers/leds.h"
 
 #include <algorithm>
 
-namespace clouds {
+namespace monsoon {
   
 using namespace std;
   
@@ -97,4 +97,4 @@ void Leds::Clear() {
   freeze_led_ = false;
 }
 
-}  // namespace clouds
+}  // namespace monsoon

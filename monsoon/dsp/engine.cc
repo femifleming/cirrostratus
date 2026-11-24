@@ -92,7 +92,6 @@ bool Engine::Init(void* main_mem, size_t main_size,
   dither_.Seed(0xBEEF);
   envelope_.Init(0.004f, 0.18f);
   memset(&env_routing_, 0, sizeof(env_routing_));
-  env_routing_.depth = 0.5f;
   memset(feedback_signal_, 0, sizeof(feedback_signal_));
   blend_.Init(0.5f);
   spread_amt_.Init(0.5f);
@@ -209,13 +208,13 @@ void Engine::Prepare() {
 void Engine::ApplyEnvelope(const Controls& raw, Controls* c) {
   *c = raw;
   c->option = active_option_;
-  float env = Clamp(envelope_.value() * 2.5f, 0.0f, 1.0f) * env_routing_.depth;
+  float env = Clamp(envelope_.value() * 2.5f, 0.0f, 1.0f);
   float* targets[ENV_TARGET_LAST] = {
     &c->blend, &c->spread, &c->feedback, &c->reverb
   };
   for (int i = 0; i < ENV_TARGET_LAST; ++i) {
-    if (env_routing_.polarity[i]) {
-      *targets[i] = Clamp(*targets[i] + env * env_routing_.polarity[i],
+    if (env_routing_.amount[i] != 0.0f) {
+      *targets[i] = Clamp(*targets[i] + env * env_routing_.amount[i],
                           0.0f, 1.0f);
     }
   }
@@ -264,12 +263,19 @@ void Engine::ProcessFloat(const Controls& raw, const FloatFrame* in,
     } else if (state_ != STATE_RUNNING) {
       fade_ = 0.0f;
     }
-    float g = silence_ ? 0.0f : fade_;
+    float g = fade_;
     wet_[i].l *= g;
     wet_[i].r *= g;
   }
 
-  blend_.Start(c.blend, n);
+  // Equal-power blend gains, computed at block rate and ramped.
+  const float b0 = blend_.value();
+  const float b1 = c.blend;
+  float wet_gain = FastSin(b0 * 0.25f), dry_gain = FastCos(b0 * 0.25f);
+  const float inv_n = 1.0f / static_cast<float>(n);
+  const float wet_inc = (FastSin(b1 * 0.25f) - wet_gain) * inv_n;
+  const float dry_inc = (FastCos(b1 * 0.25f) - dry_gain) * inv_n;
+  blend_.Init(b1);
   spread_amt_.Start(c.spread, n);
   feedback_.Start(c.feedback, n);
   for (size_t i = 0; i < n; ++i) {
@@ -293,14 +299,11 @@ void Engine::ProcessFloat(const Controls& raw, const FloatFrame* in,
     r = out_dc_[1].Process(r);
     spread_.Process(spread_amt_.Next(), &l, &r);
 
-    // Equal-power blend.
-    float b = blend_.Next();
-    float wet_gain = FastSin(b * 0.25f);
-    float dry_gain = FastCos(b * 0.25f);
+    wet_gain += wet_inc;
+    dry_gain += dry_inc;
     out[i].l = dry_[i].l * dry_gain + l * wet_gain;
     out[i].r = dry_[i].r * dry_gain + r * wet_gain;
   }
-  blend_.Finish();
   spread_amt_.Finish();
   feedback_.Finish();
 
@@ -313,6 +316,9 @@ void Engine::ProcessFloat(const Controls& raw, const FloatFrame* in,
     out[i].l = l;
     out[i].r = r;
   }
+  // While flash is written the whole output is muted, so the codec's DMA
+  // loop (which keeps cycling the last buffer) only repeats silence.
+  if (silence_) memset(out, 0, sizeof(FloatFrame) * n);
 }
 
 void Engine::Process(const Controls& raw, const ShortFrame* in,
@@ -325,12 +331,17 @@ void Engine::Process(const Controls& raw, const ShortFrame* in,
     fin[i].r = in[i].r * k;
   }
   ProcessFloat(raw, fin, fout, n);
-  // TPDF dither at 1 LSB.
+  // TPDF dither at 1 LSB: the difference of two uniform 16-bit values
+  // taken from one 32-bit random number per channel.
+  const float kDither = 1.0f / 65536.0f;
   for (size_t i = 0; i < n; ++i) {
-    float dl = (dither_.Float() - dither_.Float());
-    float dr = (dither_.Float() - dither_.Float());
-    int32_t l = static_cast<int32_t>(lrintf(fout[i].l * 32767.0f + dl));
-    int32_t r = static_cast<int32_t>(lrintf(fout[i].r * 32767.0f + dr));
+    uint32_t ra = dither_.Next(), rb = dither_.Next();
+    float dl = (static_cast<int32_t>(ra & 0xffff) - static_cast<int32_t>(ra >> 16)) * kDither;
+    float dr = (static_cast<int32_t>(rb & 0xffff) - static_cast<int32_t>(rb >> 16)) * kDither;
+    float vl = fout[i].l * 32767.0f + dl;
+    float vr = fout[i].r * 32767.0f + dr;
+    int32_t l = static_cast<int32_t>(vl + (vl >= 0.0f ? 0.5f : -0.5f));
+    int32_t r = static_cast<int32_t>(vr + (vr >= 0.0f ? 0.5f : -0.5f));
     if (l > 32767) l = 32767;
     if (l < -32767) l = -32767;
     if (r > 32767) r = 32767;

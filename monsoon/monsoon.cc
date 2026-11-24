@@ -1,0 +1,104 @@
+// Monsoon HiFi firmware - entry point.
+//
+// Hardware: Monsoon (Jak Plugg), a 12HP Clouds variant: STM32F405 + WM8731.
+// Audio runs at 48 kHz in blocks of 32 frames from the codec DMA interrupt;
+// the main loop runs the UI and the modes' background work (FFTs etc).
+
+#include "monsoon/cv_scaler.h"
+#include "monsoon/drivers/codec.h"
+#include "monsoon/drivers/debug_pin.h"
+#include "monsoon/drivers/system.h"
+#include "monsoon/drivers/version.h"
+#include "monsoon/dsp/engine.h"
+#include "monsoon/dsp/memory.h"
+#include "monsoon/meter.h"
+#include "monsoon/settings.h"
+#include "monsoon/ui.h"
+
+// #define PROFILE_INTERRUPT 1
+
+using namespace monsoon;
+using namespace stmlib;
+
+Engine engine;
+Codec codec;
+CvScaler cv_scaler;
+Meter meter;
+Settings settings;
+Ui ui;
+Controls controls;
+
+// The two big RAM blocks the engine carves up. No malloc anywhere.
+uint8_t block_main[kMainMemoryBytes] __attribute__ ((aligned (8)));
+uint8_t block_ccm[kCcmMemoryBytes] __attribute__ ((aligned (8), section (".ccmdata")));
+
+int __errno;
+
+extern "C" {
+
+void NMI_Handler() { }
+void HardFault_Handler() { while (1); }
+void MemManage_Handler() { while (1); }
+void BusFault_Handler() { while (1); }
+void UsageFault_Handler() { while (1); }
+void SVC_Handler() { }
+void DebugMon_Handler() { }
+void PendSV_Handler() { }
+
+void SysTick_Handler() {
+  ui.Poll();
+}
+
+}
+
+void FillBuffer(Codec::Frame* input, Codec::Frame* output, size_t n) {
+#ifdef PROFILE_INTERRUPT
+  TIC
+#endif
+  cv_scaler.Read(&controls);
+  engine.Process(controls, reinterpret_cast<const ShortFrame*>(input),
+                 reinterpret_cast<ShortFrame*>(output), n);
+  meter.Process(controls.freeze ? output : input, n);
+#ifdef PROFILE_INTERRUPT
+  TOC
+#endif
+}
+
+void Init() {
+  System sys;
+  Version version;
+  sys.Init(true);
+  version.Init();
+
+  settings.Init();
+  cv_scaler.Init(settings.mutable_calibration_data());
+  memset(&controls, 0, sizeof(controls));
+  meter.Init(48000);
+
+  bool engine_ok = engine.Init(block_main, sizeof(block_main),
+                               block_ccm, sizeof(block_ccm));
+  ui.Init(&settings, &cv_scaler, &engine, &meter);
+  if (!engine_ok) {
+    ui.Panic();
+  }
+
+  bool master = !version.revised();
+  if (!codec.Init(master, 48000)) {
+    ui.Panic();
+  }
+  if (!codec.Start(kBlockSize, &FillBuffer)) {
+    ui.Panic();
+  }
+#ifdef PROFILE_INTERRUPT
+  DebugPin::Init();
+#endif
+  sys.StartTimers();
+}
+
+int main(void) {
+  Init();
+  while (1) {
+    ui.DoEvents();
+    engine.Prepare();
+  }
+}

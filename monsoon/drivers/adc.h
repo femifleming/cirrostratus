@@ -26,12 +26,12 @@
 //
 // Driver for ADC.
 
-#ifndef CLOUDS_DRIVERS_ADC_H_
-#define CLOUDS_DRIVERS_ADC_H_
+#ifndef MONSOON_DRIVERS_ADC_H_
+#define MONSOON_DRIVERS_ADC_H_
 
 #include "stmlib/stmlib.h"
 
-namespace clouds {
+namespace monsoon {
 
 enum AdcChannel {
   ADC_POSITION_POTENTIOMETER_CV,
@@ -70,6 +70,6 @@ class Adc {
   DISALLOW_COPY_AND_ASSIGN(Adc);
 };
 
-}  // namespace clouds
+}  // namespace monsoon
 
-#endif  // CLOUDS_DRIVERS_ADC_H_
+#endif  // MONSOON_DRIVERS_ADC_H_

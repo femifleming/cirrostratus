@@ -26,14 +26,14 @@
 //
 // Driver for reading the hardware revision pin.
 
-#ifndef CLOUDS_DRIVERS_VERSION_H_
-#define CLOUDS_DRIVERS_VERSION_H_
+#ifndef MONSOON_DRIVERS_VERSION_H_
+#define MONSOON_DRIVERS_VERSION_H_
 
 #include "stmlib/stmlib.h"
 
 #include <stm32f4xx_conf.h>
 
-namespace clouds {
+namespace monsoon {
 
 class Version {
  public:
@@ -57,6 +57,6 @@ class Version {
   DISALLOW_COPY_AND_ASSIGN(Version);
 };
 
-}  // namespace clouds
+}  // namespace monsoon
 
-#endif  // CLOUDS_DRIVERS_VERSION_H_
+#endif  // MONSOON_DRIVERS_VERSION_H_

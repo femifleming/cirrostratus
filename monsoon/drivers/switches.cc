@@ -26,11 +26,11 @@
 //
 // Driver for the front panel switches.
 
-#include "clouds/drivers/switches.h"
+#include "monsoon/drivers/switches.h"
 
 #include <algorithm>
 
-namespace clouds {
+namespace monsoon {
 
 using namespace std;
 
@@ -66,4 +66,4 @@ void Switches::Debounce() {
       GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_8);
 }
 
-}  // namespace clouds
+}  // namespace monsoon

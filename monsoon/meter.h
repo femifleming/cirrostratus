@@ -26,14 +26,14 @@
 //
 // Vu-meter
 
-#ifndef CLOUDS_METER_H_
-#define CLOUDS_METER_H_
+#ifndef MONSOON_METER_H_
+#define MONSOON_METER_H_
 
 #include "stmlib/stmlib.h"
 
-#include "clouds/drivers/codec.h"
+#include "monsoon/drivers/codec.h"
 
-namespace clouds {
+namespace monsoon {
 
 class Meter {
  public:
@@ -79,6 +79,6 @@ class Meter {
   DISALLOW_COPY_AND_ASSIGN(Meter);
 };    
 
-}  // namespace clouds
+}  // namespace monsoon
 
-#endif  // CLOUDS_METER_H_
+#endif  // MONSOON_METER_H_
