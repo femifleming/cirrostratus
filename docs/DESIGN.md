@@ -27,7 +27,7 @@ Source of truth for the modes. The manual (MANUAL.md) is written from this.
 | size | SIZE slider + CV | 0..1 |
 | texture | TEXTURE slider + CV | 0..1 |
 | pitch | TUNE knob + V/OCT | semitones, −48..+48, 0 at noon |
-| blend / spread / feedback / reverb | WET / STER / FDB / RVB knobs + CV | 0..1 |
+| blend / spread / feedback / reverb | WET / BAL / FBK / RVB knobs + CV | 0..1 |
 | freeze | FREEZE button toggle or FREEZE gate | bool |
 
 Panel buttons: DISP (top left), WRITE (pencil, top right), FREEZE (big).
@@ -48,7 +48,7 @@ red for i ≥ 4. For buffer modes with a mono choice: options 0–3 stereo,
 
 1. Input + feedback → mode. Feedback = wet output → 25 Hz HP →
    ResonanceTamer (two adaptive notches; depth rises with how much of the
-   loop's energy sits in narrow peaks, scaled by the FDB knob) →
+   loop's energy sits in narrow peaks, scaled by the FBK knob) →
    soft clip. Gain curve: smoothstep(feedback).
 2. Wet → DC blocker → Spread: 0 = mono, 0.5 = as produced, 1 = wide
    (side gain up to 1.6 + mono-compatible allpass decorrelation + ≤0.35 ms

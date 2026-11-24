@@ -57,7 +57,7 @@ of the "build_4" Monsoon firmwares.
    no system sounds, close the chat apps.
 3. **Hold FREEZE** and switch the rack on. The FREEZE LED blinks: the module
    is listening for weather data.
-4. Computer volume about ¾, **IN LEVEL** about noon.
+4. Computer volume about ¾, **GAIN** about noon.
 5. Play `cirrostratus.wav` from the beginning (about 53 s). It sounds like a
    modem singing. That's correct.
    - While it receives, the LEDs dance with the level.
@@ -99,11 +99,11 @@ of the "build_4" Monsoon firmwares.
 | slider + CV | **DENSITY** | |
 | slider + CV | **SIZE** | |
 | slider + CV | **TEXTURE** | |
-| big knob + V/OCT | **PITCH** | ±4 octaves; it gently snaps to semitones; noon = no change |
-| IN LEVEL | input gain | analog, as before |
+| TUNE knob + V/OCT | **PITCH** | ±4 octaves; it gently snaps to semitones; noon = no change |
+| GAIN | input gain | analog, as before |
 | WET + CV | **BLEND** | dry ↔ wet, equal power |
-| STER + CV | **SPREAD** | mono ↔ as-is ↔ extra wide |
-| FDB + CV | **FEEDBACK** | the mode's output back into itself |
+| BAL + CV | **SPREAD** | mono ↔ as-is ↔ extra wide |
+| FBK + CV | **FEEDBACK** | the mode's output back into itself |
 | RVB + CV | **REVERB** | how much and how long |
 | FREEZE + gate | **FREEZE** | the gate flips whatever the button says |
 | TRIG in | **TRIG** | a different job in every mode |
@@ -132,7 +132,7 @@ Any button skips it (that press does nothing else).
 
 ### 3.1 Looking at the sky
 - **Tap DISP**: the LEDs flip between the **input level** meter and the
-  values of **WET / STER / FDB / RVB**. While frozen, the meter shows the
+  values of **WET / BAL / FBK / RVB**. While frozen, the meter shows the
   output.
 - The FREEZE LED is the freeze state, always.
 
@@ -183,7 +183,7 @@ Your input's loudness can push any of the four output knobs up or down: the
 reverb that ducks while you play, the wet that opens on loud notes, the
 feedback that swells in the gaps.
 
-- **Hold FREEZE, tap DISP**: LEDs = WET · STER · FDB · RVB.
+- **Hold FREEZE, tap DISP**: LEDs = WET · BAL · FBK · RVB.
 - **DISP** moves the cursor (blinking).
 - **FREEZE** cycles its amount: off → +½ (dim green) → +1 (green) →
   −½ (dim red) → −1 (red) → off.
@@ -216,7 +216,7 @@ IN ─┬───────────────────────�
 - **FEEDBACK with manners.** Inside the loop sits a little Quell: two
   adaptive notches hunt for the loudest narrow peaks and cut harder the more
   of the loop's energy piles into them. Broad sound passes; a whistle gets
-  talked down. Crank FDB and things *bloom* instead of shriek.
+  talked down. Crank FBK and things *bloom* instead of shriek.
 - **SPREAD**: 0 = mono, noon = untouched, full = wide. The widener is
   mid/side plus an allpass decorrelator that cancels in mono, so your mix
   survives a mono club PA, plus a pinch of Haas at the very top.

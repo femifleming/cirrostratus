@@ -13,3 +13,6 @@ What was asked for, in order (2026-11-23 → 24).
 9. Call it Cirrostratus, make a fun manual, push to GitHub as Cirrostratus.
 10. A video manual in the faltung style, dark blue, with Bliss as the music.
 11. A cool light show on start-up (→ "sunrise").
+
+## 2026-11-24 — video manual v2
+> the video needs to have the same voice that aeria os used, and needs to have a visual of the panel layout of monsoon so i know what knobs and sliders do what. you can make the module look faltung style as long as everything is located in the same place. delete the old video and make a new one.

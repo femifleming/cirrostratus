@@ -5,3 +5,5 @@ build/
 !docs/*.wav
 .DS_Store
 .claude/
+tools/video/.venv/
+*.mp4
