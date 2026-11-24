@@ -26,7 +26,8 @@ bool StretchMode::Init(Arena* arena) {
   // Biggest fixed allocations first.
   for (int ch = 0; ch < 2; ++ch) {
     ring_[ch] = NULL;
-    ref_phase_[ch] = synth_phase_[ch] = NULL;
+    ref_[ch] = NULL;
+    synth_phase_[ch] = NULL;
     inst_[ch] = smear_[ch] = NULL;
   }
   for (int ch = 0; ch < channels_; ++ch) {
@@ -39,9 +40,9 @@ bool StretchMode::Init(Arena* arena) {
   for (int ch = 0; ch < channels_; ++ch) {
     inst_[ch] = arena->Allocate<float>(kBins);
     smear_[ch] = arena->Allocate<float>(kBins);
-    ref_phase_[ch] = arena->Allocate<uint16_t>(kBins);
+    ref_[ch] = arena->Allocate<int16_t>(2 * kBins);
     synth_phase_[ch] = arena->Allocate<uint16_t>(kBins);
-    if (!inst_[ch] || !smear_[ch] || !ref_phase_[ch] || !synth_phase_[ch]) {
+    if (!inst_[ch] || !smear_[ch] || !ref_[ch] || !synth_phase_[ch]) {
       return false;
     }
     for (size_t k = 0; k < kBins; ++k) {
@@ -53,6 +54,8 @@ bool StretchMode::Init(Arena* arena) {
   memset(&controls_, 0, sizeof(controls_));
   controls_.blend = 1.0f;
   rng_.Seed(0x3c6ef372u);
+  window_cos_ = cosf(kPi / kFftSize);
+  window_sin_ = sinf(kPi / kFftSize);
   pos_ = 0;
   hop_counter_ = 0;
   hops_ready_ = 0;
@@ -146,12 +149,15 @@ void StretchMode::Prepare() {
   bool reset = !have_ref_ || dist < 0.0f || dist > 1536.0f;
   // Standing still (infinite stretch): no motion to measure frequencies
   // from, so take an extra reference frame 16 samples earlier now and then.
-  if (have_ref_ && dist < 4.0f && dist > -4.0f && hops_since_ref_ >= 24) {
-    for (int ch = 0; ch < channels_; ++ch) AnalyseReference(ch, start - 16);
+  if (have_ref_ && dist < 4.0f && dist > -4.0f && hops_since_ref_ >= 96) {
+    for (int ch = 0; ch < channels_; ++ch) {
+      Analyse(ch, start - 16);
+      StoreReference(ch);
+    }
     ref_written_ = written;
     ref_delay_ = d + 16.0f;
     dist = 16.0f;
-    hops_since_ref_ = 24;
+    hops_since_ref_ = 96;
   }
   // Prefer a long baseline (accurate); at extreme stretch factors the read
   // window may wrap before travelling far, so accept a short baseline once
@@ -166,134 +172,196 @@ void StretchMode::Prepare() {
     have_ref_ = true;
   }
   for (int ch = 0; ch < channels_; ++ch) {
-    ProcessChannel(ch, start, dist, update, reset);
-    // Overlap-add.
-    const float gain = hop / n * 2.0f / n;
-    const float inv_n = 1.0f / n;
-    float* o = ring_[ch];
-    for (size_t i = 0; i < kFftSize; ++i) {
-      size_t j = out_start + i;
-      if (j >= ring_size_) j -= ring_size_;
-      o[j] += spectrum_[i] * gain * FastSin(0.5f * static_cast<float>(i) * inv_n);
-    }
+    Analyse(ch, start);
+    Synthesize(ch, dist, update, reset);
+    OverlapAdd(ch, out_start);
   }
 }
 
-void StretchMode::AnalyseReference(int ch, int32_t start) {
-  const float inv_n = 1.0f / static_cast<float>(kFftSize);
-  for (size_t i = 0; i < kFftSize; ++i) {
-    frame_[i] = buffer_.At(ch, start + static_cast<int32_t>(i)) *
-        FastSin(0.5f * static_cast<float>(i) * inv_n);
+// Fills frame_ with the sine-windowed buffer segment and transforms it.
+// The window sin(pi i / N) comes from a rotating phasor (no table lookups).
+void StretchMode::Analyse(int ch, int32_t start) {
+  // The window is symmetric (w[i] == w[N - i]), so each phasor step serves
+  // two samples: i walking forward and N - i walking backward.
+  const int32_t size = static_cast<int32_t>(buffer_.size());
+  int32_t a = start % size;
+  if (a < 0) a += size;
+  int32_t b = a + static_cast<int32_t>(kFftSize / 2);
+  if (b >= size) b -= size;
+  // i = 0 (window 0) and i = N/2 (window 1).
+  frame_[0] = 0.0f;
+  frame_[kFftSize / 2] = buffer_.Sample(ch, static_cast<size_t>(b));
+  float ws = window_sin_, wc = window_cos_;
+  const float rc = window_cos_, rs = window_sin_;
+  int32_t fwd = a + 1;
+  if (fwd >= size) fwd -= size;
+  int32_t back = a + static_cast<int32_t>(kFftSize) - 1;
+  if (back >= size) back -= size;
+  for (size_t i = 1; i < kFftSize / 2; ++i) {
+    frame_[i] = buffer_.Sample(ch, static_cast<size_t>(fwd)) * ws;
+    frame_[kFftSize - i] = buffer_.Sample(ch, static_cast<size_t>(back)) * ws;
+    if (++fwd == size) fwd = 0;
+    if (--back < 0) back = size - 1;
+    float ns = ws * rc + wc * rs;
+    wc = wc * rc - ws * rs;
+    ws = ns;
   }
   FftDirect(frame_, spectrum_, kFftSize);
+}
+
+// Stores the unit vector of every bin of spectrum_ as the phase reference.
+void StretchMode::StoreReference(int ch) {
   const float* re = spectrum_;
   const float* im = spectrum_ + kBins;
-  uint16_t* ref = ref_phase_[ch];
-  for (size_t k = 1; k < kBins; ++k) {
-    float ph = FastAtan2Cycles(-im[k], re[k]);
-    ph -= floorf(ph);
-    ref[k] = static_cast<uint16_t>(static_cast<int32_t>(ph * 65536.0f) & 0xffff);
+  int16_t* ref = ref_[ch];
+  for (size_t k = 1; k < kTopBin; ++k) {
+    float m = sqrtf(re[k] * re[k] + im[k] * im[k]);
+    float s = 32767.0f / (m + 1e-20f);
+    // ShyFFT's imaginary part is negated: store the textbook phasor.
+    ref[2 * k] = static_cast<int16_t>(re[k] * s);
+    ref[2 * k + 1] = static_cast<int16_t>(-im[k] * s);
   }
 }
 
-void StretchMode::ProcessChannel(int ch, int32_t start, float dist,
-                                 bool update_ref, bool reset_ref) {
+void StretchMode::OverlapAdd(int ch, size_t out_start) {
+  const float n = static_cast<float>(kFftSize);
+  const float gain = static_cast<float>(kHop) / n * 2.0f / n;
+  float* o = ring_[ch];
+  const size_t half = kFftSize / 2;
+  size_t mid = out_start + half;
+  if (mid >= ring_size_) mid -= ring_size_;
+  o[mid] += spectrum_[half] * gain;
+  // Symmetric window again: one phasor step for samples i and N - i.
+  float ws = window_sin_ * gain, wc = window_cos_ * gain;
+  const float rc = window_cos_, rs = window_sin_;
+  size_t fwd = out_start + 1;
+  if (fwd >= ring_size_) fwd -= ring_size_;
+  size_t back = out_start + kFftSize - 1;
+  if (back >= ring_size_) back -= ring_size_;
+  for (size_t i = 1; i < half; ++i) {
+    o[fwd] += spectrum_[i] * ws;
+    o[back] += spectrum_[kFftSize - i] * ws;
+    if (++fwd == ring_size_) fwd = 0;
+    back = back == 0 ? ring_size_ - 1 : back - 1;
+    float ns = ws * rc + wc * rs;
+    wc = wc * rc - ws * rs;
+    ws = ns;
+  }
+}
+
+// Phase-locked vocoder resynthesis (Laroche & Dolson identity locking),
+// done with complex rotations: per region around a spectral peak, one
+// atan2 and one sin/cos; every bin is then rotated by the peak's phase
+// correction. Paulstretch randomness is a table-driven random rotation.
+void StretchMode::Synthesize(int ch, float dist, bool update_ref,
+                             bool reset_ref) {
   const Controls& c = controls_;
   const float n = static_cast<float>(kFftSize);
   const float inv_n = 1.0f / n;
-  // Analysis.
-  for (size_t i = 0; i < kFftSize; ++i) {
-    frame_[i] = buffer_.At(ch, start + static_cast<int32_t>(i)) *
-        FastSin(0.5f * static_cast<float>(i) * inv_n);
-  }
-  FftDirect(frame_, spectrum_, kFftSize);
-
-  float* re = spectrum_;
-  float* im = spectrum_ + kBins;
+  const float* re = spectrum_;
+  const float* im = spectrum_ + kBins;
   float* inst = inst_[ch];
   float* smear = smear_[ch];
-  uint16_t* ref = ref_phase_[ch];
+  int16_t* ref = ref_[ch];
   uint16_t* synth = synth_phase_[ch];
+
+  // Magnitude smear (DENSITY).
   const float smooth = 1.0f - Clamp(c.density, 0.0f, 1.0f) * 0.97f;
-  const float inv_dist = update_ref ? 1.0f / dist : 0.0f;
-
-  for (size_t k = 1; k < kBins; ++k) {
+  for (size_t k = 1; k < kTopBin; ++k) {
     float mag = sqrtf(re[k] * re[k] + im[k] * im[k]);
-    // ShyFFT's imaginary part has the opposite sign of the usual e^{-jwt}
-    // convention, so negate it to get phases that advance with time.
-    float ph = FastAtan2Cycles(-im[k], re[k]);
-    if (update_ref) {
-      float prev = static_cast<float>(ref[k]) * (1.0f / 65536.0f);
-      float dev = ph - prev - static_cast<float>(k) * dist * inv_n;
-      dev -= floorf(dev + 0.5f);
-      inst[k] = static_cast<float>(k) * inv_n + dev * inv_dist;
-    }
-    if (update_ref || reset_ref) {
-      float p = ph - floorf(ph);
-      ref[k] = static_cast<uint16_t>(static_cast<int32_t>(p * 65536.0f) & 0xffff);
-    }
     smear[k] += smooth * (mag - smear[k]);
-    re[k] = ph;  // keep the analysis phase for phase locking below
   }
+  smear[0] = 0.0f;
+  smear[kTopBin] = 0.0f;
 
-  // Magnitudes (with optional bin blur) into im[], reused as scratch.
-  const float blur = c.density > 0.5f ? (c.density - 0.5f) * 2.0f : 0.0f;
-  float* mags = im;
-  for (size_t k = 1; k < kBins; ++k) {
-    float m = smear[k];
-    if (blur > 0.0f && k > 1 && k + 1 < kBins) {
-      float b = 0.25f * smear[k - 1] + 0.5f * smear[k] + 0.25f * smear[k + 1];
-      m += blur * (b - m);
-    }
-    mags[k] = m;
-  }
-  mags[0] = 0.0f;
-
-  // Synthesis with identity phase locking (Laroche & Dolson): each region
-  // around a spectral peak keeps its analysed phase relationships and
-  // rotates as a whole with the peak's running phase.
   memset(frame_, 0, sizeof(float) * kFftSize);
   float* ore = frame_;
   float* oim = frame_ + kBins;
   const float ratio = SemitonesToRatio(c.pitch);
-  const float randomness = Clamp(c.texture, 0.0f, 1.0f) * 0.5f;
+  const float blur = c.density > 0.5f ? (c.density - 0.5f) * 2.0f : 0.0f;
+  const float randomness = Clamp(c.texture, 0.0f, 1.0f);
   const float hop = static_cast<float>(kHop);
+  const float inv_dist = update_ref ? 1.0f / dist : 0.0f;
+  const bool store_ref = update_ref || reset_ref;
+  const int top = static_cast<int>(kTopBin);
   int last_j = -1;
+  Random rng = rng_;  // local copy keeps the state in registers
   size_t region = 1;
-  while (region < kBins) {
-    // Region ends at the next valley.
+  while (region < kTopBin) {
+    // A region runs up to the next valley of the smeared magnitudes, and
+    // spans at least 4 bins (noise would otherwise make a region of every
+    // other bin, each costing a sin/cos).
     size_t end = region + 1;
-    while (end < kBins - 1 &&
-           !(mags[end] < mags[end - 1] && mags[end] <= mags[end + 1])) {
+    size_t peak = region;
+    while (end < kTopBin &&
+           (end - region < 4 ||
+            !(smear[end] < smear[end - 1] && smear[end] <= smear[end + 1]))) {
+      if (smear[end] > smear[peak]) peak = end;
       ++end;
     }
-    if (end >= kBins - 1) end = kBins;
-    size_t peak = region;
-    for (size_t k = region; k < end; ++k) {
-      if (mags[k] > mags[peak]) peak = k;
+    // Peak phase (textbook sign) and frequency.
+    const float pre = re[peak], pim = -im[peak];
+    if (update_ref) {
+      const float rr = ref[2 * peak], ri = ref[2 * peak + 1];
+      // arg(X * conj(ref))
+      float dphi = FastAtan2Cycles(pim * rr - pre * ri, pre * rr + pim * ri);
+      float dev = dphi - static_cast<float>(peak) * dist * inv_n;
+      dev -= FastFloor(dev + 0.5f);
+      const float f = static_cast<float>(peak) * inv_n + dev * inv_dist;
+      for (size_t k = region; k < end; ++k) inst[k] = f;
     }
     int jp = static_cast<int>(static_cast<float>(peak) * ratio + 0.5f);
-    if (jp >= 1 && jp < static_cast<int>(kBins) && jp != last_j) {
-      float inc = inst[peak] * ratio * hop;
-      inc -= floorf(inc);
-      synth[jp] = static_cast<uint16_t>(synth[jp] +
-          static_cast<uint16_t>(static_cast<int32_t>(inc * 65536.0f) & 0xffff));
-      last_j = jp;
+    float rot_c = 1.0f, rot_s = 0.0f;
+    if (jp >= 1 && jp < top) {
+      if (jp != last_j) {
+        float inc = inst[peak] * ratio * hop;
+        inc -= FastFloor(inc);
+        synth[jp] = static_cast<uint16_t>(synth[jp] +
+            static_cast<uint16_t>(static_cast<int32_t>(inc * 65536.0f) & 0xffff));
+        last_j = jp;
+      }
+      // e^{i theta} = e^{i synth} * conj(X_peak) / |X_peak|
+      const float sp = static_cast<float>(synth[jp]) * (1.0f / 65536.0f);
+      const float sc = FastCos(sp), ss = FastSin(sp);
+      const float inv = 1.0f / (sqrtf(pre * pre + pim * pim) + 1e-20f);
+      const float ur = pre * inv, ui = -pim * inv;
+      rot_c = sc * ur - ss * ui;
+      rot_s = sc * ui + ss * ur;
     }
-    const float peak_phase = jp >= 1 && jp < static_cast<int>(kBins)
-        ? static_cast<float>(synth[jp]) * (1.0f / 65536.0f) : 0.0f;
-    const float peak_analysis = re[peak];
     for (size_t k = region; k < end; ++k) {
+      const float xr = re[k], xi = -im[k];
+      const float mag = sqrtf(xr * xr + xi * xi);
+      const float inv = 1.0f / (mag + 1e-20f);
+      if (store_ref) {
+        ref[2 * k] = static_cast<int16_t>(xr * inv * 32767.0f);
+        ref[2 * k + 1] = static_cast<int16_t>(xi * inv * 32767.0f);
+      }
       int j = static_cast<int>(static_cast<float>(k) * ratio + 0.5f);
-      if (j < 1 || j >= static_cast<int>(kBins)) continue;
-      float phase = peak_phase + (re[k] - peak_analysis);
-      if (randomness > 0.0f) phase += rng_.Bipolar() * randomness;
-      float m = mags[k];
-      ore[j] += m * FastCos(phase);
-      oim[j] -= m * FastSin(phase);
+      if (j < 1 || j >= top) continue;
+      float m = smear[k];
+      if (blur > 0.0f) {
+        float b = 0.25f * (smear[k - 1] + smear[k + 1]) + 0.5f * m;
+        m += blur * (b - m);
+      }
+      const float g = m * inv;
+      // Y = X * g * e^{i theta} (* a random rotation for Paulstretch).
+      float gc = g * rot_c, gs = g * rot_s;
+      if (randomness > 0.0f) {
+        // Uniform +/- half a turn, scaled by TEXTURE, from 10 random bits.
+        int32_t a = static_cast<int32_t>(
+            static_cast<float>(static_cast<int32_t>(rng.Next()) >> 22) *
+            randomness) & 1023;
+        const float cr = kSineTable[(a + 256) & 1023], sr = kSineTable[a];
+        float t = gc * cr - gs * sr;
+        gs = gc * sr + gs * cr;
+        gc = t;
+      }
+      ore[j] += xr * gc - xi * gs;
+      oim[j] -= xr * gs + xi * gc;  // back to ShyFFT's sign
     }
     region = end;
   }
+  rng_ = rng;
   FftInverse(frame_, spectrum_, kFftSize);
 }
 

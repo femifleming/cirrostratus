@@ -1,5 +1,6 @@
 // STRETCH behaviour tests.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -18,8 +19,9 @@ MONSOON_TEST(stretch_factor_mapping) {
   float a9 = StretchMode::AdvancePerHop(0.9f);
   float a1 = StretchMode::AdvancePerHop(1.0f);
   std::printf("    advance/hop: %.2f (size 0), %.4f (0.9), %.4f (1.0)\n", a0, a9, a1);
-  CHECK(std::fabs(a0 - 512.0f) < 1.0f, "1x at 0");
-  CHECK(std::fabs(512.0f / a9 - 1000.0f) < 20.0f, "1000x at 0.9");
+  const float hop = float(StretchMode::kHop);
+  CHECK(std::fabs(a0 - hop) < 1.0f, "1x at 0");
+  CHECK(std::fabs(hop / a9 - 1000.0f) < 20.0f, "1000x at 0.9");
   CHECK(a1 == 0.0f, "standstill at 1");
   return true;
 }
@@ -56,9 +58,32 @@ MONSOON_TEST(stretch_pitch_shifts_without_changing_speed) {
 }
 
 MONSOON_TEST(stretch_paulstretch_texture_still_tonal) {
-  float a = Tone(0.0f, 1.0f, 440.0f);
-  std::printf("    random phases: 440 Hz at %.1f dB\n", Db(a));
-  CHECK(Db(a) > -24.0f, "random-phase stretch keeps the partial");
+  // Random phases smear a partial over the window bandwidth (~+/-25 Hz),
+  // so look at the strongest line near 440 Hz against lines well away.
+  Module m;
+  m.SetMode(MODE_STRETCH);
+  auto in = Sine(440.0f, 3.0f, 0.5f);
+  auto out = m.Render(in, [&](size_t) {
+    Controls c = DefaultControls();
+    c.size = 0.5f;
+    c.texture = 1.0f;
+    c.density = 0.0f;
+    return c;
+  });
+  auto band_max = [&](float lo, float hi) {
+    float best = 0.0f;
+    for (float f = lo; f <= hi; f += 2.0f) {
+      float v = ToneAmplitude(out, f, out.size() - 48000, out.size());
+      if (v > best) best = v;
+    }
+    return best;
+  };
+  float on = band_max(410.0f, 470.0f);
+  float off = std::max(band_max(250.0f, 350.0f), band_max(550.0f, 700.0f));
+  std::printf("    random phases: near 440 Hz %.1f dB, elsewhere %.1f dB\n",
+              Db(on), Db(off));
+  CHECK(Db(on) > -30.0f, "partial kept");
+  CHECK(on > off * 30.0f, "energy stays around the partial");
   return true;
 }
 
@@ -93,40 +118,40 @@ MONSOON_TEST(stretch_mono_option_doubles_the_buffer) {
 }
 
 MONSOON_TEST(stretch_trigger_jumps_to_newest_audio) {
-  // Buffer holds 220 Hz (older) then 660 Hz (newest), frozen. Reading the
-  // old part, a trigger jumps to the newest material.
-  Module m;
-  m.SetMode(MODE_STRETCH, 1);
-  auto in = Sine(220.0f, 1.0f, 0.5f);
-  auto b2 = Sine(660.0f, 0.3f, 0.5f);
-  auto b3 = Silence(3.0f);
-  in.insert(in.end(), b2.begin(), b2.end());
-  in.insert(in.end(), b3.begin(), b3.end());
-  const size_t freeze_block = (48000 + 14400) / kBlockSize;
-  const size_t trig_block = freeze_block + 1500;
-  float before_hi = 0, before_lo = 0;
-  std::vector<FloatFrame> out = m.Render(in, [&](size_t b) {
-    Controls c = DefaultControls();
-    c.size = 0.85f;
-    c.position = 0.9f;
-    c.texture = 0.0f;
-    c.density = 0.0f;
-    c.freeze = b >= freeze_block;
-    c.trigger = b == trig_block;
-    return c;
-  });
-  size_t t = trig_block * kBlockSize;
-  before_hi = ToneAmplitude(out, 660.0f, t - 24000, t);
-  before_lo = ToneAmplitude(out, 220.0f, t - 24000, t);
-  float hi = ToneAmplitude(out, 660.0f, t + 9600, t + 33600);
-  float lo = ToneAmplitude(out, 220.0f, t + 9600, t + 33600);
-  std::printf("    before trigger: 220 Hz %.1f dB, 660 Hz %.1f dB\n",
-              Db(before_lo), Db(before_hi));
-  std::printf("    after trigger:  220 Hz %.1f dB, 660 Hz %.1f dB\n", Db(lo), Db(hi));
-  CHECK(before_lo > before_hi * 4.0f, "reading the old part first");
-  CHECK(hi > lo * 4.0f, "trigger should jump to the newest audio");
+  // Buffer holds tone A (older) then tone B (newest), frozen and stretched.
+  // After a trigger the newest tone must dominate. Run it both ways round
+  // so a lucky read position can't pass the test.
+  const float tones[2][2] = { { 220.0f, 660.0f }, { 660.0f, 220.0f } };
+  for (int k = 0; k < 2; ++k) {
+    Module m;
+    m.SetMode(MODE_STRETCH, 1);
+    auto in = Sine(tones[k][0], 1.0f, 0.5f);
+    auto b2 = Sine(tones[k][1], 0.3f, 0.5f);
+    auto b3 = Silence(3.0f);
+    in.insert(in.end(), b2.begin(), b2.end());
+    in.insert(in.end(), b3.begin(), b3.end());
+    const size_t freeze_block = (48000 + 14400) / kBlockSize;
+    const size_t trig_block = freeze_block + 1500;
+    auto out = m.Render(in, [&](size_t b) {
+      Controls c = DefaultControls();
+      c.size = 0.85f;
+      c.position = 0.9f;
+      c.texture = 0.0f;
+      c.density = 0.0f;
+      c.freeze = b >= freeze_block;
+      c.trigger = b == trig_block;
+      return c;
+    });
+    size_t t = trig_block * kBlockSize;
+    float newest = ToneAmplitude(out, tones[k][1], t + 9600, t + 33600);
+    float older = ToneAmplitude(out, tones[k][0], t + 9600, t + 33600);
+    std::printf("    after trigger: newest %.0f Hz %.1f dB, older %.0f Hz %.1f dB\n",
+                tones[k][1], Db(newest), tones[k][0], Db(older));
+    CHECK(newest > older * 4.0f, "trigger should jump to the newest audio");
+  }
   return true;
 }
+
 MONSOON_TEST(stretch_keeps_pitch_and_level_at_every_factor) {
   for (float size : {0.0f, 0.5f, 0.7f, 0.85f, 1.0f}) {
     for (int fr = 0; fr < 2; ++fr) {
