@@ -25,8 +25,8 @@ float PeakNear(const std::vector<FloatFrame>& v, float hz, float cents,
 
 Controls Base() {
   Controls c = DefaultControls();
-  c.spread = 0.5f;
-  c.reverb = 0.0f;
+  c.bal = 0.5f;
+  c.rvb = 0.0f;
   return c;
 }
 

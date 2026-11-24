@@ -13,8 +13,8 @@ namespace {
 
 Controls Base() {
   Controls c = DefaultControls();
-  c.reverb = 0.0f;
-  c.feedback = 0.0f;
+  c.rvb = 0.0f;
+  c.fbk = 0.0f;
   c.density = 0.0f;   // tanpura off unless a test wants it
   c.texture = 0.0f;
   c.size = 0.0f;

@@ -38,10 +38,13 @@ struct Controls {
   float density;
   float texture;
   float pitch;       // knob + V/oct, -48..+48 semitones
-  float blend;
-  float spread;
-  float feedback;
-  float reverb;
+  float blend;       // WET knob + CV (the engine's dry/wet blend)
+  // The three small knobs below WET are per-mode controls (each mode
+  // documents what they do). Conventions: BAL is bipolar with the v1.0
+  // sound at noon; FBK and RVB give the v1.0 sound at zero.
+  float bal;         // BAL knob + CV, 0..1
+  float fbk;         // FBK knob + CV, 0..1
+  float rvb;         // RVB knob + CV, 0..1
   bool freeze;       // current freeze state (button toggle or gate)
   bool trigger;      // rising edge on TRIG input during this block
   bool gate;         // TRIG input level
@@ -99,6 +102,16 @@ inline float Clamp(float x, float lo, float hi) {
 }
 
 inline float Crossfade(float a, float b, float t) { return a + (b - a) * t; }
+
+// A bipolar knob (BAL): 0..1 -> -1..+1, with a small dead zone at noon so a
+// knob left roughly centred gives exactly the neutral setting.
+inline float KnobBipolar(float k) {
+  const float kDead = 0.03f;
+  float x = k * 2.0f - 1.0f;
+  if (x > kDead) return x > 1.0f ? 1.0f : (x - kDead) * (1.0f / (1.0f - kDead));
+  if (x < -kDead) return x < -1.0f ? -1.0f : (x + kDead) * (1.0f / (1.0f - kDead));
+  return 0.0f;
+}
 
 inline float SemitonesToRatio(float s) {
   return exp2f(s * (1.0f / 12.0f));

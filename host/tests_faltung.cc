@@ -26,6 +26,7 @@ Controls Neutral() {
 std::vector<FloatFrame> ImpulseResponse(Controls c, float seconds,
                                         size_t at = 24000) {
   Module m;
+  m.engine().set_mono_bass(false);  // measure the mode, not the output section
   m.SetMode(MODE_FALTUNG);
   std::vector<FloatFrame> in = Silence(seconds);
   in[at].l = in[at].r = 0.5f;
@@ -78,6 +79,7 @@ MONSOON_TEST(faltung_tail_decays_and_size_shortens_it) {
 
 MONSOON_TEST(faltung_trig_and_position_change_the_ir) {
   Module m;
+  m.engine().set_mono_bass(false);  // measure the mode, not the output section
   CHECK(m.SetMode(MODE_FALTUNG), "init");
   FaltungMode* mode = static_cast<FaltungMode*>(
       m.engine().mode_instance(MODE_FALTUNG));
@@ -116,6 +118,7 @@ MONSOON_TEST(faltung_predelay_moves_the_arrival) {
   c.density = 0.5f;  // ~100 ms
   // The pre-delay glides to its target: let it settle first.
   Module m;
+  m.engine().set_mono_bass(false);  // measure the mode, not the output section
   m.SetMode(MODE_FALTUNG);
   std::vector<FloatFrame> in = Silence(1.5f);
   const size_t at = 48000;
@@ -137,6 +140,7 @@ MONSOON_TEST(faltung_predelay_moves_the_arrival) {
 
 MONSOON_TEST(faltung_freeze_sustains_and_stays_bounded) {
   Module m;
+  m.engine().set_mono_bass(false);  // measure the mode, not the output section
   CHECK(m.SetMode(MODE_FALTUNG), "init");
   auto in = Music(8.0f);
   for (size_t i = 48000 * 2; i < in.size(); ++i) in[i].l = in[i].r = 0.0f;

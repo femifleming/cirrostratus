@@ -81,21 +81,21 @@ int main() {
     Arena a; a.Init(block_main, sizeof(block_main), 0, 0);
     fdn.Init(&a);
     static ResonanceTamer tamer; tamer.Init();
-    static Spread spread; spread.Init();
+    static MonoBass mono_bass; mono_bass.Init(60.0f);
     static Limiter lim; lim.Init();
     FloatFrame f[kBlockSize];
     for (size_t i = 0; i < kBlockSize; ++i) { f[i].l = Noise() / 32768.0f; f[i].r = f[i].l * 0.5f; }
     const int N = 2000;
     uint64_t t = Ticks();
-    for (int k = 0; k < N; ++k) fdn.Process(0.5f, false, f, kBlockSize);
+    for (int k = 0; k < N; ++k) fdn.Process(0.5f, false, f, f, kBlockSize);
     Print("fdn "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / (N * kBlockSize))); Print("\n");
     t = Ticks();
     float acc = 0;
     for (int k = 0; k < N; ++k) for (size_t i = 0; i < kBlockSize; ++i) acc += tamer.Process(f[i].l, 0.8f);
     Print("tamer "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / (N * kBlockSize))); Print("\n");
     t = Ticks();
-    for (int k = 0; k < N; ++k) for (size_t i = 0; i < kBlockSize; ++i) { float l = f[i].l, r = f[i].r; spread.Process(0.8f, &l, &r); acc += l; }
-    Print("spread "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / (N * kBlockSize))); Print("\n");
+    for (int k = 0; k < N; ++k) { mono_bass.Process(f, kBlockSize); acc += f[0].l; }
+    Print("mono bass "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / (N * kBlockSize))); Print("\n");
     t = Ticks();
     for (int k = 0; k < N; ++k) for (size_t i = 0; i < kBlockSize; ++i) { float l = f[i].l, r = f[i].r; lim.Process(&l, &r); acc += l; }
     Print("limiter "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / (N * kBlockSize))); Print("\n");
@@ -157,11 +157,11 @@ int main() {
         engine.Prepare();
       }
       c.position = 0.4f; c.size = 0.6f; c.density = 0.6f; c.texture = 0.6f;
-      c.pitch = 7.0f; c.blend = 0.7f; c.spread = 0.6f; c.feedback = 0.4f;
-      c.reverb = 0.5f;
+      c.pitch = 7.0f; c.blend = 0.7f; c.bal = 0.6f; c.fbk = 0.4f;
+      c.rvb = 0.5f;
       if (scenario == 1) {  // heavy: everything up
-        c.density = 1.0f; c.size = 0.95f; c.texture = 0.9f; c.feedback = 0.9f;
-        c.reverb = 0.9f; c.pitch = -12.0f;
+        c.density = 1.0f; c.size = 0.95f; c.texture = 0.9f; c.fbk = 0.9f;
+        c.rvb = 0.9f; c.pitch = -12.0f;
       }
       // Warm up 0.5 s so buffers fill.
       for (int b = 0; b < 250; ++b) {

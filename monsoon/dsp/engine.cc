@@ -120,7 +120,8 @@ bool Engine::Init(void* main_mem, size_t main_size,
               ccm_size - reverb_bytes);
   if (!reverb_.Init(&reverb_arena_)) return false;
   tamer_.Init();
-  spread_.Init();
+  feedback_active_ = false;
+  mono_bass_.Init(60.0f);
   limiter_.Init();
   for (int i = 0; i < 2; ++i) {
     fb_hp_[i].Init();
@@ -132,9 +133,7 @@ bool Engine::Init(void* main_mem, size_t main_size,
   memset(&env_routing_, 0, sizeof(env_routing_));
   memset(feedback_signal_, 0, sizeof(feedback_signal_));
   blend_.Init(0.5f);
-  spread_amt_.Init(0.5f);
   feedback_.Init(0.0f);
-  reverb_amt_.Init(0.0f);
   silence_ = false;
   pending_load_data_ = NULL;
   pending_load_size_ = 0;
@@ -248,7 +247,7 @@ void Engine::ApplyEnvelope(const Controls& raw, Controls* c) {
   c->option = active_option_;
   float env = Clamp(envelope_.value() * 2.5f, 0.0f, 1.0f);
   float* targets[ENV_TARGET_LAST] = {
-    &c->blend, &c->spread, &c->feedback, &c->reverb
+    &c->blend, &c->bal, &c->fbk, &c->rvb
   };
   for (int i = 0; i < ENV_TARGET_LAST; ++i) {
     if (env_routing_.amount[i] != 0.0f) {
@@ -267,16 +266,29 @@ void Engine::ProcessFloat(const Controls& raw, const FloatFrame* in,
   Controls c;
   ApplyEnvelope(raw, &c);
 
-  // Feedback goes into the mode together with the input.
-  for (size_t i = 0; i < n; ++i) {
-    dry_[i] = in[i];
-    mode_in_[i].l = in[i].l + feedback_signal_[i].l;
-    mode_in_[i].r = in[i].r + feedback_signal_[i].r;
-  }
-
-  bool run_mode = !init_failed_ &&
+  // Only touch the mode while it is running (Prepare may be re-initialising
+  // another one during a switch).
+  const bool run_mode = !init_failed_ &&
       (state_ == STATE_RUNNING || state_ == STATE_FADING_IN ||
        state_ == STATE_FADING_OUT);
+
+  // The global feedback loop only runs for modes that map a knob to it.
+  const float fb_target = run_mode ?
+      Clamp(current_->feedback_amount(c), 0.0f, 1.0f) : 0.0f;
+  const bool feedback_on = fb_target > 0.0f || feedback_.value() > 0.0f;
+
+  // Feedback goes into the mode together with the input.
+  if (feedback_active_) {
+    for (size_t i = 0; i < n; ++i) {
+      dry_[i] = in[i];
+      mode_in_[i].l = in[i].l + feedback_signal_[i].l;
+      mode_in_[i].r = in[i].r + feedback_signal_[i].r;
+    }
+  } else {
+    memcpy(dry_, in, sizeof(FloatFrame) * n);
+    memcpy(mode_in_, in, sizeof(FloatFrame) * n);
+  }
+
   if (run_mode) {
     current_->Process(c, mode_in_, wet_, n);
   } else {
@@ -314,38 +326,71 @@ void Engine::ProcessFloat(const Controls& raw, const FloatFrame* in,
   const float wet_inc = (FastSin(b1 * 0.25f) - wet_gain) * inv_n;
   const float dry_inc = (FastCos(b1 * 0.25f) - dry_gain) * inv_n;
   blend_.Init(b1);
-  spread_amt_.Start(c.spread, n);
-  feedback_.Start(c.feedback, n);
+  if (feedback_on) {
+    feedback_.Start(fb_target, n);
+    for (size_t i = 0; i < n; ++i) {
+      float l = wet_[i].l;
+      float r = wet_[i].r;
+      // A runaway mode must never produce NaN/inf downstream.
+      if (!(fabsf(l) < 64.0f)) l = 0.0f;
+      if (!(fabsf(r) < 64.0f)) r = 0.0f;
+      // Feedback path: HP, Quell-style resonance taming, saturation.
+      float fb = feedback_.Next();
+      float fb_gain = fb * fb * (3.0f - 2.0f * fb) * 1.02f;
+      float hl = fb_hp_[0].Hp(l);
+      float hr = fb_hp_[1].Hp(r);
+      float cut = tamer_.Process(0.5f * (hl + hr),
+                                 Clamp(fb * 1.6f, 0.0f, 1.0f));
+      feedback_signal_[i].l = SoftClip((hl - cut) * fb_gain);
+      feedback_signal_[i].r = SoftClip((hr - cut) * fb_gain);
+      wet_[i].l = l;
+      wet_[i].r = r;
+    }
+    feedback_.Finish();
+    feedback_active_ = true;
+  } else if (feedback_active_) {
+    // The loop has just been released: let it go silent, cost nothing.
+    memset(feedback_signal_, 0, sizeof(feedback_signal_));
+    feedback_active_ = false;
+  }
+  // Blend. The dry part goes straight to `out` (so fully dry stays
+  // bit-transparent); everything the module adds is collected in wet_.
   for (size_t i = 0; i < n; ++i) {
     float l = wet_[i].l;
     float r = wet_[i].r;
-    // A runaway mode must never produce NaN/inf downstream.
     if (!(fabsf(l) < 64.0f)) l = 0.0f;
     if (!(fabsf(r) < 64.0f)) r = 0.0f;
-
-    // Feedback path: HP, Quell-style resonance taming, saturation.
-    float fb = feedback_.Next();
-    float fb_gain = fb * fb * (3.0f - 2.0f * fb) * 1.02f;
-    float hl = fb_hp_[0].Hp(l);
-    float hr = fb_hp_[1].Hp(r);
-    float cut = tamer_.Process(0.5f * (hl + hr), Clamp(fb * 1.6f, 0.0f, 1.0f));
-    feedback_signal_[i].l = SoftClip((hl - cut) * fb_gain);
-    feedback_signal_[i].r = SoftClip((hr - cut) * fb_gain);
-
-    // Remove any DC the mode produced, then stereo spread on the wet signal.
+    // Remove any DC the mode produced. The output is hard stereo: exactly
+    // what the mode makes.
     l = out_dc_[0].Process(l);
     r = out_dc_[1].Process(r);
-    spread_.Process(spread_amt_.Next(), &l, &r);
-
     wet_gain += wet_inc;
     dry_gain += dry_inc;
-    out[i].l = dry_[i].l * dry_gain + l * wet_gain;
-    out[i].r = dry_[i].r * dry_gain + r * wet_gain;
+    out[i].l = dry_[i].l * dry_gain;
+    out[i].r = dry_[i].r * dry_gain;
+    wet_[i].l = l * wet_gain;
+    wet_[i].r = r * wet_gain;
   }
-  spread_amt_.Finish();
-  feedback_.Finish();
 
-  reverb_.Process(c.reverb, false, out, n);
+  // The FDN reverb (for modes that map a knob to it) hears the blended
+  // signal; its tail joins the wet bus.
+  const float rvb = run_mode ?
+      Clamp(current_->reverb_amount(c), 0.0f, 1.0f) : 0.0f;
+  if (rvb > 0.0f || !reverb_.idle()) {
+    for (size_t i = 0; i < n; ++i) {
+      mode_in_[i].l = out[i].l + wet_[i].l;
+      mode_in_[i].r = out[i].r + wet_[i].r;
+    }
+    reverb_.Process(rvb, false, mode_in_, wet_, n);
+  }
+
+  // Mono bass below 60 Hz on everything the module adds (unless switched
+  // off), then the dry and wet buses meet.
+  mono_bass_.Process(wet_, n);
+  for (size_t i = 0; i < n; ++i) {
+    out[i].l += wet_[i].l;
+    out[i].r += wet_[i].r;
+  }
 
   for (size_t i = 0; i < n; ++i) {
     float l = out[i].l;

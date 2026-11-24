@@ -101,9 +101,9 @@ MONSOON_TEST(every_mode_survives_random_knob_abuse) {
         c.texture = rng.Float();
         c.pitch = rng.Bipolar() * 48.0f;
         c.blend = rng.Float();
-        c.spread = rng.Float();
-        c.feedback = rng.Float();
-        c.reverb = rng.Float();
+        c.bal = rng.Float();
+        c.fbk = rng.Float();
+        c.rvb = rng.Float();
         c.option = uint8_t(rng.Next() % m.engine().num_options(ModeId(mode)));
         if (rng.Float() < 0.3f) c.freeze = !c.freeze;
       }
@@ -185,7 +185,7 @@ MONSOON_TEST(reverb_tail_grows_with_slider) {
     auto out = m.Render(in, [&](size_t) {
       Controls c = DefaultControls();
       c.blend = 0.0f;
-      c.reverb = k == 0 ? 0.3f : 0.9f;
+      c.rvb = k == 0 ? 0.3f : 0.9f;
       return c;
     });
     tails[k] = Measure(out, 48000 * 2, 48000 * 3).rms;

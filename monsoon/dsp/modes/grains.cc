@@ -106,11 +106,22 @@ void GrainsMode::Spawn(const Controls& c, float rate, float length) {
   const float travel = len * ratio;
   const float filled = static_cast<float>(buffer_.filled());
 
-  // Range of delays (behind the write head) the whole grain can be read from.
+  // BAL: left of noon scatters grains around the path (spray), right of
+  // noon plays a growing share of them backwards. No random numbers are
+  // drawn at noon, so the v1.0 cloud is reproduced exactly.
+  const float bal = KnobBipolar(c.bal);
+  const bool reverse = bal > 0.0f && rng_.Float() < bal;
+
+  // Range of delays (behind the write head) the whole grain can be read
+  // from. A reversed grain starts at the delay and reads away from the
+  // write head, so it only needs room behind it.
   float d_lo, d_hi;
   if (frozen_) {
-    d_lo = travel + 4.0f;
-    d_hi = filled - 8.0f;
+    d_lo = reverse ? 4.0f : travel + 4.0f;
+    d_hi = filled - 8.0f - (reverse ? travel : 0.0f);
+  } else if (reverse) {
+    d_lo = 96.0f;
+    d_hi = filled - 96.0f - travel - len;
   } else {
     d_lo = (ratio > 1.0f ? len * (ratio - 1.0f) : 0.0f) + 96.0f;
     d_hi = filled - 96.0f - (ratio < 1.0f ? len * (1.0f - ratio) : 0.0f);
@@ -126,12 +137,14 @@ void GrainsMode::Spawn(const Controls& c, float rate, float length) {
   float jitter = len * 0.25f;
   if (jitter > 2400.0f) jitter = 2400.0f;
   d += rng_.Bipolar() * jitter;
+  if (bal < 0.0f) d -= rng_.Bipolar() * bal * 0.5f * span;  // spray
   // Reflect into range.
   if (d < d_lo) d = d_lo + (d_lo - d);
   if (d > d_hi) d = d_hi - (d - d_hi);
   d = Clamp(d, d_lo, d_hi);
 
-  float pan = Clamp((y + 0.25f * rng_.Bipolar()) * c.spread, -1.0f, 1.0f);
+  // Pan follows the path's y coordinate (the v1.0 width at noon).
+  float pan = Clamp((y + 0.25f * rng_.Bipolar()) * 0.5f, -1.0f, 1.0f);
   float gl, gr;
   if (buffer_.channels() == 1) {
     float a = (pan + 1.0f) * 0.125f;  // 0..0.25 cycles
@@ -145,7 +158,7 @@ void GrainsMode::Spawn(const Controls& c, float rate, float length) {
   float norm = 1.0f / sqrtf(overlap * 0.6f > 1.0f ? overlap * 0.6f : 1.0f);
 
   g->position = static_cast<float>(buffer_.write_head()) - d;
-  g->increment = ratio;
+  g->increment = reverse ? -ratio : ratio;
   g->phase = 0.0f;
   g->phase_inc = 1.0f / len;
   g->gain_l = gl * norm;

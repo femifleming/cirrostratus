@@ -49,11 +49,11 @@ class CvScaler {
     return false;
   }
 
-  // Output-section values (for the DISP page).
+  // Knob values for the DISP page: WET and the three per-mode knobs.
   float wet() const { return last_.blend; }
-  float stereo() const { return last_.spread; }
-  float feedback() const { return last_.feedback; }
-  float reverb() const { return last_.reverb; }
+  float bal() const { return last_.bal; }
+  float fbk() const { return last_.fbk; }
+  float rvb() const { return last_.rvb; }
 
  private:
   struct Transformation {

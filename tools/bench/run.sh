@@ -2,7 +2,7 @@
 # Builds the benchmark image and runs it on QEMU's STM32F405 model.
 set -e
 cd "$(dirname "$0")/../.."
-OUT=build/bench
+OUT=${BENCH_OUT:-build/bench}
 mkdir -p $OUT
 FLAGS="-O2 -g -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 \
   -fno-math-errno -fno-use-cxa-atexit -fdata-sections -ffunction-sections -fshort-enums -I."

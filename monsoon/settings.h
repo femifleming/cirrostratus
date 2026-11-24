@@ -6,29 +6,9 @@
 
 #include "stmlib/stmlib.h"
 
-#include "monsoon/drivers/adc.h"
-#include "monsoon/dsp/engine.h"
+#include "monsoon/settings_data.h"
 
 namespace monsoon {
-
-struct CalibrationData {
-  float pitch_offset;
-  float pitch_scale;
-  float offset[ADC_CHANNEL_LAST];
-};
-
-const int kNumSlots = 4;
-const size_t kSlotBytes = 0x20000;  // one 128 KB flash sector each
-
-struct SettingsData {
-  CalibrationData calibration_data;
-  uint32_t magic;
-  uint8_t mode;
-  uint8_t display;
-  uint8_t option[MODE_LAST];
-  int8_t env[MODE_LAST][ENV_TARGET_LAST];  // -2..+2 (half steps)
-  uint8_t padding[3];
-};
 
 class Settings {
  public:
@@ -52,7 +32,10 @@ class Settings {
   SettingsData* mutable_data() { return &data_; }
   const SettingsData& data() const { return data_; }
 
-  EnvRouting env_routing(int mode) const;
+  EnvRouting env_routing(int mode) const {
+    return SettingsEnvRouting(data_, mode);
+  }
+  bool mono_bass() const { return data_.mono_bass_off == 0; }
   bool freshly_baked() const { return freshly_baked_; }
   bool imported_calibration() const { return imported_calibration_; }
 

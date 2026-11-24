@@ -38,7 +38,8 @@ void Fdn::Clear() {
   for (int i = 0; i < kLines; ++i) lp_[i] = 0.0f;
 }
 
-void Fdn::Process(float amount, bool freeze, FloatFrame* io, size_t n) {
+void Fdn::Process(float amount, bool freeze, const FloatFrame* in,
+                  FloatFrame* out, size_t n) {
   amount_smoothed_ += 0.2f * (amount - amount_smoothed_);
   const float a = amount_smoothed_;
   if (a < 0.002f && !freeze) {
@@ -92,8 +93,8 @@ void Fdn::Process(float amount, bool freeze, FloatFrame* io, size_t n) {
   } while (0)
 
   for (size_t s = 0; s < n; ++s) {
-    float il = in_ap_[1].Process(in_ap_[0].Process(io[s].l)) * in_gain;
-    float ir = in_ap_[3].Process(in_ap_[2].Process(io[s].r)) * in_gain;
+    float il = in_ap_[1].Process(in_ap_[0].Process(in[s].l)) * in_gain;
+    float ir = in_ap_[3].Process(in_ap_[2].Process(in[s].r)) * in_gain;
 
     lp0 += damp * (FDN_TAP_MOD(0, m0) - lp0);
     lp1 += damp * (FDN_TAP(1) - lp1);
@@ -127,8 +128,8 @@ void Fdn::Process(float amount, bool freeze, FloatFrame* io, size_t n) {
     FDN_WRITE(6, (b2 - b6) * kLineScale + il);
     FDN_WRITE(7, (b3 - b7) * kLineScale + ir);
 
-    io[s].l += dc_[0].Process(outl) * wet;
-    io[s].r += dc_[1].Process(outr) * wet;
+    out[s].l += dc_[0].Process(outl) * wet;
+    out[s].r += dc_[1].Process(outr) * wet;
   }
 #undef FDN_TAP
 #undef FDN_TAP_MOD

@@ -43,15 +43,16 @@ enum ModeId {
   MODE_LAST
 };
 
+// What the envelope page can push: WET and the three per-mode knobs.
 enum EnvTarget {
   ENV_TARGET_BLEND,
-  ENV_TARGET_SPREAD,
-  ENV_TARGET_FEEDBACK,
-  ENV_TARGET_REVERB,
+  ENV_TARGET_BAL,
+  ENV_TARGET_FBK,
+  ENV_TARGET_RVB,
   ENV_TARGET_LAST
 };
 
-// How strongly the input envelope pushes each output knob (-1..+1).
+// How strongly the input envelope pushes each knob (-1..+1).
 struct EnvRouting {
   float amount[ENV_TARGET_LAST];
 };
@@ -88,6 +89,10 @@ class Engine {
   void RequestLoad(const uint8_t* data, size_t size);
   void SetMorphSource(const uint8_t* data, size_t size);
   bool supports_morph();
+
+  // Mono bass on the main out (LR4 crossover at 60 Hz). On by default.
+  void set_mono_bass(bool on) { mono_bass_.set_on(on); }
+  bool mono_bass() const { return mono_bass_.on(); }
 
   // Mute the wet path (used while flash is being written).
   void set_silence(bool s) { silence_ = s; }
@@ -128,15 +133,17 @@ class Engine {
   EnvRouting env_routing_;
   Envelope envelope_;
 
+  // Services a mode may map a knob to (see Mode::feedback_amount).
   Fdn reverb_;
   ResonanceTamer tamer_;
-  Spread spread_;
+  bool feedback_active_;
+  MonoBass mono_bass_;
   Limiter limiter_;
   OnePole fb_hp_[2];
   DcBlocker out_dc_[2];
   Random dither_;
 
-  BlockRamp blend_, spread_amt_, feedback_, reverb_amt_;
+  BlockRamp blend_, feedback_;
   FloatFrame feedback_signal_[kBlockSize];
   FloatFrame dry_[kBlockSize];
   FloatFrame mode_in_[kBlockSize];

@@ -23,9 +23,9 @@ static float* Param(Controls* c, const std::string& name) {
   if (name == "texture") return &c->texture;
   if (name == "pitch") return &c->pitch;
   if (name == "blend") return &c->blend;
-  if (name == "spread") return &c->spread;
-  if (name == "feedback") return &c->feedback;
-  if (name == "reverb") return &c->reverb;
+  if (name == "spread") return &c->bal;
+  if (name == "feedback") return &c->fbk;
+  if (name == "reverb") return &c->rvb;
   return NULL;
 }
 

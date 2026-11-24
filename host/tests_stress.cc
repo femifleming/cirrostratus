@@ -51,8 +51,8 @@ MONSOON_TEST(stress_every_option_with_fast_cv) {
         Controls c = DefaultControls();
         c.position = r.Float(); c.size = r.Float(); c.density = r.Float();
         c.texture = r.Float(); c.pitch = r.Bipolar() * 48.0f;
-        c.blend = r.Float(); c.spread = r.Float(); c.feedback = r.Float();
-        c.reverb = r.Float();
+        c.blend = r.Float(); c.bal = r.Float(); c.fbk = r.Float();
+        c.rvb = r.Float();
         c.freeze = (b / 37) % 3 == 0;
         c.trigger = r.Float() < 0.1f;
         c.gate = r.Float() < 0.5f;
@@ -79,13 +79,13 @@ MONSOON_TEST(stress_silence_after_abuse) {
     auto loud = Noise(3.0f, 0.9f);
     m.Render(loud, [](size_t) {
       Controls c = DefaultControls();
-      c.density = 1.0f; c.texture = 1.0f; c.feedback = 1.0f; c.reverb = 1.0f;
+      c.density = 1.0f; c.texture = 1.0f; c.fbk = 1.0f; c.rvb = 1.0f;
       return c;
     });
     auto quiet = Silence(30.0f);
     auto out = m.Render(quiet, [](size_t) {
       Controls c = DefaultControls();
-      c.density = 0.3f; c.feedback = 0.0f; c.reverb = 0.0f;
+      c.density = 0.3f; c.fbk = 0.0f; c.rvb = 0.0f;
       return c;
     });
     Stats tail = Measure(out, out.size() - 48000 * 2);
@@ -120,8 +120,8 @@ MONSOON_TEST(stress_mode_switch_storm) {
     auto out = m.Render(in, [&](size_t) {
       Controls c = DefaultControls();
       c.freeze = (k & 1) != 0;
-      c.feedback = 0.8f;
-      c.reverb = 0.6f;
+      c.fbk = 0.8f;
+      c.rvb = 0.6f;
       return c;
     });
     Stats s = Measure(out);
@@ -199,7 +199,7 @@ MONSOON_TEST(stress_noise_floor) {
     CHECK(m.SetMode(ModeId(mode)), "init");
     auto out = m.Render(Silence(3.0f), [](size_t) {
       Controls c = DefaultControls();
-      c.feedback = 0.0f; c.reverb = 0.0f;
+      c.fbk = 0.0f; c.rvb = 0.0f;
       return c;
     });
     Stats s = Measure(out, 48000);

@@ -13,7 +13,7 @@ namespace {
 
 Controls Base() {
   Controls c = DefaultControls();
-  c.reverb = 0.0f;
+  c.rvb = 0.0f;
   c.size = 0.0f;
   c.texture = 1.0f;   // internal source
   c.density = 0.0f;   // unison

@@ -25,9 +25,9 @@ inline Controls DefaultControls() {
   c.texture = 0.5f;
   c.pitch = 0.0f;
   c.blend = 1.0f;     // fully wet so tests hear the mode
-  c.spread = 0.5f;
-  c.feedback = 0.0f;
-  c.reverb = 0.0f;
+  c.bal = 0.5f;
+  c.fbk = 0.0f;
+  c.rvb = 0.0f;
   c.freeze = false;
   c.trigger = false;
   c.gate = false;

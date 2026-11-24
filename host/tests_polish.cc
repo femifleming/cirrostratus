@@ -24,6 +24,7 @@ Controls Neutral() {
 std::vector<FloatFrame> Run(const std::vector<FloatFrame>& in,
                             std::function<Controls(size_t)> ctl) {
   Module m;
+  m.engine().set_mono_bass(false);  // measure the mode, not the output section
   m.SetMode(MODE_POLISH);
   return m.Render(in, ctl);
 }

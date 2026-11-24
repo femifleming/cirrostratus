@@ -1,6 +1,7 @@
-// Output-section effects shared by every mode:
+// Output-section effects (the feedback loop and the FDN are services a
+// mode may map a knob to; MonoBass and Limiter run on the main out):
 //  - ResonanceTamer: Quell-style adaptive notches for the feedback loop.
-//  - Spread: mid/side width + mono-compatible decorrelation + tiny Haas.
+//  - MonoBass: LR4 crossover, bass below 60 Hz summed to mono.
 //  - Fdn: 8-line modulated feedback delay network reverb (int16 lines).
 //  - Limiter: stereo peak limiter + soft clip.
 
@@ -77,44 +78,78 @@ class ResonanceTamer {
 };
 
 // ---------------------------------------------------------------------------
-class Spread {
+// Mono bass for the main out: a Linkwitz-Riley 4th-order crossover. Below
+// the crossover L and R are summed, (L+R)/2 to both sides; above it they
+// pass untouched. Same result as HP4(L) + LP4((L+R)/2), but done in
+// mid/side with three 2nd-order sections instead of six:
+//   mid  -> LR4 allpass (= LP4 + HP4, the crossover's flat-magnitude sum)
+//   side -> LR4 high-pass (two Butterworth high-passes)
+// Toggling crossfades over ~20 ms; fully off it costs nothing.
+class MonoBass {
  public:
-  void Init() {
-    ap0_.Init(37, 0.6f);
-    ap1_.Init(113, -0.55f);
-    ap2_.Init(241, 0.5f);
-    haas_pos_ = 0;
-    memset(haas_, 0, sizeof(haas_));
+  void Init(float hz) {
+    const float g = tanf(kPi * hz / kSampleRate);
+    const float k = 1.41421356f;  // Butterworth, Q = 1/sqrt(2)
+    k_ = k;
+    a1_ = 1.0f / (1.0f + g * (g + k));
+    a2_ = g * a1_;
+    a3_ = g * a2_;
+    Reset();
+    mix_ = 1.0f;
+    on_ = true;
   }
-  // spread 0 = mono, 0.5 = untouched, 1 = extra wide.
-  inline void Process(float spread, float* l, float* r) {
-    float m = 0.5f * (*l + *r);
-    float s = 0.5f * (*l - *r);
-    float width = spread * 2.0f;
-    float extra = spread > 0.5f ? (spread - 0.5f) * 2.0f : 0.0f;
-    if (width > 1.0f) width = 1.0f + (width - 1.0f) * 0.6f;
-    s *= width;
-    // Mono-compatible decorrelation: added to the side only, so L+R keeps
-    // exactly the original mid.
-    float d = ap2_.Process(ap1_.Process(ap0_.Process(m)));
-    s += d * extra * 0.45f;
-    float outl = m + s;
-    float outr = m - s;
-    // Haas: delay R by up to ~0.35 ms at the very top of the range.
-    haas_[haas_pos_] = outr;
-    size_t delay = static_cast<size_t>(extra * extra * 16.0f);
-    size_t rd = (haas_pos_ + kHaas - delay) % kHaas;
-    *l = outl;
-    *r = haas_[rd];
-    haas_pos_ = (haas_pos_ + 1) % kHaas;
+  void Reset() { for (int i = 0; i < 6; ++i) s_[i] = 0.0f; }
+  void set_on(bool on) { on_ = on; }
+  bool on() const { return on_; }
+
+  void Process(FloatFrame* io, size_t n) {
+    if (!on_ && mix_ <= 0.0f) return;
+    if (on_ && mix_ <= 0.0f) Reset();  // coming back from bypass
+    const float inc = on_ ? 1.0f / 960.0f : -1.0f / 960.0f;
+    float ic1 = s_[0], ic2 = s_[1], ic3 = s_[2], ic4 = s_[3];
+    float ic5 = s_[4], ic6 = s_[5];
+    const float k = k_, a1 = a1_, a2 = a2_, a3 = a3_;
+    float mix = mix_;
+    for (size_t i = 0; i < n; ++i) {
+      const float l = io[i].l, r = io[i].r;
+      const float m = 0.5f * (l + r);
+      const float s = 0.5f * (l - r);
+      // Mid: allpass x - 2k*bp.
+      float v1 = a1 * ic1 + a2 * (m - ic2);
+      float v2 = ic2 + a2 * ic1 + a3 * (m - ic2);
+      ic1 = 2.0f * v1 - ic1;
+      ic2 = 2.0f * v2 - ic2;
+      const float ap = m - 2.0f * k * v1;
+      // Side: two high-passes x - k*bp - lp.
+      v1 = a1 * ic3 + a2 * (s - ic4);
+      v2 = ic4 + a2 * ic3 + a3 * (s - ic4);
+      ic3 = 2.0f * v1 - ic3;
+      ic4 = 2.0f * v2 - ic4;
+      const float h1 = s - k * v1 - v2;
+      v1 = a1 * ic5 + a2 * (h1 - ic6);
+      v2 = ic6 + a2 * ic5 + a3 * (h1 - ic6);
+      ic5 = 2.0f * v1 - ic5;
+      ic6 = 2.0f * v2 - ic6;
+      const float h2 = h1 - k * v1 - v2;
+      if (mix >= 1.0f && inc > 0.0f) {
+        io[i].l = ap + h2;
+        io[i].r = ap - h2;
+      } else {
+        mix = Clamp(mix + inc, 0.0f, 1.0f);
+        io[i].l = l + (ap + h2 - l) * mix;
+        io[i].r = r + (ap - h2 - r) * mix;
+      }
+    }
+    s_[0] = ic1; s_[1] = ic2; s_[2] = ic3; s_[3] = ic4;
+    s_[4] = ic5; s_[5] = ic6;
+    mix_ = mix;
   }
+
  private:
-  static const size_t kHaas = 32;
-  Allpass<64> ap0_;
-  Allpass<128> ap1_;
-  Allpass<256> ap2_;
-  float haas_[kHaas];
-  size_t haas_pos_;
+  float k_, a1_, a2_, a3_;
+  float s_[6];
+  float mix_;
+  bool on_;
 };
 
 // ---------------------------------------------------------------------------
@@ -127,8 +162,12 @@ class Fdn {
 
   bool Init(Arena* arena);
   // amount 0..1 sets both send level and decay time; freeze = infinite.
-  void Process(float amount, bool freeze, FloatFrame* io, size_t n);
+  // Reads `in`, adds the reverb tail to `out` (they may be the same).
+  void Process(float amount, bool freeze, const FloatFrame* in,
+               FloatFrame* out, size_t n);
   void Clear();
+  // True once the send has faded out; Process then returns at once.
+  bool idle() const { return amount_smoothed_ < 0.002f; }
 
  private:
   // All eight lines share one ring buffer and one write pointer (the

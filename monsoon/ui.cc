@@ -40,6 +40,7 @@ void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
   save_requested_ = false;
   settings_dirty_ = false;
   panic_until_ = 0;
+  mono_bass_until_ = 0;
 
   const SettingsData& d = settings_->data();
   menu_mode_ = d.mode;
@@ -48,6 +49,7 @@ void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
   if (d.display == 1) previous_page_ = UI_PAGE_KNOBS;
   engine_->RequestMode(static_cast<ModeId>(d.mode), d.option[d.mode]);
   engine_->set_env_routing(settings_->env_routing(d.mode));
+  engine_->set_mono_bass(settings_->mono_bass());
 }
 
 void Ui::Poll() {
@@ -76,6 +78,9 @@ void Ui::Poll() {
   if ((page_ == UI_PAGE_LOAD || page_ == UI_PAGE_SAVE ||
        page_ == UI_PAGE_ENV) && now > page_timeout_) {
     if (page_ == UI_PAGE_ENV) settings_dirty_ = true;
+    page_ = previous_page_;
+  }
+  if (page_ == UI_PAGE_MONO_BASS && now > mono_bass_until_) {
     page_ = previous_page_;
   }
   PaintLeds();
@@ -135,6 +140,22 @@ void Ui::OnPress(uint8_t id) {
       }
       break;
 
+    case SWITCH_WRITE:
+      if (switches_.pressed(SWITCH_FREEZE) &&
+          (page_ == UI_PAGE_VU_METER || page_ == UI_PAGE_KNOBS)) {
+        // FREEZE held + WRITE: mono bass on/off.
+        used_as_modifier_[SWITCH_FREEZE] = true;
+        used_as_modifier_[SWITCH_WRITE] = true;
+        SettingsData* d = settings_->mutable_data();
+        d->mono_bass_off = d->mono_bass_off ? 0 : 1;
+        engine_->set_mono_bass(settings_->mono_bass());
+        settings_dirty_ = true;
+        previous_page_ = page_;
+        page_ = UI_PAGE_MONO_BASS;
+        mono_bass_until_ = system_clock.milliseconds() + 1500;
+      }
+      break;
+
     default:
       break;
   }
@@ -158,7 +179,8 @@ void Ui::OnLongPress(uint8_t id) {
       used_as_modifier_[SWITCH_DISP] = true;
       used_as_modifier_[SWITCH_WRITE] = true;
       page_ = UI_PAGE_CALIBRATION_1;
-    } else if (page_ == UI_PAGE_VU_METER || page_ == UI_PAGE_KNOBS) {
+    } else if (!used_as_modifier_[SWITCH_WRITE] &&
+               (page_ == UI_PAGE_VU_METER || page_ == UI_PAGE_KNOBS)) {
       previous_page_ = page_;
       used_as_modifier_[SWITCH_WRITE] = true;
       page_ = UI_PAGE_SAVE;
@@ -408,9 +430,9 @@ void Ui::PaintLeds() {
 
     case UI_PAGE_KNOBS:
       leds_.set_intensity(0, static_cast<uint8_t>(cv_scaler_->wet() * 255.0f));
-      leds_.set_intensity(1, static_cast<uint8_t>(cv_scaler_->stereo() * 255.0f));
-      leds_.set_intensity(2, static_cast<uint8_t>(cv_scaler_->feedback() * 255.0f));
-      leds_.set_intensity(3, static_cast<uint8_t>(cv_scaler_->reverb() * 255.0f));
+      leds_.set_intensity(1, static_cast<uint8_t>(cv_scaler_->bal() * 255.0f));
+      leds_.set_intensity(2, static_cast<uint8_t>(cv_scaler_->fbk() * 255.0f));
+      leds_.set_intensity(3, static_cast<uint8_t>(cv_scaler_->rvb() * 255.0f));
       break;
 
     case UI_PAGE_MODE_MENU:
@@ -450,6 +472,18 @@ void Ui::PaintLeds() {
           if (e == 0) { red = 40; green = 40; } else { red = 0; green = 0; }
         }
         leds_.set_status(i, red, green);
+      }
+      break;
+
+    case UI_PAGE_MONO_BASS:
+      if (settings_->mono_bass()) {
+        // Bass gathered in the middle.
+        leds_.set_status(1, 0, 255);
+        leds_.set_status(2, 0, 255);
+      } else {
+        // Bass out at the sides.
+        leds_.set_status(0, 255, 160);
+        leds_.set_status(3, 255, 160);
       }
       break;
 

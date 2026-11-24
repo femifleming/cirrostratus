@@ -1,7 +1,7 @@
 // Buttons and LEDs.
 //
 //   FREEZE            tap: freeze on/off
-//   DISP              tap: LEDs show input level <-> WET/STER/FDB/RVB
+//   DISP              tap: LEDs show input level <-> WET/BAL/FBK/RVB
 //   DISP (hold)       mode menu: POSITION picks the mode (shown in binary,
 //                     green = bank 1, modes 1-15; red = bank 2, 16-30),
 //                     WRITE tap switches bank, FREEZE cycles the mode's
@@ -11,8 +11,11 @@
 //                     (DISP picks the slot, WRITE confirms; in the load page
 //                      FREEZE arms/clears the slot as the morph source)
 //   FREEZE hold + DISP   envelope page: DISP moves the cursor over
-//                     WET/STER/FDB/RVB, FREEZE cycles off/+½/+1/−½/−1,
+//                     WET/BAL/FBK/RVB, FREEZE cycles off/+½/+1/−½/−1,
 //                     WRITE saves and leaves
+//   FREEZE hold + WRITE  mono bass on/off (main out, below 60 Hz); the LEDs
+//                     show it for 1.5 s: middle two green = on, outer two
+//                     amber = off. Stored in the settings.
 
 #ifndef MONSOON_UI_H_
 #define MONSOON_UI_H_
@@ -34,6 +37,7 @@ enum UiPage {
   UI_PAGE_SAVE,
   UI_PAGE_SAVING,
   UI_PAGE_ENV,
+  UI_PAGE_MONO_BASS,
   UI_PAGE_CALIBRATION_1,
   UI_PAGE_CALIBRATION_2,
   UI_PAGE_PANIC,
@@ -87,6 +91,7 @@ class Ui {
   uint32_t page_timeout_;
   uint32_t option_flash_until_;
   uint32_t panic_until_;
+  uint32_t mono_bass_until_;
 
   uint8_t menu_mode_;
   uint8_t menu_bank_;

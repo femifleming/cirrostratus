@@ -60,6 +60,22 @@ class Mode {
   }
   virtual bool supports_morph() const { return false; }
 
+  // Engine services a mode may map one of its own knobs to (BAL/FBK/RVB
+  // are per-mode controls). Return 0 when the service is not used; the
+  // engine then skips it and it costs no CPU.
+  //  - feedback_amount: the global feedback loop (wet output -> 25 Hz HP ->
+  //    resonance tamer -> soft clip -> back into the mode's input), 0..1.
+  //  - reverb_amount: the 8-line FDN reverb after the blend, 0..1 (send and
+  //    decay together, 0.5 s -> ~16 s).
+  virtual float feedback_amount(const Controls& c) const {
+    (void)c;
+    return 0.0f;
+  }
+  virtual float reverb_amount(const Controls& c) const {
+    (void)c;
+    return 0.0f;
+  }
+
   // Whether the mode wants the dry input muted while frozen (purely a hint
   // for the engine's meter; blending still uses the BLEND slider).
   virtual bool frozen() const { return false; }

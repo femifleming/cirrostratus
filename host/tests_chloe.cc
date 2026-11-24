@@ -90,7 +90,7 @@ MONSOON_TEST(chloe_stays_bounded_at_full_regen_and_drive) {
     auto out = m.Render(in, [](size_t b) {
       Controls c = DefaultControls();
       c.density = 1.0f; c.texture = 1.0f; c.size = (b % 400) / 400.0f;
-      c.position = 0.7f; c.feedback = 0.8f; c.trigger = (b % 500) == 0;
+      c.position = 0.7f; c.fbk = 0.8f; c.trigger = (b % 500) == 0;
       return c;
     });
     Stats s = Measure(out);

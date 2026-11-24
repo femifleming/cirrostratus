@@ -13,7 +13,7 @@ namespace {
 
 Controls Base() {
   Controls c = DefaultControls();
-  c.reverb = 0.0f;
+  c.rvb = 0.0f;
   c.size = 0.0f;      // no ombak
   c.texture = 0.0f;   // saron
   c.density = 0.7f;

@@ -13,7 +13,7 @@ namespace {
 
 Controls Base() {
   Controls c = DefaultControls();
-  c.reverb = 0.0f;
+  c.rvb = 0.0f;
   c.position = 0.3f;
   c.size = 0.5f;
   c.density = 0.5f;

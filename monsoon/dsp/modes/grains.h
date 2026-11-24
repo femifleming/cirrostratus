@@ -4,6 +4,13 @@
 // recording buffer (circle, line, figure-8, spiral, random walk). The path
 // also carries a pan coordinate, so circular paths swirl across the stereo
 // field.
+//
+// Per-mode knobs:
+//   BAL  noon = v1.0. Left: spray (grains scatter around the path, up to
+//        half the buffer). Right: share of grains played backwards (all of
+//        them at full).
+//   FBK  the engine's feedback loop (with the resonance tamer).
+//   RVB  the engine's FDN reverb.
 
 #ifndef MONSOON_DSP_MODES_GRAINS_H_
 #define MONSOON_DSP_MODES_GRAINS_H_
@@ -43,6 +50,11 @@ class GrainsMode : public Mode {
     return buffer_.Load(data, size) != 0;
   }
   bool frozen() const { return frozen_; }
+
+  // FBK and RVB use the engine's feedback loop and FDN reverb (the Clouds
+  // pairing for a granular cloud).
+  float feedback_amount(const Controls& c) const { return c.fbk; }
+  float reverb_amount(const Controls& c) const { return c.rvb; }
 
   // For tests.
   Shape shape() const { return shape_; }

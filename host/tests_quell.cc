@@ -35,6 +35,7 @@ Controls Settings(float density) {
 std::vector<FloatFrame> Run(const std::vector<FloatFrame>& in, Controls c,
                             int trigger_block = -1) {
   Module m;
+  m.engine().set_mono_bass(false);  // measure the mode, not the output section
   m.SetMode(MODE_QUELL);
   return m.Render(in, [&](size_t b) {
     Controls k = c;
@@ -108,6 +109,7 @@ MONSOON_TEST(quell_freeze_holds_the_cut_curve) {
   float held[2];
   for (int frozen = 0; frozen < 2; ++frozen) {
     Module m;
+    m.engine().set_mono_bass(false);  // measure the mode, not the output section
     m.SetMode(MODE_QUELL);
     QuellMode* q = static_cast<QuellMode*>(m.engine().mode_instance(MODE_QUELL));
     auto in = NoiseWithRing(4.0f, 0.3f);

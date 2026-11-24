@@ -10,7 +10,6 @@ namespace monsoon {
 // settings. The bootloader stays in sector 0, the app starts at sector 2.
 static stmlib::Storage<1> storage;
 
-static const uint32_t kSettingsMagic = 0x4D484631;  // "MHF1"
 
 // Layout written by the stock Monsoon (Clouds 1.x) firmware, used once to
 // carry over an existing V/OCT calibration.
@@ -26,8 +25,7 @@ void Settings::Init() {
   freshly_baked_ = false;
   imported_calibration_ = false;
   if (storage.ParsimoniousLoad(&data_, &version_token_) &&
-      data_.magic == kSettingsMagic) {
-    if (data_.mode >= MODE_LAST) data_.mode = 0;
+      UpgradeSettingsData(&data_)) {
     return;
   }
   memset(&data_, 0, sizeof(data_));
@@ -47,6 +45,7 @@ void Settings::Init() {
     freshly_baked_ = true;
   }
   data_.magic = kSettingsMagic;
+  data_.version = kSettingsVersion;
   data_.mode = MODE_GRAINS;
   version_token_ = 0;
   Save();
@@ -54,14 +53,6 @@ void Settings::Init() {
 
 void Settings::Save() {
   storage.ParsimoniousSave(data_, &version_token_);
-}
-
-EnvRouting Settings::env_routing(int mode) const {
-  EnvRouting r;
-  for (int i = 0; i < ENV_TARGET_LAST; ++i) {
-    r.amount[i] = 0.5f * data_.env[mode][i];
-  }
-  return r;
 }
 
 void Settings::WriteSlot(int index, const PersistentChunk* chunks, size_t n) {
