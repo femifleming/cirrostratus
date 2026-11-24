@@ -16,6 +16,21 @@
 // | TRIG     | Toggle "listen": hear only what the spectral cleaner removes|
 // | Options  | 0 = 50 Hz mains, 1 = 60 Hz mains                            |
 //
+// Per-mode knobs:
+//   BAL  tilt of the reduction, noon = v1.0 (even). Left: the lows are
+//        cleaned harder (twice at full) and the highs left alone; right:
+//        the other way round (hiss only, the bass untouched). Pivot
+//        ~1.5 kHz.
+//   FBK  de-crackle on the input: whatever a ~2.5 kHz low-pass does not
+//        predict is limited to a few times its own running level
+//        (28x -> 3x), so clicks and vinyl crackle are flattened while
+//        steady sound passes.
+//   RVB  de-reverb: every bin's decay is made steeper than it really is
+//        (up to 3x faster in dB at full), which pulls down the room tail
+//        and keeps attacks, steady notes and slow natural decays (it acts
+//        on energy falling faster than 60 dB in ~4 s; at most -24 dB).
+//        Works with DENSITY at 0 too.
+//
 // STFT 1024 / hop 512 (2x overlap, sine windows), stereo-linked Wiener-
 // style gain with a floor (2x keeps the CPU in budget next to the 16 hum
 // notches; the gain smoothing hides the coarser time grid).
@@ -25,6 +40,7 @@
 #define MONSOON_DSP_MODES_PUTZ_H_
 
 #include "monsoon/dsp/mode.h"
+#include "monsoon/dsp/modes/knob_fx.h"
 #include "monsoon/dsp/modes/table_stft.h"
 
 namespace monsoon {
@@ -53,6 +69,9 @@ class PutzMode : public Mode, public StftClient {
     float x1[2], x2[2], y1[2], y2[2];
   };
   void UpdateNotches(float f0);
+  float KnobPower(size_t k, float p, float alpha, float gmin2) KNOB_FX;
+  const FloatFrame* Knobs(const Controls& c, const FloatFrame* in,
+                          FloatFrame* clean, size_t n) KNOB_FX;
 
   TableStft stft_;
   float* noise_;      // estimated noise power per bin
@@ -72,6 +91,9 @@ class PutzMode : public Mode, public StftClient {
   volatile bool freeze_;
   bool listen_;
   bool prev_trigger_;
+  volatile float bal_, rvb_;
+  float* tail_;       // RVB: decaying peak of smooth_ per bin
+  float click_[4];    // FBK: low-pass and level per side
 
   Notch notch_[kHarmonics];
   float notch_f0_;

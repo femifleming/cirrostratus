@@ -15,6 +15,7 @@ bool FolderMode::Init(Arena* arena) {
     dc_[ch].Init();
   }
   up_w_ = down_w_ = 0;
+  memset(&k_, 0, sizeof(k_));
   // Blackman-windowed half-band (odd taps only), unity DC gain.
   float sum = 0.0f;
   for (int k = 0; k < 12; ++k) {
@@ -78,17 +79,23 @@ void FolderMode::Process(const Controls& c, const FloatFrame* in,
   const float vca_amt = Clamp(2.0f * d, 0.0f, 1.0f);
   const float cut = vactrol_ * lp_amt + (1.0f - lp_amt);
   const float fc = 20.0f * powf(1000.0f, cut);
-  for (int ch = 0; ch < 2; ++ch) lpg_[ch].set(fc / kSampleRate, 0.6f);
+  SetLpg(fc / kSampleRate);
   lpg_gain_ = Clamp(lpg_gain_, 0.0f, 1.0f);
   const float new_gain = (1.0f - vca_amt) + vca_amt * vactrol_;
   // Ramp the VCA gain across the block (no zipper noise).
   const float gain_inc = (new_gain - lpg_gain_) / static_cast<float>(n);
 
+  // BAL (cross-modulation) and FBK (folder feedback) act before the
+  // folder.
+  const bool pre = Knobs(c, n);
+
   for (size_t s = 0; s < n; ++s) {
     phase_ += inc;
     if (phase_ >= 1.0f) phase_ -= 1.0f;
-    const float sine = FastSin(phase_) * sine_level;
-    const float x[2] = { in[s].l + sine, in[s].r + sine };
+    const float carrier = FastSin(phase_);
+    const float sine = carrier * sine_level;
+    float x[2] = { in[s].l + sine, in[s].r + sine };
+    if (pre) PreFold(x, in[s], carrier, sine_level);
     float y[2];
     for (int ch = 0; ch < 2; ++ch) {
       float* up = up_[ch];
@@ -115,6 +122,7 @@ void FolderMode::Process(const Controls& c, const FloatFrame* in,
                                dn[(center + kRing - off) & (kRing - 1)]);
       }
       y[ch] = acc;
+      k_.fold_y[ch] = acc;
     }
     up_w_ = (up_w_ + 1) & (kRing - 1);
     down_w_ = (down_w_ + 2) & (kRing - 1);
@@ -123,6 +131,56 @@ void FolderMode::Process(const Controls& c, const FloatFrame* in,
     out[s].l = dc_[0].Process(lpg_[0].Lp(y[0]) * lpg_gain_ * 0.8f);
     out[s].r = dc_[1].Process(lpg_[1].Lp(y[1]) * lpg_gain_ * 0.8f);
   }
+}
+
+// Out of line and compiled for size (the flash is nearly full).
+void FolderMode::SetLpg(float f) {
+  for (int ch = 0; ch < 2; ++ch) lpg_[ch].set(f, 0.6f);
+}
+
+// Block-rate part of BAL and FBK: the ramps (snapped to their targets at
+// every block, so noon / zero is exact). Returns whether PreFold runs.
+bool FolderMode::Knobs(const Controls& c, size_t n) {
+  const float inv_n = 1.0f / static_cast<float>(n);
+  const float bal = KnobBal(c.bal);
+  const float fb = 1.5f * (c.fbk > 1.0f ? 1.0f : c.fbk);
+  k_.value[0] = k_.target[0];
+  k_.value[1] = k_.target[1];
+  k_.inc[0] = (bal - k_.value[0]) * inv_n;
+  k_.inc[1] = (fb - k_.value[1]) * inv_n;
+  k_.target[0] = bal;
+  k_.target[1] = fb;
+  return bal != 0.0f || fb > 0.0f || k_.value[0] != 0.0f ||
+      k_.value[1] > 0.0f;
+}
+
+// The folder's input with BAL and FBK, per sample (replaces in + sine).
+// BAL left: the input bends the sine's phase (up to +/-0.75 cycles at
+// full scale). Right: the sine (at PITCH, also in option 1) rings the
+// input (all ring at full). FBK: the last folder output is added back
+// (up to 1.5x).
+void FolderMode::PreFold(float* x, const FloatFrame& in, float carrier,
+                         float level) {
+  const float bal = (k_.value[0] += k_.inc[0]);
+  const float fb = (k_.value[1] += k_.inc[1]);
+  float l = in.l, r = in.r;
+  float sine = carrier;
+  if (bal < 0.0f) {
+    // The phase-modulated sine, as a parabola (its small harmonics vanish
+    // in the folding): with q = 2 frac(phase) - 1 in [-1, 1),
+    // sin(2 pi phase) = -sin(pi q) ~ -4 q (1 - |q|).
+    float q = phase_ - 0.375f * bal * (l + r);
+    q -= static_cast<float>(static_cast<int32_t>(q));   // (-1, 1)
+    q = q < 0.0f ? 2.0f * q + 1.0f : 2.0f * q - 1.0f;
+    sine = -4.0f * q * (1.0f - fabsf(q));
+  } else {
+    const float rm = 1.0f + bal * (1.41f * carrier - 1.0f);
+    l *= rm;
+    r *= rm;
+  }
+  sine *= level;
+  x[0] = l + sine + fb * k_.fold_y[0];
+  x[1] = r + sine + fb * k_.fold_y[1];
 }
 
 }  // namespace monsoon

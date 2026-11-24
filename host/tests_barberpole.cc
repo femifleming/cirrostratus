@@ -129,3 +129,103 @@ MONSOON_TEST(barberpole_freeze_keeps_spiralling_without_input) {
   CHECK(Db(tail[1]) - Db(tail[0]) > 30.0f, "freeze should sustain");
   return true;
 }
+
+namespace {
+
+// Energy share of one side below 300 Hz and above 4 kHz.
+void Tilt(const std::vector<FloatFrame>& v, size_t from, float* low,
+          float* high) {
+  Svf lp, hp;
+  lp.Init();
+  hp.Init();
+  lp.set(300.0f / 48000.0f, 0.7f);
+  hp.set(4000.0f / 48000.0f, 0.7f);
+  double e = 0, el = 0, eh = 0;
+  for (size_t i = 0; i < v.size(); ++i) {
+    float a = lp.Lp(v[i].l), b = hp.Hp(v[i].l);
+    if (i < from) continue;
+    e += v[i].l * v[i].l;
+    el += a * a;
+    eh += b * b;
+  }
+  *low = float(el / (e + 1e-30));
+  *high = float(eh / (e + 1e-30));
+}
+
+}  // namespace
+
+MONSOON_TEST(barberpole_bal_fbk_rvb_do_what_they_say) {
+  // BAL: the loop's tone. A noise burst recirculating without a shift.
+  auto burst = Noise(2.0f, 0.3f);
+  for (size_t i = 4800; i < burst.size(); ++i) burst[i].l = burst[i].r = 0.0f;
+  float low[3], high[3];
+  for (int k = 0; k < 3; ++k) {
+    auto out = Run(burst, [&](size_t, Controls* c) {
+      c->position = 0.5f;   // no shift
+      c->density = 0.9f;
+      c->bal = 0.5f * k;
+    });
+    Tilt(out, 48000, &low[k], &high[k]);
+  }
+  std::printf("    BAL left/noon/right: lows %.3f/%.3f/%.3f, highs %.3f/%.3f/%.3f\n",
+              low[0], low[1], low[2], high[0], high[1], high[2]);
+  CHECK(high[0] < high[1] * 0.1f, "BAL left should darken every pass");
+  CHECK(low[2] < low[1] * 0.1f && high[2] > high[1], "BAL right should thin every pass");
+
+  // FBK: wow. A 1 kHz sine through the loop (no feedback): the moving
+  // delay spreads it around 1 kHz.
+  auto sine = Sine(1000.0f, 3.0f, 0.3f);
+  float on[2];
+  for (int k = 0; k < 2; ++k) {
+    auto out = Run(sine, [&](size_t, Controls* c) {
+      c->position = 0.5f;
+      c->size = 0.5f;
+      c->fbk = k ? 1.0f : 0.0f;
+    });
+    on[k] = ToneAmplitude(out, 1000.0f, 48000, out.size());
+  }
+  std::printf("    FBK: 1 kHz after the loop %.1f dB -> %.1f dB\n", Db(on[0]), Db(on[1]));
+  CHECK(on[1] < on[0] * 0.5f, "FBK should detune the loop");
+
+  // RVB: dispersion. A click recirculating through a 49 ms loop: every
+  // pass delays the lows behind the highs, so in the third echo the
+  // energy below 300 Hz peaks well after the energy above 3 kHz.
+  auto click = Silence(1.0f);
+  click[2400].l = click[2400].r = 0.9f;
+  const float loop = 72.0f * std::pow(24000.0f / 72.0f, 0.6f);
+  float lag[2];
+  for (int k = 0; k < 2; ++k) {
+    auto out = Run(click, [&](size_t, Controls* c) {
+      c->position = 0.5f;
+      c->size = 0.6f;
+      c->density = 0.7f;
+      c->rvb = k ? 1.0f : 0.0f;
+    });
+    Stats s = Measure(out);
+    CHECK(s.finite && s.peak <= 1.0f, "the loop must stay bounded");
+    // Where each band's energy peaks (1 ms slots) in the third echo.
+    Svf lp, hp;
+    lp.Init();
+    hp.Init();
+    lp.set(300.0f / 48000.0f, 0.7f);
+    hp.set(3000.0f / 48000.0f, 0.7f);
+    const size_t from = 2400 + size_t(3.0f * loop) - 240;
+    double el[45] = { 0 }, eh[45] = { 0 };
+    for (size_t i = 0; i < from + 45 * 48; ++i) {
+      float a = lp.Lp(out[i].l), b = hp.Hp(out[i].l);
+      if (i < from) continue;
+      el[(i - from) / 48] += a * a;
+      eh[(i - from) / 48] += b * b;
+    }
+    int pl = 0, ph = 0;
+    for (int w = 0; w < 45; ++w) {
+      if (el[w] > el[pl]) pl = w;
+      if (eh[w] > eh[ph]) ph = w;
+    }
+    lag[k] = float(pl - ph);
+  }
+  std::printf("    RVB: lows behind the highs in the third echo %.1f ms -> %.1f ms\n",
+              lag[0], lag[1]);
+  CHECK(lag[1] - lag[0] > 5.0f, "RVB should disperse the repeats");
+  return true;
+}

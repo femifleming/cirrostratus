@@ -57,6 +57,7 @@ bool ChoirMode::Init(Arena* arena) {
     for (int f = 0; f < kFormants; ++f) formant_[ch][f].Init();
   }
   last_position_ = -1.0f;
+  last_bal_ = 0.0f;
   write_ = 0;
   inversion_ = 0;
   frozen_ = false;
@@ -68,13 +69,13 @@ bool ChoirMode::Init(Arena* arena) {
   return true;
 }
 
-void ChoirMode::UpdateFormants(float position) {
+void ChoirMode::UpdateFormants(float position, float shift) {
   float p = Clamp(position, 0.0f, 1.0f) * 4.0f;
   int i0 = static_cast<int>(p);
   if (i0 > 3) i0 = 3;
   float t = p - i0;
   for (int f = 0; f < kFormants; ++f) {
-    float hz = Crossfade(kVowelF[i0][f], kVowelF[i0 + 1][f], t);
+    float hz = Crossfade(kVowelF[i0][f], kVowelF[i0 + 1][f], t) * shift;
     float bw = Crossfade(kVowelBw[i0][f], kVowelBw[i0 + 1][f], t);
     float db = Crossfade(kVowelDb[i0][f], kVowelDb[i0 + 1][f], t);
     formant_gain_[f] = powf(10.0f, db / 20.0f);
@@ -88,10 +89,9 @@ void ChoirMode::Process(const Controls& c, const FloatFrame* in,
                         FloatFrame* out, size_t n) {
   frozen_ = c.freeze;
   if (c.trigger) inversion_ = (inversion_ + 1) & 3;
-  if (fabsf(c.position - last_position_) > 0.002f) {
-    UpdateFormants(c.position);
-    last_position_ = c.position;
-  }
+  // Formants (POSITION, BAL) and FBK's comb feedback.
+  float comb_scale;
+  const float comb_fb = Knobs(c, &comb_scale);
 
   // Chord with inversion: the lowest `inversion_` notes go up an octave.
   int chord = static_cast<int>(Clamp(c.density, 0.0f, 0.999f) * kChords);
@@ -116,7 +116,7 @@ void ChoirMode::Process(const Controls& c, const FloatFrame* in,
   const float vib_depth = 0.002f + 0.006f * size;
 
   const float tex = Clamp(c.texture, 0.0f, 1.0f);
-  const float comb_mix = 1.0f - tex;
+  const float comb_mix = (1.0f - tex) * comb_scale;
   const float glottal_mix = tex;
   const float breath = tex * tex * 0.08f;
 
@@ -152,7 +152,7 @@ void ChoirMode::Process(const Controls& c, const FloatFrame* in,
       float b = vo.comb[(ip + 1) & kCombMask];
       float d = a + (b - a) * fr;
       vo.damp += 0.5f * (d - vo.damp);
-      vo.comb[write_] = comb_in + 0.93f * vo.damp;
+      vo.comb[write_] = comb_in + comb_fb * vo.damp;
       float voiced = vo.damp * 0.07f * comb_mix + glottal * glottal_mix;
 
       l += voiced * (1.0f - pan_[v]);
@@ -168,6 +168,27 @@ void ChoirMode::Process(const Controls& c, const FloatFrame* in,
     out[s].l = dc_[0].Process(fl * 0.9f);
     out[s].r = dc_[1].Process(fr2 * 0.9f);
   }
+}
+
+// Updates the formants when POSITION or BAL moved. BAL shifts them (the
+// singers' size) by 2^(0.4 BAL), x0.76 .. x1.32, without moving the notes
+// (exactly back to v1.0 at noon).
+// FBK: the comb feedback 0.93 (v1.0) -> 0.995 is returned; the comb output
+// is scaled by (1 - feedback) / 0.07 so a note's peak level stays put
+// while it rings longer.
+float ChoirMode::Knobs(const Controls& c, float* comb_scale) {
+  const float bal = KnobBal(c.bal);
+  if (fabsf(c.position - last_position_) > 0.002f ||
+      fabsf(bal - last_bal_) > (bal == 0.0f ? 0.0f : 0.002f)) {
+    last_bal_ = bal;
+    last_position_ = c.position;
+    UpdateFormants(c.position, exp2f(0.4f * bal));
+  }
+  *comb_scale = 1.0f;
+  if (c.fbk <= 0.0f) return 0.93f;
+  const float fb = 0.93f + 0.065f * (c.fbk < 1.0f ? c.fbk : 1.0f);
+  *comb_scale = (1.0f - fb) * (1.0f / 0.07f);
+  return fb;
 }
 
 }  // namespace monsoon

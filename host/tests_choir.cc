@@ -126,3 +126,67 @@ MONSOON_TEST(choir_freeze_sustains_without_input) {
   CHECK(std::fabs(Db(a) - Db(b)) < 2.0f, "steady");
   return true;
 }
+
+MONSOON_TEST(choir_bal_fbk_rvb_do_what_they_say) {
+  // BAL: the formants move without the notes. Share of the frozen
+  // choir's energy above 1.5 kHz, and the root's pitch.
+  float bright[3], root[3];
+  for (int k = 0; k < 3; ++k) {
+    Controls c = Base();
+    c.bal = 0.5f * k;
+    auto out = Sing(c, 1.5f);
+    Svf hp;
+    hp.Init();
+    hp.set(1500.0f / 48000.0f, 0.7f);
+    double e = 0, h = 0;
+    for (size_t i = 0; i < out.size(); ++i) {
+      float x = hp.Hp(out[i].l);
+      if (i < 24000) continue;
+      e += out[i].l * out[i].l;
+      h += x * x;
+    }
+    bright[k] = float(h / (e + 1e-30));
+    root[k] = PeakNear(out, 130.81f, 30.0f, 24000, out.size() - 64);
+  }
+  std::printf("    BAL left/noon/right: energy above 1.5 kHz %.3f / %.3f / %.3f, "
+              "root %.1f / %.1f / %.1f Hz\n",
+              bright[0], bright[1], bright[2], root[0], root[1], root[2]);
+  CHECK(bright[0] < bright[1] * 0.7f && bright[2] > bright[1] * 1.4f,
+        "BAL should move the formants");
+  CHECK(std::fabs(root[0] - root[2]) < 1.0f, "BAL must not move the notes");
+
+  // FBK: the input's combs ring longer. A 0.1 s noise burst, TEXTURE 0.
+  float ring[2];
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Base();
+    c.texture = 0.0f;
+    c.fbk = k ? 1.0f : 0.0f;
+    auto in = Silence(2.0f);
+    Random r;
+    r.Seed(5);
+    for (size_t i = 4800; i < 9600; ++i) in[i].l = in[i].r = 0.3f * r.Bipolar();
+    auto out = Sing(c, 2.0f, false, &in);
+    Stats s = Measure(out);
+    CHECK(s.finite && s.peak < 1.0f, "bounded");
+    ring[k] = Measure(out, 9600 + 24000, 9600 + 48000).rms /
+        (Measure(out, 4800, 9600).rms + 1e-20f);
+  }
+  std::printf("    FBK: 0.5-1 s after the burst %.1f dB -> %.1f dB (re the burst)\n",
+              Db(ring[0]), Db(ring[1]));
+  CHECK(Db(ring[1]) - Db(ring[0]) > 30.0f, "FBK should make the combs ring on");
+
+  // RVB: the FDN service gives a tail after the input stops.
+  float late[2];
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Base();
+    c.rvb = k ? 0.8f : 0.0f;
+    auto in = Music(1.0f);
+    in.resize(48000 * 3);
+    auto out = Sing(c, 3.0f, false, &in);
+    late[k] = Measure(out, 48000 * 2, 48000 * 3).rms;
+  }
+  std::printf("    RVB: 1-2 s after the input stops %.1f dB -> %.1f dB\n",
+              Db(late[0]), Db(late[1]));
+  CHECK(Db(late[1]) - Db(late[0]) > 30.0f && Db(late[1]) > -70.0f, "RVB should add a tail");
+  return true;
+}

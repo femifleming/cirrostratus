@@ -19,12 +19,26 @@
 //
 // The loop holds 30 Hz high-pass and 14 kHz low-pass filters so shifted
 // material leaves the band instead of folding round DC or Nyquist.
+//
+// Per-mode knobs:
+//   BAL  tone of the loop, noon = v1.0 (30 Hz - 14 kHz). Left: a one-pole
+//        low-pass closing 14 kHz -> 1.2 kHz (every pass darker); right: a
+//        one-pole high-pass opening up to 1.5 kHz (every pass thinner).
+//   FBK  loop wow: the loop delay wobbles (a 0.9 Hz triangle, up to
+//        +2.5 ms, at most a quarter of the delay), so every pass is
+//        detuned and smeared a little more, like tape.
+//   RVB  dispersion in the loop: twelve first-order allpasses per side
+//        (coefficient down to -0.9: the lows up to ~4.5 ms behind the
+//        highs on every pass), so the spiralling repeats smear into
+//        falling chirps, like a spring.
+//
 // Memory: block-floating-point stereo loop (~96 KB, 500 ms).
 
 #ifndef MONSOON_DSP_MODES_BARBERPOLE_H_
 #define MONSOON_DSP_MODES_BARBERPOLE_H_
 
 #include "monsoon/dsp/mode.h"
+#include "monsoon/dsp/modes/knob_fx.h"
 #include "monsoon/dsp/sample_buffer.h"
 
 namespace monsoon {
@@ -74,6 +88,9 @@ class BarberpoleMode : public Mode {
   float shift_hz(int side) const { return shift_[side]; }
 
  private:
+  float Knobs(const Controls& c, size_t n) KNOB_FX;
+  void LoopFx(FloatFrame* stage, size_t n) KNOB_FX;
+
   SampleBuffer loop_;
   BarberSplitter splitter_[2];
   Svf hp_[2], lp_[2];
@@ -83,6 +100,19 @@ class BarberpoleMode : public Mode {
   float feedback_;
   float input_gain_;
   float direction_;
+  // BAL / FBK / RVB state (zeroed in Init).
+  struct {
+    float bal;
+    float tone_coef;     // BAL's one-pole in the loop
+    float tone[2];
+    float wow;           // FBK LFO phase
+    float wow_depth;     // samples
+    float wow_shape;     // LFO value at the end of the last block, 0..1
+    float wow_inc;       // per-sample ramp of the offset in this block
+    bool loop_fx;        // LoopFx runs this block
+    float disp_coef, disp_mix, disp_inc;   // RVB
+    float disp[24];      // 2 sides x 12 first-order allpasses
+  } k_;
   bool frozen_;
 };
 

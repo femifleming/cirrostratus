@@ -135,3 +135,74 @@ MONSOON_TEST(specdelay_pitch_spirals_the_repeats) {
   CHECK(Db(octave) > -45.0f && Db(fourth_harm) > -60.0f, "no spiral");
   return true;
 }
+
+MONSOON_TEST(specdelay_bal_fbk_rvb_do_what_they_say) {
+  // BAL: delay pattern. With a flat curve both tones of a burst come back
+  // together; stripes (left) or scatter (right) pull them apart.
+  float diff[3];
+  for (int k = 0; k < 3; ++k) {
+    Module m;
+    CHECK(m.SetMode(MODE_SPECDELAY), "init");
+    auto in = TwoToneBurst(1.5f, 4800);
+    auto out = m.Render(in, [&](size_t) {
+      Controls c = Neutral();
+      c.position = 0.5f;
+      c.size = 1.0f;
+      c.bal = 0.5f * k;
+      return c;
+    });
+    diff[k] = std::fabs(float(PeakTime(out, 6000.0f, 4800)) -
+                        float(PeakTime(out, 300.0f, 4800))) / 48.0f;
+  }
+  std::printf("    BAL left/noon/right: 300 Hz and 6 kHz %.0f / %.0f / %.0f ms apart\n",
+              diff[0], diff[1], diff[2]);
+  CHECK(diff[1] < 20.0f, "noon: flat curve");
+  CHECK(diff[0] > 100.0f && diff[2] > 100.0f, "BAL should pattern the delays");
+
+  // FBK: spectral blur. A 1 kHz burst repeating: the repeats spread to the
+  // neighbouring frequencies.
+  // RVB: phase diffusion. A click repeating: the repeats lose their edge
+  // (crest factor down).
+  float spread[2], crest[2];
+  for (int k = 0; k < 2; ++k) {
+    Module m;
+    CHECK(m.SetMode(MODE_SPECDELAY), "init");
+    auto in = Silence(2.0f);
+    for (size_t i = 0; i < 2400; ++i) {
+      in[4800 + i].l = in[4800 + i].r =
+          0.3f * std::sin(2 * M_PI * 1000.0 * i / 48000.0);
+    }
+    auto out = m.Render(in, [&](size_t) {
+      Controls c = Neutral();
+      c.size = 0.3f;
+      c.density = 0.8f;
+      c.fbk = k ? 1.0f : 0.0f;
+      return c;
+    });
+    float on = ToneAmplitude(out, 1000.0f, 24000, 72000);
+    float off = ToneAmplitude(out, 1400.0f, 24000, 72000) +
+        ToneAmplitude(out, 600.0f, 24000, 72000);
+    spread[k] = off / (on + 1e-12f);
+
+    Module m2;
+    CHECK(m2.SetMode(MODE_SPECDELAY), "init");
+    auto click = Silence(1.0f);
+    click[4800].l = click[4800].r = 0.9f;
+    auto out2 = m2.Render(click, [&](size_t) {
+      Controls c = Neutral();
+      c.size = 0.3f;
+      c.density = 0.8f;
+      c.rvb = k ? 1.0f : 0.0f;
+      return c;
+    });
+    Stats s = Measure(out2, 9600, 48000);
+    CHECK(s.finite && s.peak < 1.0f, "bounded");
+    crest[k] = s.peak / (s.rms + 1e-20f);
+  }
+  std::printf("    FBK: energy 400 Hz off the tone %.1f dB -> %.1f dB\n",
+              Db(spread[0]), Db(spread[1]));
+  std::printf("    RVB: crest factor of the repeats %.1f -> %.1f\n", crest[0], crest[1]);
+  CHECK(spread[1] > spread[0] * 3.0f, "FBK should blur the repeats");
+  CHECK(crest[1] < crest[0] * 0.5f, "RVB should diffuse the repeats");
+  return true;
+}
