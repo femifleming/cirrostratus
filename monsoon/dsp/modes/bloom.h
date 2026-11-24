@@ -24,6 +24,21 @@
 // |          | blooming in reverse, over and over                          |
 // | TRIG     | restart the reverse heads now                               |
 // | options  | none                                                        |
+//
+// Per-mode knobs:
+//   BAL  noon = v1.0 (every bloom reversed, swelling in). Left: a growing
+//        share of blooms fade *out* instead (reverse echoes that strike,
+//        then trail away). Right: a growing share play *forwards*,
+//        swelling in (a swelled echo, one window late). Chosen per chunk.
+//   FBK  regeneration: the engine's feedback loop. The output (swelled
+//        dry and blooms) re-enters the buffer, so every bloom blooms
+//        again, reversed twice = forwards again ...: cascades, one round
+//        per 2 W.
+//   RVB  haze tail: TEXTURE's allpass chain is closed into a damped loop
+//        (gain up to 0.85, ~1.3 s), so the blooms - only they - ring on
+//        after the note: reverse reverb -> note -> reverb. Brings at
+//        least TEXTURE ~0.8's diffusion with it.
+//
 
 #ifndef MONSOON_DSP_MODES_BLOOM_H_
 #define MONSOON_DSP_MODES_BLOOM_H_
@@ -43,10 +58,15 @@ class BloomMode : public Mode {
                size_t n);
   bool frozen() const { return frozen_; }
 
+  // FBK is the engine's feedback loop.
+  float feedback_amount(const Controls& c) const { return c.fbk; }
+
   // Delay of the dry path in samples for a SIZE value (for tests).
   static float WindowSamples(float size);
 
  private:
+  __attribute__((noinline, cold)) void PickChunk(int h, float bal);
+
   struct Diffuser {
     float* line;
     size_t size;
@@ -60,6 +80,12 @@ class BloomMode : public Mode {
   float start_[2];      // buffer position each head started from
   float env_fast_, env_slow_;
   float dry_gain_;
+  float haze_[2];       // RVB: last output of each diffusion chain (damped)
+  Random rng_;          // BAL: per-chunk direction / envelope choice
+  bool next_forward_[2];
+  bool next_fall_[2];
+  float off_[2], dir_[2];    // read position: start - (off + dir ph) W
+  float rise_[2], fade_[2];  // envelope knee and fade length
   bool frozen_;
   bool was_trigger_;
 };

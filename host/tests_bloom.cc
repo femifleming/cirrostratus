@@ -113,3 +113,119 @@ MONSOON_TEST(bloom_freeze_keeps_blooming) {
   CHECK(Db(a) > -40.0f && std::fabs(Db(a) - Db(b)) < 3.0f, "freeze");
   return true;
 }
+
+// Per-mode knobs: BAL = falling (left) / forward (right) blooms, FBK =
+// regeneration (the engine's feedback loop), RVB = haze tail. Measured on a single click: the
+// blooms of a click are echoes of it between the click and the delayed dry.
+MONSOON_TEST(bloom_bal_fbk_rvb_do_what_they_say) {
+  const size_t at = 24000;
+  const size_t w = size_t(BloomMode::WindowSamples(0.5f));
+  auto run = [&](float bal, float fbk, float rvb, float seconds) {
+    Module m;
+    m.SetMode(MODE_BLOOM);
+    auto in = Silence(seconds);
+    in[at].l = in[at].r = 0.8f;
+    return m.Render(in, [&](size_t) {
+      Controls c = DefaultControls();
+      c.size = 0.5f;
+      c.position = 0.0f;
+      c.density = 1.0f;
+      c.texture = 0.0f;
+      c.bal = bal;
+      c.fbk = fbk;
+      c.rvb = rvb;
+      return c;
+    });
+  };
+  // Energy-weighted mean echo time (in windows) and the share of the echo
+  // energy landing exactly one window after the click.
+  auto echoes = [&](const std::vector<FloatFrame>& out, float* centroid,
+                    float* at_w) {
+    double e = 0, et = 0, ew = 0;
+    for (size_t i = at + 16; i < at + 2 * w - 64; ++i) {
+      double p = double(out[i].l) * out[i].l + double(out[i].r) * out[i].r;
+      e += p;
+      et += p * double(i - at) / w;
+      if (i + 8 >= at + w && i <= at + w + 8) ew += p;
+    }
+    *centroid = float(et / (e + 1e-30));
+    *at_w = float(ew / (e + 1e-30));
+  };
+  float cen[3], share[3];
+  const float bals[3] = { 0.0f, 0.5f, 1.0f };
+  for (int k = 0; k < 3; ++k) {
+    auto out = run(bals[k], 0.0f, 0.0f, 1.0f);
+    echoes(out, &cen[k], &share[k]);
+  }
+  std::printf("    BAL: echo centroid left %.2f W, noon %.2f W, right %.2f W; "
+              "energy at exactly 1 W: %.0f%% / %.0f%% / %.0f%%\n",
+              cen[0], cen[1], cen[2], 100 * share[0], 100 * share[1], 100 * share[2]);
+  CHECK(cen[1] > 1.4f, "noon: blooms swell up to the dry");
+  CHECK(cen[0] < 0.6f * cen[1], "BAL left: blooms should strike right after the sound");
+  CHECK(share[2] > 0.9f && share[1] < 0.1f, "BAL right: forward blooms, one window late");
+
+  // FBK: echoes of echoes keep coming after the delayed dry (2 W).
+  float late[2];
+  for (int k = 0; k < 2; ++k) {
+    auto out = run(0.5f, k ? 1.0f : 0.0f, 0.0f, 1.5f);
+    late[k] = Db(Measure(out, at + 2 * w + 480, at + 6 * w).rms);
+    CHECK(Measure(out).finite, "finite");
+  }
+  std::printf("    FBK: 2 W ... 6 W after the click: off %.1f dB, full %.1f dB\n",
+              late[0], late[1]);
+  CHECK(late[0] < -70.0f, "(almost) nothing after the dry without FBK");
+  CHECK(late[1] > late[0] + 20.0f, "FBK should make the blooms bloom again");
+
+  // RVB: the blooms ring on after everything else has finished (the
+  // last bloom of the click ends with the delayed dry at 2 W).
+  float tail[2];
+  for (int k = 0; k < 2; ++k) {
+    auto out = run(0.5f, 0.0f, k ? 1.0f : 0.0f, 2.5f);
+    tail[k] = Db(Measure(out, at + 2 * w + 2400, at + 2 * w + 26400).rms);
+    CHECK(Measure(out).finite, "finite");
+  }
+  std::printf("    RVB: 50-550 ms after the delayed dry: off %.1f dB, full %.1f dB\n",
+              tail[0], tail[1]);
+  CHECK(tail[0] < -70.0f && tail[1] > tail[0] + 20.0f, "RVB should add a haze tail");
+
+  // RVB on music stays near the dry bloom's level.
+  {
+    float lv[2];
+    for (int k = 0; k < 2; ++k) {
+      Module m;
+      m.SetMode(MODE_BLOOM);
+      auto out = m.Render(Music(4.0f), [&](size_t) {
+        Controls c = DefaultControls();
+        c.density = 1.0f;
+        c.texture = 0.0f;
+        c.rvb = k ? 1.0f : 0.0f;
+        return c;
+      });
+      lv[k] = Db(Measure(out, 48000).rms);
+    }
+    std::printf("    RVB on music: %.1f -> %.1f dB\n", lv[0], lv[1]);
+    CHECK(lv[1] - lv[0] < 6.0f, "RVB level");
+  }
+
+  // Full FBK on loud music, then random fast CV: bounded.
+  {
+    Module m;
+    m.SetMode(MODE_BLOOM);
+    Random r;
+    r.Seed(9);
+    auto out = m.Render(Music(6.0f), [&](size_t b) {
+      Controls c = DefaultControls();
+      c.density = 1.0f;
+      c.texture = b < 4000 ? 1.0f : r.Float();
+      c.fbk = b < 4000 ? 1.0f : r.Float();
+      c.bal = b < 4000 ? 0.0f : r.Float();
+      c.rvb = b < 4000 ? 0.0f : r.Float();
+      c.size = b < 4000 ? 0.0f : r.Float();
+      return c;
+    });
+    Stats st = Measure(out);
+    std::printf("    full FBK + random CV: peak %.2f, rms %.1f dB\n", st.peak, Db(st.rms));
+    CHECK(st.finite && st.peak < 2.0f, "FBK should stay bounded");
+  }
+  return true;
+}

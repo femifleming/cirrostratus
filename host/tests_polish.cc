@@ -136,3 +136,78 @@ MONSOON_TEST(polish_trig_rematches_loudness) {
   CHECK(std::fabs(Db(after) - Db(ref)) < 1.0f, "auto-gain should match the input");
   return true;
 }
+
+// Per-mode knobs: BAL = which band the compressor leans on, FBK = parallel
+// compression, RVB = air exciter.
+MONSOON_TEST(polish_bal_fbk_rvb_do_what_they_say) {
+  // BAL: mean gain reduction of the low and high bands on music.
+  float lean[3];
+  const float bals[3] = { 0.0f, 0.5f, 1.0f };
+  for (int k = 0; k < 3; ++k) {
+    Module m;
+    m.engine().set_mono_bass(false);
+    m.SetMode(MODE_POLISH);
+    PolishMode* p = static_cast<PolishMode*>(m.engine().mode_instance(MODE_POLISH));
+    double lo = 0, hi = 0;
+    m.Render(Music(4.0f), [&](size_t b) {
+      if (b > 1500) { lo += p->gain_reduction_db(0); hi += p->gain_reduction_db(2); }
+      Controls c = Neutral();
+      c.density = 0.8f;
+      c.bal = bals[k];
+      return c;
+    });
+    lean[k] = float(lo - hi) / float(6000 - 1500);
+  }
+  std::printf("    BAL: low minus high band gain reduction: left %+.1f dB, noon %+.1f dB, right %+.1f dB\n",
+              lean[0], lean[1], lean[2]);
+  CHECK(lean[0] > lean[1] + 3.0f, "BAL left should lean on the lows");
+  CHECK(lean[2] < lean[1] - 3.0f, "BAL right should lean on the highs");
+
+  // FBK: quiet material comes up a lot, loud material hardly.
+  float lift[2];
+  const float amps[2] = { 0.01f, 0.7f };
+  for (int k = 0; k < 2; ++k) {
+    auto in = Sine(1000.0f, 1.0f, amps[k]);
+    auto off = Run(in, [](size_t) { return Neutral(); });
+    auto on = Run(in, [](size_t) { Controls c = Neutral(); c.fbk = 1.0f; return c; });
+    lift[k] = Db(Measure(on, 24000).rms) - Db(Measure(off, 24000).rms);
+  }
+  std::printf("    FBK: level change at -40 dBFS %+.1f dB, at -3 dBFS %+.1f dB\n", lift[0], lift[1]);
+  CHECK(lift[0] > 8.0f, "FBK should lift quiet material");
+  CHECK(lift[1] < 2.5f, "FBK should leave peaks alone");
+
+  // RVB: a 3.5 kHz tone gains a 7 kHz harmonic; a 1 kHz tone gets nothing.
+  float h2[2], low_air;
+  for (int k = 0; k < 2; ++k) {
+    auto out = Run(Sine(3500.0f, 1.0f, 0.3f), [&](size_t) {
+      Controls c = Neutral(); c.rvb = k ? 1.0f : 0.0f; return c;
+    });
+    h2[k] = Db(ToneAmplitude(out, 7000.0f, 24000, 48000 - 32));
+  }
+  {
+    auto out = Run(Sine(1000.0f, 1.0f, 0.3f), [&](size_t) {
+      Controls c = Neutral(); c.rvb = 1.0f; return c;
+    });
+    low_air = Db(ToneAmplitude(out, 2000.0f, 24000, 48000 - 32));
+  }
+  std::printf("    RVB: 7 kHz from a 3.5 kHz tone: off %.1f dB, full %.1f dB; "
+              "2 kHz from a 1 kHz tone %.1f dB\n", h2[0], h2[1], low_air);
+  CHECK(h2[1] > h2[0] + 40.0f && h2[1] > -40.0f, "RVB should add air harmonics");
+  CHECK(low_air < -70.0f, "RVB should leave material without highs alone");
+
+  // Random fast CV on all three with compression and saturation: bounded.
+  {
+    Random r;
+    r.Seed(2);
+    auto out = Run(Music(3.0f), [&](size_t) {
+      Controls c = Neutral();
+      c.density = 1.0f; c.texture = 0.5f;
+      c.bal = r.Float(); c.fbk = r.Float(); c.rvb = r.Float();
+      return c;
+    });
+    Stats st = Measure(out);
+    std::printf("    random CV: peak %.2f\n", st.peak);
+    CHECK(st.finite && st.peak < 2.0f, "bounded");
+  }
+  return true;
+}

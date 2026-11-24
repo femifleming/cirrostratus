@@ -2,6 +2,8 @@
 
 #include "monsoon/dsp/modes/mirror.h"
 
+#include "monsoon/dsp/modes/bal_knob.h"
+
 #include "monsoon/dsp/modes/spectral_util.h"
 
 namespace monsoon {
@@ -45,10 +47,15 @@ bool MirrorMode::Init(Arena* arena) {
   best_ = arena->Allocate<float>(kBins);
   pfreq_ = arena->Allocate<float>(kBins);
   off_ = arena->Allocate<int16_t>(kBins);
+  fb_mag_ = arena->Allocate<float>(2 * kBins);
   if (!mag_ || !freq_ || !an_phase_ || !syn_phase_ || !out_mag_ || !best_ ||
-      !pfreq_ || !off_) {
+      !pfreq_ || !off_ || !fb_mag_) {
     return false;
   }
+  fb_freq_ = fb_mag_ + kBins;
+  memset(out_mag_, 0, sizeof(float) * kBins);
+  src_energy_ = 0.0f;
+  ref_energy_ = 0.0f;
   for (size_t k = 0; k < kBins; ++k) freq_[k] = static_cast<float>(k);
   memset(&ctl_, 0, sizeof(ctl_));
   grab_ = false;
@@ -82,6 +89,41 @@ float MirrorMode::Warp(float f, float anchor, float position, float amount) {
   return f + (g - f) * amount;
 }
 
+// FBK: per bin, the louder of the new input and the last output (scaled
+// so that the warp, tilt and overlaps never add energy) is what gets
+// warped. Under a sustained input the trails may add at most +3 dB; once
+// the input stops, that allowance decays with the trails themselves.
+void MirrorMode::Feedback(float fbk) {
+  const size_t h = kBins;
+  float in_e = 0.0f;
+  for (size_t k = 1; k < h; ++k) in_e += mag_[k] * mag_[k];
+  if (fbk <= 0.0f) {
+    src_energy_ = ref_energy_ = in_e;
+    return;
+  }
+  float out_e = 0.0f;
+  for (size_t k = 1; k < h; ++k) out_e += out_mag_[k] * out_mag_[k];
+  float g = 0.95f * fbk;
+  if (out_e > src_energy_) g *= sqrtf(src_energy_ / out_e);
+  float e = 0.0f;
+  fb_mag_[0] = fb_freq_[0] = 0.0f;
+  for (size_t k = 1; k < h; ++k) {
+    const float f = g * out_mag_[k];
+    const bool fed = f > mag_[k];
+    fb_mag_[k] = fed ? f : mag_[k];
+    fb_freq_[k] = fed ? pfreq_[k] : freq_[k];
+    e += fb_mag_[k] * fb_mag_[k];
+  }
+  const float g2 = 0.9025f * fbk * fbk;
+  ref_energy_ = in_e > ref_energy_ * g2 ? in_e : ref_energy_ * g2;
+  if (e > 2.0f * ref_energy_) {
+    const float k = sqrtf(2.0f * ref_energy_ / e);
+    for (size_t j = 1; j < h; ++j) fb_mag_[j] *= k;
+    e = 2.0f * ref_energy_;
+  }
+  src_energy_ = e;
+}
+
 void MirrorMode::Transform(float* in, float* out[2], size_t fft_size) {
   (void)fft_size;
   const Controls c = ctl_;
@@ -113,6 +155,12 @@ void MirrorMode::Transform(float* in, float* out[2], size_t fft_size) {
   }
   mag_[0] = 0.0f;
 
+  // ---- FBK (see Feedback()).
+  const float fbk = Clamp(c.fbk, 0.0f, 1.0f);
+  Feedback(fbk);
+  const float* src_mag = fbk > 0.0f ? fb_mag_ : mag_;
+  const float* src_freq = fbk > 0.0f ? fb_freq_ : freq_;
+
   // ---- Warp: move every peak region rigidly.
   memset(out_mag_, 0, sizeof(float) * h);
   memset(best_, 0, sizeof(float) * h);
@@ -121,8 +169,13 @@ void MirrorMode::Transform(float* in, float* out[2], size_t fft_size) {
   const float position = c.position;
   const float tilt_oct = (c.texture - 0.5f) * 18.0f / 6.0206f;
   const float log_1k = FastLog2(1000.0f / kBinHz);
-  ForEachPeakRegion(mag_, h, [&](size_t lo, size_t hi, size_t p) {
-    const float fw = Warp(freq_[p], anchor, position, amount);
+  // BAL: linear shift in bins (+/-1 kHz, square law), through zero.
+  const float bal = BalKnob(c.bal);
+  const float shift_bins = bal * fabsf(bal) * (1000.0f / kBinHz);
+  ForEachPeakRegion(src_mag, h, [&](size_t lo, size_t hi, size_t p) {
+    // (Warp() is never negative, so at noon this is exactly v1.0.)
+    const float fw = fabsf(Warp(src_freq[p], anchor, position, amount) +
+                           shift_bins);
     const int32_t shift = RoundToInt(fw - static_cast<float>(p));
     float g = 1.0f;
     if (tilt_oct != 0.0f && fw > 1.0f) {
@@ -132,7 +185,7 @@ void MirrorMode::Transform(float* in, float* out[2], size_t fft_size) {
     for (size_t k = lo; k <= hi; ++k) {
       const int32_t j = static_cast<int32_t>(k) + shift;
       if (j < 1 || j >= static_cast<int32_t>(h) - 1) continue;
-      const float m = mag_[k] * g;
+      const float m = src_mag[k] * g;
       if (m > best_[j]) {
         best_[j] = m;
         off_[j] = static_cast<int16_t>(static_cast<int32_t>(k) -
@@ -152,6 +205,7 @@ void MirrorMode::Transform(float* in, float* out[2], size_t fft_size) {
   }
   ore[0] = oim[0] = 0.0f;
   ore[h - 1] = oim[h - 1] = 0.0f;
+
   for (size_t j = 1; j < h - 1; ++j) {
     const float m = out_mag_[j];
     if (m <= 0.0f) {

@@ -145,3 +145,109 @@ MONSOON_TEST(hall_stereo_is_decorrelated) {
   CHECK(std::fabs(corr) < 0.3f, "tail should be wide");
   return true;
 }
+
+// Per-mode knobs: BAL = bass decay ratio, FBK = pre-delay echoes, RVB =
+// diffusion. Each is measured against the neutral setting.
+MONSOON_TEST(hall_bal_fbk_rvb_do_what_they_say) {
+  // BAL: low (120 Hz) vs high (2 kHz) energy late in the tail.
+  float bass[3];
+  const float bals[3] = { 0.0f, 0.5f, 1.0f };
+  for (int k = 0; k < 3; ++k) {
+    auto in = Noise(0.3f);
+    auto s = Silence(2.5f);
+    in.insert(in.end(), s.begin(), s.end());
+    auto out = Run(in, [&](size_t, Controls* c) { c->bal = bals[k]; });
+    Svf h, l;
+    h.Init(); l.Init();
+    h.set(2000.0f / 48000.0f, 2.0f);
+    l.set(120.0f / 48000.0f, 2.0f);
+    double eh = 0, el = 0;
+    for (size_t i = 0; i < out.size(); ++i) {
+      float yh = h.BpNormalized(out[i].l), yl = l.BpNormalized(out[i].l);
+      if (i > 72000) { eh += yh * yh; el += yl * yl; }
+    }
+    bass[k] = 10 * std::log10(el / eh);
+  }
+  std::printf("    BAL: 120 Hz vs 2 kHz in the late tail: left %+.1f dB, noon %+.1f dB, right %+.1f dB\n",
+              bass[0], bass[1], bass[2]);
+  CHECK(bass[1] - bass[0] > 10.0f, "BAL left should shorten the bass");
+  CHECK(bass[2] - bass[1] > 6.0f, "BAL right should lengthen the bass");
+
+  // FBK: with 150 ms of pre-delay and a short hall, a click keeps coming
+  // back (one echo every 150 ms, each into the hall).
+  float later[2];
+  int peaks[2];
+  for (int k = 0; k < 2; ++k) {
+    auto out = Run(Clicked(2.0f), [&](size_t, Controls* c) {
+      c->position = 0.6f;
+      c->density = 0.0f;
+      c->fbk = k ? 1.0f : 0.0f;
+    });
+    later[k] = Db(Measure(out, 4800 + 48000, 4800 + 72000).rms);
+    // Count echo onsets: 10 ms windows whose level jumps by > 6 dB.
+    peaks[k] = 0;
+    float prev = -200.0f;
+    for (size_t w = 4800; w + 480 < 4800 + 72000; w += 480) {
+      float lv = Db(Measure(out, w, w + 480).rms);
+      if (lv > -60.0f && lv > prev + 6.0f) ++peaks[k];
+      prev = lv;
+    }
+    CHECK(Measure(out).finite && Measure(out).peak < 1.0f, "bounded");
+  }
+  std::printf("    FBK: 1-1.5 s after a click (pre-delay 150 ms, decay 0.4 s): off %.1f dB, "
+              "full %.1f dB; onsets in 1.5 s: %d -> %d\n", later[0], later[1], peaks[0], peaks[1]);
+  CHECK(later[1] > later[0] + 40.0f, "FBK should repeat the pre-delay");
+  CHECK(peaks[1] >= peaks[0] + 5, "FBK echoes should arrive one by one");
+
+  // RVB: less diffusion = a sparser, grainier tail. Normalised echo
+  // density (Abel & Huang: share of samples beyond one standard deviation,
+  // / 0.3173; ~1 = Gaussian-smooth) over 1024-sample windows, 30-400 ms
+  // after a click.
+  float ned[2];
+  for (int k = 0; k < 2; ++k) {
+    auto out = Run(Clicked(1.0f), [&](size_t, Controls* c) {
+      c->rvb = k ? 1.0f : 0.0f;
+    });
+    double sum = 0;
+    int windows = 0;
+    for (size_t w = 4800 + 1440; w + 1024 <= 4800 + 19200; w += 1024, ++windows) {
+      double e = 0;
+      for (size_t i = w; i < w + 1024; ++i) e += double(out[i].l) * out[i].l;
+      const double sd = std::sqrt(e / 1024);
+      int over = 0;
+      for (size_t i = w; i < w + 1024; ++i) over += std::fabs(out[i].l) > sd;
+      sum += over / 1024.0 / 0.3173;
+    }
+    ned[k] = float(sum / windows);
+  }
+  std::printf("    RVB: echo density 30-400 ms after a click: off %.2f, full %.2f\n",
+              ned[0], ned[1]);
+  CHECK(ned[1] < ned[0] - 0.2f, "RVB should make the tail grainy");
+
+  // Everything at maximum: the tail must still decay, never grow.
+  {
+    auto in = Noise(0.3f);
+    auto s = Silence(10.0f);
+    in.insert(in.end(), s.begin(), s.end());
+    auto out = Run(in, [](size_t, Controls* c) {
+      c->density = 1.0f; c->texture = 1.0f; c->size = 1.0f;
+      c->bal = 1.0f; c->fbk = 1.0f; c->rvb = 1.0f;
+    });
+    float a = Db(Measure(out, 48000, 96000).rms);
+    float z = Db(Measure(out, out.size() - 48000).rms);
+    std::printf("    all max: 1-2 s %.1f dB, last second %.1f dB\n", a, z);
+    CHECK(z < a - 3.0f, "the tail must decay");
+  }
+
+  // Random fast CV on all three, long decay: bounded.
+  Random r;
+  r.Seed(3);
+  auto out = Run(Music(4.0f), [&](size_t, Controls* c) {
+    c->density = 1.0f;
+    c->bal = r.Float(); c->fbk = r.Float(); c->rvb = r.Float();
+  });
+  Stats st = Measure(out);
+  std::printf("    random CV: peak %.2f, rms %.1f dB\n", st.peak, Db(st.rms));
+  CHECK(st.finite && st.peak < 1.5f, "random CV should stay bounded");
+  return true;
+}
