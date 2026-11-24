@@ -13,7 +13,8 @@ control lights up on the panel, joined by a line.
 
 Narration: Kokoro, British English "Emma" (tts_kokoro.py, run in
 tools/video/.venv), the AERIA OS narrator. The music sits underneath,
-ducked while the voice speaks.
+ducked while the voice speaks (--music-level, 0.75 since 1.2: a little
+quieter than the 1.1 videos).
 
 Content comes from the manual (docs/MANUAL.md, docs/modes_*.md), so the
 video always matches it. Needs Pillow, numpy, ffmpeg.
@@ -81,6 +82,9 @@ def clean_md(s):
     s = re.sub(r"\*\*(.+?)\*\*", r"\1", s)
     s = re.sub(r"\*(.+?)\*", r"\1", s)
     s = re.sub(r"`(.+?)`", r"\1", s)
+    # Manual section references ("(3.7)", ", 3.7)") mean nothing in a video.
+    s = re.sub(r"\s*\((?:see )?\d\.\d\)", "", s)
+    s = re.sub(r",\s*\d\.\d(?=\))", "", s)
     return s.strip()
 
 
@@ -186,6 +190,16 @@ def hl_for(label):
             seen.add(k)
             out.append(k)
     return out
+
+
+def bq_leds(q, pending=False):
+    """Buffer page LEDs for quality q: 1-3 lit (48/24/16 kHz), green 16-bit,
+    red 8-bit; LED 4 amber while the choice is pending."""
+    lit = 1 + q % 3
+    col = (1, 0) if q >= 3 else (0, 1)
+    leds = [col if i < lit else (0, 0) for i in range(3)]
+    leds.append((1, 0.63) if pending else (0, 0))
+    return leds
 
 
 def row(label, text, spoken=None, hl=None):
@@ -327,6 +341,37 @@ def general_chapters():
                        "Hold FREEZE and tap WRITE to switch it. Two green lights in the middle mean on, "
                        "two amber lights at the sides mean off.", hl=["freeze", "write", "leds"]),
                    row("limiter", "−1 dBFS", "And a limiter that stays out of the way.")], kind="output"),
+        dict(code="bq08", title="longer buffers", sub="buffer quality, for every mode that records",
+             desc="Hold WRITE and tap DISP. FREEZE steps through 48, 24 and 16 kHz, in 16 or 8 bit. "
+                  "The lower settings hold up to six times more sound in GRAINS, STRETCH, CAPTURE, TAPE, "
+                  "BARBERPOLE and BLOOM.",
+             say="Longer buffers. New in one point two: one master setting for every mode that records. "
+                 "Trade a little fidelity, for up to six times more sound.",
+             rows=[dict(row("write + disp", "open the buffer page",
+                            "Hold WRITE and tap DISP, within a second, before the save page opens.",
+                            hl=["write", "disp"]), leds=bq_leds(0)),
+                   dict(row("freeze", "48 · 24 · 16 kHz",
+                            "FREEZE steps through the settings. One, two or three lights: forty-eight, "
+                            "twenty-four or sixteen kilohertz.", hl=["freeze", "leds"]), leds="cycle"),
+                   dict(row("green", "16-bit · lower rates lose the top",
+                            "Green is sixteen bit. The lower rates simply lose the very top end, like dusk "
+                            "coming in.", hl=["leds"]), leds=bq_leds(2, True)),
+                   dict(row("red", "8-bit · twice as long again",
+                            "Red is eight bit: twice as long again, with a fine grain of noise under the "
+                            "loud parts.", hl=["leds"]), leds=bq_leds(5, True)),
+                   dict(row("write · disp", "apply · cancel",
+                            "WRITE applies it, and the running mode's buffer starts again, empty. Or tap "
+                            "DISP to leave without changing a thing.", hl=["write", "disp"]), leds=bq_leds(5)),
+                   dict(row("grains mono", "1.24 s → 7.32 s",
+                            "Grains in mono goes from one and a quarter seconds, to more than seven. "
+                            "Stretch, up to five.", hl=["sl0", "sl1", "sl2", "sl3"]), leds=bq_leds(5)),
+                   dict(row("the others", "tape, barberpole, bloom: up to 6×",
+                            "Tape runs slower, so its echoes reach seven seconds. Barberpole's loop grows to "
+                            "three, and Bloom's swells get six times longer.", hl=["out_l", "out_r"]),
+                        leds=bq_leds(5)),
+                   dict(row("slots", "keep their quality",
+                            "And a save slot remembers the quality it was recorded with.",
+                            hl=["write", "leds"]), leds=bq_leds(5))], kind="buffer"),
     ]
 
 
@@ -347,7 +392,7 @@ def build_chapters():
                    desc="Thirty kinds of sky. Thanks to Mutable Instruments, Tom Burns and Jak Plugg.",
                    say="That's Cirrostratus. Thirty kinds of sky, in one small cloud. Thanks to Mutable Instruments, "
                        "Tom Burns and Jak Plugg. Now go and look up.",
-                   rows=[row("modes", "30", hl=[]), row("tests", "218 passing", hl=[]),
+                   rows=[row("modes", "30", hl=[]), row("tests", "224 passing", hl=[]),
                          row("licence", "mit", hl=[])], kind="outro"))
     for i, c in enumerate(ch):
         c["index"] = i
@@ -859,6 +904,11 @@ def render_chapter(args):
         elif c["kind"] == "menu":
             n = int(t / 1.2) % 30 + 1
             leds = binary_leds((n - 1) % 15 + 1, n <= 15)
+        elif c["kind"] == "buffer":
+            r = c["rows"][active] if active is not None else c["rows"][0]
+            leds = r.get("leds", bq_leds(0))
+            if leds == "cycle":
+                leds = bq_leds(int(t / 0.9) % 6)
         elif c["kind"] == "env":
             leds = [(0, 1), (0, 0), (0, 0.4), (1, 0)]
         elif c["kind"] == "steps":
@@ -922,6 +972,8 @@ def main():
     ap.add_argument("--still", help="write one frame per chapter as PNG at this time (s) and stop")
     ap.add_argument("--print", action="store_true", help="print the spoken text and stop")
     ap.add_argument("--short", action="store_true", help="the 90-second poem instead of the full manual")
+    ap.add_argument("--music-level", type=float, default=0.75,
+                    help="music bed level (1.0 = the 1.1 videos; 0.75 is about 2.5 dB quieter)")
     a = ap.parse_args()
 
     chapters = short_chapters() if a.short else build_chapters()
@@ -1001,7 +1053,7 @@ def main():
         acc = max(0.0, min(1.0, acc))
         e[i:i + step] = acc
     speaking = np.clip(e * 12, 0, 1)
-    gain = 0.62 - 0.44 * speaking
+    gain = (0.62 - 0.44 * speaking) * a.music_level
     fade = np.ones(n, np.float32)
     fi, fo = int(2.5 * SR), int(5 * SR)
     fade[:fi] = np.linspace(0, 1, fi)
