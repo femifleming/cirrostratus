@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds docs/Cirrostratus-Manual.md and .pdf from docs/MANUAL.md and the
 per-bank mode chapters (docs/modes_*.md). Needs `markdown` and Chrome."""
-import glob, os, subprocess, markdown
+import glob, os, subprocess, tempfile, markdown
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCS = os.path.join(ROOT, "docs")
@@ -32,10 +32,17 @@ def build():
     html_path = os.path.join(DOCS, "manual.html")
     open(html_path, "w").write(html)
     pdf = os.path.join(DOCS, "Cirrostratus-Manual.pdf")
+    if os.path.exists(pdf):
+        os.remove(pdf)
     chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     subprocess.run([chrome, "--headless", "--disable-gpu", "--no-pdf-header-footer",
+                    "--user-data-dir=" + tempfile.mkdtemp(prefix="cirro_chrome_"),
                     "--print-to-pdf=" + pdf, "file://" + html_path],
-                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # Headless Chrome sometimes crashes on shutdown after writing the file,
+    # so judge success by the PDF, not the exit code.
+    if not os.path.exists(pdf) or os.path.getsize(pdf) < 10000:
+        raise SystemExit("PDF was not written")
     os.remove(html_path)
     print(md_out)
     print(pdf)
