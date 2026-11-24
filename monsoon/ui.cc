@@ -14,7 +14,7 @@ using namespace stmlib;
 
 const uint32_t kLongPress = 1000;
 const uint32_t kPageTimeout = 6000;
-const uint32_t kSplashDuration = 1200;
+const uint32_t kSplashDuration = 3300;
 const int kModesPerBank = 15;
 
 void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
@@ -83,6 +83,11 @@ void Ui::Poll() {
 
 void Ui::OnPress(uint8_t id) {
   page_timeout_ = system_clock.milliseconds() + kPageTimeout;
+  if (page_ == UI_PAGE_SPLASH) {
+    page_ = previous_page_;
+    used_as_modifier_[id] = true;  // the skipping press does nothing else
+    return;
+  }
   switch (id) {
     case SWITCH_FREEZE:
       if (page_ == UI_PAGE_MODE_MENU) {
@@ -317,6 +322,70 @@ void Ui::ShowBinary(uint8_t value, bool green, uint8_t brightness) {
   }
 }
 
+// Start-up sequence, "cirrostratus" (3.3 s, any button skips it):
+//   0.0-0.8 s  ice crystals: dim sparkles twinkle at random
+//   0.8-1.9 s  halo: two amber rings pulse out from the middle LEDs to the
+//              edges, the FREEZE LED glowing with each pulse
+//   1.9-2.5 s  the sun breaks through: amber sweeps to green
+//   2.5-3.3 s  forecast: the current mode in binary (bank colour), fading
+void Ui::PaintSplash(uint32_t now) {
+  // Triangle 0..255..0 over `period` ms, offset by `phase` ms.
+  struct Tri {
+    static uint8_t at(int32_t t, int32_t period) {
+      if (t < 0 || t >= period) return 0;
+      int32_t h = period / 2;
+      int32_t v = t < h ? t * 255 / h : (period - t) * 255 / h;
+      return static_cast<uint8_t>(v);
+    }
+  };
+  int32_t t = static_cast<int32_t>(now);
+  if (t < 800) {
+    // Each LED twinkles on its own pseudo-random schedule.
+    for (int i = 0; i < 4; ++i) {
+      uint32_t h = (static_cast<uint32_t>(t / 90) + i * 7919u) * 2654435761u;
+      uint8_t level = (h >> 24) > 170 ? static_cast<uint8_t>((h >> 16) & 0x7f) : 0;
+      // Fade the whole sparkle field in over the first 400 ms.
+      level = static_cast<uint8_t>(level * (t < 400 ? t : 400) / 400);
+      leds_.set_status(i, level / 3, level);
+    }
+    return;
+  }
+  if (t < 1900) {
+    int32_t u = t - 800;
+    uint8_t glow = 0;
+    for (int pulse = 0; pulse < 2; ++pulse) {
+      int32_t p = u - pulse * 500;
+      uint8_t inner = Tri::at(p, 400);        // LEDs 2 and 3 (the middle)
+      uint8_t outer = Tri::at(p - 150, 400);  // LEDs 1 and 4, a moment later
+      if (inner || outer) {
+        leds_.set_status(1, inner, inner * 3 / 4);
+        leds_.set_status(2, inner, inner * 3 / 4);
+        leds_.set_status(0, outer, outer * 3 / 4);
+        leds_.set_status(3, outer, outer * 3 / 4);
+      }
+      if (inner > glow) glow = inner;
+    }
+    leds_.set_freeze(glow > 128);
+    return;
+  }
+  if (t < 2500) {
+    // Amber -> green, sweeping left to right.
+    int32_t u = t - 1900;
+    for (int i = 0; i < 4; ++i) {
+      int32_t k = (u - i * 90) * 255 / 300;
+      if (k < 0) k = 0;
+      if (k > 255) k = 255;
+      leds_.set_status(i, static_cast<uint8_t>(255 - k), 255);
+    }
+    return;
+  }
+  // The forecast: which mode is up, then fade out.
+  int32_t u = t - 2500;
+  uint8_t level = u < 500 ? 255 : static_cast<uint8_t>(255 - (u - 500) * 255 / 300);
+  uint8_t m = settings_->data().mode;
+  ShowBinary(m % kModesPerBank + 1, m < kModesPerBank, level);
+}
+
 void Ui::PaintLeds() {
   leds_.Clear();
   uint32_t now = system_clock.milliseconds();
@@ -324,12 +393,7 @@ void Ui::PaintLeds() {
   bool fast_blink = (now & 127) > 63;
   switch (page_) {
     case UI_PAGE_SPLASH:
-      {
-        // Rain: a drop falls across the four LEDs.
-        uint8_t index = (now >> 7) & 3;
-        leds_.set_status(index, 0, 255);
-        leds_.set_status((index + 3) & 3, 0, 60);
-      }
+      PaintSplash(now);
       break;
 
     case UI_PAGE_VU_METER:
@@ -404,7 +468,7 @@ void Ui::PaintLeds() {
       for (int i = 0; i < 4; ++i) leds_.set_status(i, 255, 0);
       break;
   }
-  leds_.set_freeze(cv_scaler_->freeze());
+  if (page_ != UI_PAGE_SPLASH) leds_.set_freeze(cv_scaler_->freeze());
   leds_.Write();
 }
 

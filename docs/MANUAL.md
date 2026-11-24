@@ -1,122 +1,143 @@
-# Monsoon HiFi
+# Cirrostratus
 
-**Alternative firmware for the Monsoon** (Jak Plugg's 12HP Clouds variant).
-It replaces the four Clouds playback modes with **30 modes in two banks**,
-running in a new 48 kHz floating-point engine with a new output section.
+### *a thin, high sheet of cloud for the Monsoon*
+
+> **cir·ro·stra·tus** /ˌsɪroʊˈstreɪtəs/ *n.* — a pale veil of ice crystals
+> spread so high and thin across the sky that the sun shines straight
+> through it, with a ring of light around it: a **halo**.
+
+Cirrostratus is alternative firmware for **Monsoon**, Jak Plugg's 12HP
+module built on Mutable Instruments' Clouds. Clouds made granular weather.
+This firmware goes one layer higher, thinner and brighter:
+
+- **30 modes** in two banks (Clouds had four kinds of sky)
+- **48 kHz**, 32-bit float inside, 16-bit block-float buffers that keep quiet
+  sounds clean (a −60 dB whisper is stored with 93 dB SNR)
+- a new **output section** on every mode: equal-power blend, a widener that
+  stays mono-compatible, feedback that **tames its own howl**, a lush 8-line
+  reverb, a transparent limiter and dithered output
+- four **save slots**, **slot morphing**, per-mode **options** and
+  **envelope-follower routing**
+
+It is still your Monsoon: same panel, same jacks, same bootloader. Only the
+weather changes.
 
 ---
 
-## 1. Installing
+## 0. Forecast in thirty seconds
 
-The firmware comes as two files:
+1. Hold **DISP**. The four top LEDs show a number.
+2. Push **POSITION** up or down to pick a mode. **Tap WRITE** to flip
+   between the green bank and the red bank.
+3. Let go of **DISP**.
+4. Play something in, and wiggle all four sliders. **FREEZE** and **TRIG** do
+   something different (and good) in every mode.
 
-| File | Use it for |
+The rest of this manual is the long-range forecast.
+
+---
+
+## 1. Installing (getting the cloud up there)
+
+You get:
+
+| File | What for |
 |---|---|
-| `monsoon_hifi.wav` | Updating through the module's audio input (no tools needed) |
-| `monsoon.bin` / `monsoon_bootloader_combo.bin` | Flashing over SWD with an ST-Link |
+| `cirrostratus.wav` | update through the audio input, no tools |
+| `cirrostratus.bin` | the application, for SWD |
+| `cirrostratus_bootloader_combo.bin` | bootloader + application, for a blank chip |
 
-### 1a. Audio update (recommended)
+### 1a. By ear (recommended)
 
-This works if your Monsoon already runs a Clouds/Monsoon firmware with the
-standard audio bootloader. The "build_4" Monsoon hex files include it.
+Your Monsoon already has the Clouds/Monsoon audio bootloader if it runs any
+of the "build_4" Monsoon firmwares.
 
-1. Power the rack **off**.
-2. Patch your computer's headphone/line output into the Monsoon's **IN L**.
-   Use a cable, not Bluetooth. Close every other app that might make a sound.
-3. Hold **FREEZE** and power the rack on. The FREEZE LED blinks: the
-   bootloader is listening.
-4. Set the computer's volume to about 3/4 and **IN LEVEL** to about noon.
-5. Play `monsoon_hifi.wav` from the start (it is about 50 s).
-   - While it receives, the LEDs show the input level.
-   - All four LEDs turn green while each block is written.
-   - When the file ends, the module restarts into Monsoon HiFi. A short
-     "rain" animation runs across the LEDs.
-6. If the four LEDs **blink red**, reception failed (level too low/high, a
-   system sound, a gap). Press **FREEZE** to reset the receiver, adjust the
-   level, and play the file again from the start.
+1. Rack **off**.
+2. Cable from your computer's headphone/line out into **IN L**. No Bluetooth,
+   no system sounds, close the chat apps.
+3. **Hold FREEZE** and switch the rack on. The FREEZE LED blinks: the module
+   is listening for weather data.
+4. Computer volume about ¾, **IN LEVEL** about noon.
+5. Play `cirrostratus.wav` from the beginning (about 53 s). It sounds like a
+   modem singing. That's correct.
+   - While it receives, the LEDs dance with the level.
+   - **All four light green** each time a chunk is written to flash.
+   - When the file ends, the module reboots into Cirrostratus and greets you
+     with a little **rain** running across the LEDs.
+6. **Four red blinking LEDs** mean reception failed (too quiet, too loud, a
+   notification ping…). Press **FREEZE**, fix the level, and play the file
+   again from the start. Nothing can break: the bootloader is never
+   overwritten.
 
-Nothing is lost by a failed update. The bootloader stays intact and you can
-retry as often as you like.
+### 1b. With a programmer (SWD)
 
-### 1b. SWD (ST-Link)
+1. `brew install open-ocd`
+2. Connect an ST-Link to the 10-pin SWD header on the Monsoon board, with
+   the module powered.
+3. In the firmware folder:
+   - `make -f monsoon/makefile flash` writes the application and keeps the
+     bootloader, settings and slots.
+   - `make -f monsoon/bootloader/makefile && make -f monsoon/makefile flash_all`
+     writes bootloader + application to a blank chip (settings reset).
 
-Use this for a module with no bootloader, or if you prefer a programmer.
+### After landing
 
-1. Install OpenOCD: `brew install open-ocd`.
-2. Connect an ST-Link V2 to the 10-pin SWD/JTAG header on the Monsoon's
-   board (SWDIO, SWCLK, GND, 3V3 sense). The module must be powered.
-3. From the firmware folder:
-   - Application only (keeps the bootloader, settings and save slots):
-     `make -f monsoon/makefile flash`
-   - Blank chip (bootloader + application, resets settings):
-     `make -f monsoon/bootloader/makefile && make -f monsoon/makefile flash_all`
-
-### After installing
-
-- **V/OCT calibration is carried over** from the stock firmware on first
-  boot. If your module was never calibrated, or the import fails, run the
-  calibration (section 3.6).
-- Save slots made with the stock firmware are not compatible. They are
-  ignored, never misread. Re-save your sounds.
-- **Going back to stock:** flash the stock Monsoon firmware the same way
-  (its WAV through the bootloader, or its hex over SWD).
-
-### Building it yourself
-
-`make -f monsoon/makefile` builds the firmware, `make -f monsoon/makefile wav`
-builds the update file, and `make -C host test` runs the test suite on a
-computer (it needs `arm-none-eabi-gcc`).
+- Your **V/OCT calibration comes along** from the stock firmware
+  automatically. Never calibrated? See 3.6.
+- Old Clouds save slots aren't compatible. Cirrostratus recognises and
+  ignores them; it never plays garbage.
+- **Back to stock:** flash the stock Monsoon firmware the same way. Clouds
+  never mind.
 
 ---
 
-## 2. Panel
+## 2. The panel
 
-| Control | Name in this manual | Notes |
+| On the panel | We call it | |
 |---|---|---|
-| Slider + CV | **POSITION** | also picks the mode in the mode menu |
-| Slider + CV | **DENSITY** | |
-| Slider + CV | **SIZE** | |
-| Slider + CV | **TEXTURE** | |
-| Big knob + V/OCT | **TUNE / PITCH** | ±4 octaves, gentle semitone "magnets", C3 at noon |
-| IN LEVEL | input gain | analog, as on stock firmware |
-| WET + CV | **BLEND** | equal-power dry/wet |
-| STER + CV | **SPREAD** | stereo width of the wet signal |
-| FDB + CV | **FEEDBACK** | wet signal back into the mode |
-| RVB + CV | **REVERB** | amount and length of the output reverb |
-| FREEZE button + gate | **FREEZE** | the gate inverts the button state |
-| TRIG input | **TRIG** | each mode gives it its own job |
-| DISP button | **DISP** | display / mode menu |
-| Pencil button | **WRITE** | load / save |
+| slider + CV | **POSITION** | also picks the mode in the mode menu |
+| slider + CV | **DENSITY** | |
+| slider + CV | **SIZE** | |
+| slider + CV | **TEXTURE** | |
+| big knob + V/OCT | **PITCH** | ±4 octaves; it gently snaps to semitones; noon = no change |
+| IN LEVEL | input gain | analog, as before |
+| WET + CV | **BLEND** | dry ↔ wet, equal power |
+| STER + CV | **SPREAD** | mono ↔ as-is ↔ extra wide |
+| FDB + CV | **FEEDBACK** | the mode's output back into itself |
+| RVB + CV | **REVERB** | how much and how long |
+| FREEZE + gate | **FREEZE** | the gate flips whatever the button says |
+| TRIG in | **TRIG** | a different job in every mode |
+| DISP | **DISP** | display, mode menu |
+| ✎ | **WRITE** | load, save, bank flip |
 
-The four slider LEDs show incoming CV (hardware, as before). The four
-**status LEDs** in the top row are driven by the firmware.
+The slider LEDs still show incoming CV (that's hardware). The four LEDs
+along the top belong to Cirrostratus.
 
 ---
 
-## 3. Buttons and pages
+## 3. Buttons, pages and little rituals
 
-### 3.1 Normal display
-
-- Tap **DISP** to switch the LEDs between the **input level meter** and the
-  **WET / STER / FDB / RVB values**. The output level is shown while frozen.
-- The FREEZE LED shows the freeze state.
+### 3.1 Looking at the sky
+- **Tap DISP**: the LEDs flip between the **input level** meter and the
+  values of **WET / STER / FDB / RVB**. While frozen, the meter shows the
+  output.
+- The FREEZE LED is the freeze state, always.
 
 ### 3.2 Choosing a mode
+1. **Hold DISP** for a second. The LEDs show the current mode in binary:
+   **green = bank 1** (modes 1–15), **red = bank 2** (16–30).
+2. **Move POSITION** to browse. The menu only starts following POSITION
+   once you actually move it, so peeking never changes anything. The sound
+   keeps its old POSITION while you browse.
+3. **Tap WRITE** to flip banks.
+4. **Tap FREEZE** to step through the mode's **options**. Each shows briefly
+   as a single LED: green 1–4 for options 1–4, red 1–4 for options 5–8.
+5. **Release DISP**. The old mode fades out and the new one fades in
+   (about 20 ms, no clicks).
 
-1. **Hold DISP** for 1 s. The LEDs show the current mode as a binary number,
-   **green for bank 1** (modes 1–15) and **red for bank 2** (16–30).
-2. **Move POSITION** to step through the bank. The sound keeps its old
-   POSITION value while you do this. The menu only starts following the
-   slider once you actually move it.
-3. **Tap WRITE** to switch to the other bank.
-4. **Tap FREEZE** to step through the mode's **options** (if it has any).
-   The option shows for a moment as one LED: LED 1–4 green = options 1–4,
-   red = options 5–8.
-5. **Release DISP** to switch. The modes crossfade (about 20 ms).
+Reading the binary, left to right is 8 · 4 · 2 · 1:
 
-Binary on the LEDs, left to right = 8, 4, 2, 1:
-
-| LEDs | # | LEDs | # | LEDs | # |
+| ●=on | # | | # | | # |
 |---|---|---|---|---|---|
 | ○○○● | 1 | ○●○● | 5 | ●○○● | 9 |
 | ○○●○ | 2 | ○●●○ | 6 | ●○●○ | 10 |
@@ -124,95 +145,113 @@ Binary on the LEDs, left to right = 8, 4, 2, 1:
 | ○●○○ | 4 | ●○○○ | 8 | ●●○○ | 12 |
 | ●●○● | 13 | ●●●○ | 14 | ●●●● | 15 |
 
-Every mode remembers its own option and envelope routing.
+Red bank: add 15 (red ○○○● is mode 16, red ●●●● is mode 30).
 
-### 3.3 Save slots (four, kept when powered off)
+Every mode remembers its own option and envelope routing, even through
+power cycles.
 
-- **Hold WRITE** (1 s): save page, slot LED blinks red. **DISP** picks the
-  slot, **WRITE** saves. Saving takes about a second; the module is silent
-  meanwhile.
-- **Tap WRITE**: load page, slot LED blinks green. **DISP** picks, **WRITE**
-  loads. A slot remembers its mode and option, so loading switches to it.
-- Each mode decides what a slot holds: its audio buffer, its frozen
-  spectrum, its wavetable, its captured impulse response, and so on (listed
-  with each mode). Modes with nothing worth saving ignore the save.
+### 3.3 Four jars of sky (save slots)
+- **Hold WRITE**: the save page (slot LED blinks red). **DISP** picks a
+  slot, **WRITE** saves. About a second of silence while flash is written.
+- **Tap WRITE**: the load page (slot LED blinks green). **DISP** picks,
+  **WRITE** loads. The slot remembers its mode and option, so loading takes
+  you there.
+- What goes in the jar depends on the mode: a recorded buffer, a frozen
+  spectrum, a wavetable, a captured impulse response, a tape loop… Each
+  mode below says what it keeps.
 
 **Slot morph** (SPECTRAL and CAPTURE): on the load page, tap **FREEZE**
-instead of WRITE. That slot becomes the *morph source* (its LED stays red)
-and the mode can blend toward it with POSITION, reading it straight from
-flash. Tap FREEZE on it again to clear it.
+instead of WRITE. That slot becomes the *morph source*: its LED stays red,
+it's read straight from flash, and POSITION blends toward it. Tap FREEZE on
+it again to let it go.
 
-### 3.4 Envelope page
+### 3.4 The envelope page (weather that follows you)
+Your input's loudness can push any of the four output knobs up or down: the
+reverb that ducks while you play, the wet that opens on loud notes, the
+feedback that swells in the gaps.
 
-The input level can push any of the four output knobs up or down: ducking
-the reverb under playing, opening WET with loud notes, and so on.
-
-- **Hold FREEZE and tap DISP** to open it. The four LEDs are WET, STER, FDB, RVB.
-- **DISP** moves the cursor (blinking LED).
-- **FREEZE** cycles the cursor's amount: off → +½ (dim green) → +1 (green)
-  → −½ (dim red) → −1 (red) → off.
+- **Hold FREEZE, tap DISP**: LEDs = WET · STER · FDB · RVB.
+- **DISP** moves the cursor (blinking).
+- **FREEZE** cycles its amount: off → +½ (dim green) → +1 (green) →
+  −½ (dim red) → −1 (red) → off.
 - **WRITE** saves and leaves (it also leaves by itself after 6 s).
 
-### 3.5 Freeze and TRIG
+### 3.5 FREEZE and TRIG
+- FREEZE toggles on **release**, because the button is also a modifier.
+- The FREEZE **gate** inverts the button: button off + gate high = frozen;
+  button on + gate high = thawed.
 
-FREEZE is the button toggle, and the FREEZE gate inverts it: with the button
-off, a high gate freezes; with the button on, a high gate unfreezes. FREEZE
-toggles on *release*, because the button is also a modifier for the
-envelope page.
-
-### 3.6 V/OCT calibration
-
-1. **Hold DISP** (the mode menu opens), then also **hold WRITE** for 1 s.
+### 3.6 Teaching it volts (V/OCT calibration)
+1. **Hold DISP** (the menu opens), then also **hold WRITE** for a second.
    Two LEDs blink.
-2. Send **1 V** to V/OCT and tap **WRITE**. Four LEDs blink.
-3. Send **3 V** and tap **WRITE**. Done. Red LEDs mean the readings were off;
-   check the voltages and repeat.
+2. Send **1 V** into V/OCT, tap **WRITE**. Four LEDs blink.
+3. Send **3 V**, tap **WRITE**. Done. Red means the readings looked wrong:
+   check the voltages and try again.
 
 ---
 
-## 4. The output section (all modes)
+## 4. The output section, on every mode
 
 ```
 IN ─┬───────────────────────────────────────────────┐
     │                                               │ dry
     └─► (+) ─► MODE ─► DC block ─► SPREAD ─► BLEND ─┴─► REVERB ─► LIMITER ─► OUT
          ▲                │
-         └── FEEDBACK ◄───┘  (25 Hz high-pass, resonance tamer, soft clip)
+         └── FEEDBACK ◄───┘   25 Hz high-pass · resonance tamer · soft clip
 ```
 
-- **FEEDBACK** sends the mode's output back to its input. A **resonance
-  tamer** sits in the loop: two adaptive notches that find the strongest
-  narrow peaks. They cut harder the more the loop's energy collects in
-  those peaks. Broad sounds pass untouched, and a whistling loop gets reined
-  in, so high feedback swells instead of screaming.
-- **SPREAD**: 0 = mono, noon = as the mode made it, full = wide. The
-  widening is mid/side, plus an allpass decorrelation that leaves the mono
-  sum unchanged, plus a hint of Haas delay at the very top.
-- **BLEND**: equal-power dry/wet. Fully dry is bit-transparent.
-- **REVERB**: an 8-line modulated feedback-delay network. The knob sets the
-  send and the decay together (0.5 s → about 16 s).
-- **Limiter**: −1 dBFS peak limiter, transparent below −2 dBFS, then TPDF
-  dither to the codec.
+- **FEEDBACK with manners.** Inside the loop sits a little Quell: two
+  adaptive notches hunt for the loudest narrow peaks and cut harder the more
+  of the loop's energy piles into them. Broad sound passes; a whistle gets
+  talked down. Crank FDB and things *bloom* instead of shriek.
+- **SPREAD**: 0 = mono, noon = untouched, full = wide. The widener is
+  mid/side plus an allpass decorrelator that cancels in mono, so your mix
+  survives a mono club PA, plus a pinch of Haas at the very top.
+- **BLEND**: equal power. Fully dry is bit-transparent.
+- **REVERB**: an 8-line modulated feedback delay network. One knob for send
+  and length together (0.5 s → about 16 s). It's skipped entirely at zero,
+  which saves CPU for the modes.
+- **LIMITER**: −1 dBFS peak limiter, transparent below −2 dBFS, then TPDF
+  dither into the codec.
 
 ---
 
-## 5. The engine, in brief
+## 5. Modes
 
-- 48 kHz (Clouds: 32 kHz), 32-bit float processing throughout.
-- Audio buffers store 16-bit samples with a shared exponent per 32 samples.
-  A sound at −60 dBFS keeps 93 dB SNR, where plain 16-bit would keep about 38 dB.
-- Hermite interpolation for every variable-rate read.
-- FFT modes use ARM's CMSIS-DSP FFT; their heavy work runs in the background
-  between audio interrupts, as in Clouds' spectral mode.
-- RAM is about 130 KB per mode. Only the running mode holds memory, which is
-  why buffers are short at full quality and every buffer mode offers a mono
-  option with twice the length.
-
----
-
-## 6. Modes
-
-Each mode lists what the controls do. **PITCH** means TUNE + V/OCT. The
-four output knobs always work as in section 4.
+**PITCH** = TUNE knob + V/OCT. The four output knobs always do what
+section 4 says. "Keeps" = what a save slot holds for that mode.
 
 <!-- MODES -->
+
+---
+
+## 6. Under the cloud (specs)
+
+| | |
+|---|---|
+| Sample rate | 48 kHz (Clouds: 32 kHz) |
+| Processing | 32-bit float; buffers 16-bit mantissa + exponent per 32 samples |
+| Interpolation | Hermite everywhere it reads between samples |
+| FFT | ARM CMSIS-DSP real FFT, heavy work between interrupts |
+| RAM per mode | about 130 KB (only the running mode holds memory) |
+| CPU | every mode measured on an emulated STM32F405 at ≤ ~2400 instructions per stereo frame including the output section |
+| Save slots | 4 × 128 KB of flash |
+| Settings | calibration, mode, per-mode option + envelope routing |
+
+The source, the 180-odd tests and the CPU benchmark live in the repository:
+`make -C host test`, `tools/bench/run.sh`.
+
+---
+
+## 7. Thanks and licences
+
+- **Mutable Instruments / Émilie Gillet**: Clouds, stmlib, the audio
+  bootloader and its QPSK encoder (MIT).
+- **Tom Burns**: the Monsoon port of the Clouds firmware, whose pin mapping
+  this firmware stands on (MIT).
+- **Jak Plugg**: the Monsoon hardware.
+- **ARM**: CMSIS-DSP FFT (BSD-style licence, see `stmlib/third_party`).
+- The Chloaelis, Tantri, Oneirophone, Quell, Leitner and ConvoSolution
+  ideas come from their own projects; the DSP here is written for the M4.
+
+Cirrostratus is MIT-licensed. Look up. ☁

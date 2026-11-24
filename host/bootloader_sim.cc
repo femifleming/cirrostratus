@@ -3,7 +3,7 @@
 // monsoon/bootloader/bootloader.cc) and checks the bytes it would flash
 // against the original .bin.
 //
-//   host/build/bootloader_sim build/monsoon/monsoon_hifi.wav build/monsoon/monsoon.bin
+//   host/build/bootloader_sim build/cirrostratus/cirrostratus.wav build/cirrostratus/cirrostratus.bin
 
 #include <cstdio>
 #include <cstring>

@@ -1,4 +1,4 @@
-/* Monsoon HiFi: application from 0x08008000 to 0x0807FFFF (480 KB). Sectors
+/* Cirrostratus: application from 0x08008000 to 0x0807FFFF (480 KB). Sectors
    8-11 above it hold the four save slots. libm is kept (block-rate only). */
 /*
 Default linker script for STM32F4xx_1024K_192K
@@ -46,6 +46,13 @@ SECTIONS
     *(.glue_7t)
     KEEP (*(.init))
     KEEP (*(.fini))
+    . = ALIGN(4);
+    /* C++ static constructors: the modes are objects with vtables, so
+       their constructors must run before main() (see monsoon.cc). */
+    __init_array_start = .;
+    KEEP (*(SORT(.init_array.*)))
+    KEEP (*(.init_array*))
+    __init_array_end = .;
     . = ALIGN(16);
      _etext = .;
      _sidata = _etext;

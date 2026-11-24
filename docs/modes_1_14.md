@@ -1,6 +1,8 @@
 ### Bank 1 (green)
 
 #### 1 · GRAINS — trajectory grains
+*Forecast: scattered showers, falling in shapes.*
+
 Grains are read from a recorded buffer along a moving path, not at random
 spots. Buffer: 0.62 s stereo or 1.24 s mono.
 
@@ -15,9 +17,11 @@ spots. Buffer: 0.62 s stereo or 1.24 s mono.
 | FREEZE | stop recording |
 | TRIG | next path shape: circle → line → figure-8 → spiral → random walk |
 | Options | 1 chromatic · 2 minor pentatonic · 3 octaves + fifths · 4 free; options 5–8 = the same in mono (double length) |
-| Save | the buffer |
+| Keeps | the buffer |
 
 #### 2 · SPECTRAL — spectral freeze / resynthesis
+*Forecast: a held moment, refracted into its colours.*
+
 2048-point phase vocoder with peak-locked partials (64 ms latency).
 
 | Control | |
@@ -29,9 +33,11 @@ spots. Buffer: 0.62 s stereo or 1.24 s mono.
 | PITCH | transposition without changing speed |
 | FREEZE | hold the spectrum; it keeps resynthesising with a slight drift |
 | TRIG | grab a new spectrum while frozen |
-| Save / morph | the frozen spectrum / yes |
+| Keeps / morph | the frozen spectrum / yes |
 
 #### 3 · CONVOLVE — freeze captures the impulse response
+*Forecast: the room you're standing in is whatever you just played.*
+
 Your own audio becomes the space the sound plays in. The impulse response
 (IR) can be up to 139 ms, and FEEDBACK makes it ring on much longer. The
 mode starts with a small synthetic room so it sounds straight away.
@@ -44,9 +50,11 @@ mode starts with a small synthetic room so it sounds straight away.
 | DENSITY | IR envelope: reverse swell ← as captured (noon) → faster decay |
 | TEXTURE | IR brightness: low-pass below noon, treble boost above |
 | PITCH | IR playback rate |
-| Save | the capture and its settings |
+| Keeps | the capture and its settings |
 
 #### 4 · RESONATOR — sympathetic strings with jawari
+*Forecast: eight strings hum along, with a buzzing bridge.*
+
 Eight tuned strings, excited by the input, tuned to the cent.
 
 | Control | |
@@ -60,6 +68,8 @@ Eight tuned strings, excited by the input, tuned to the cent.
 | TRIG | pluck all strings |
 
 #### 5 · DIFFERENCE — difference tones (after the Oneirophone)
+*Forecast: notes that only happen inside your head. Really.*
+
 The input is frequency-shifted into high pairs of tones, f and f + Δ. Your
 ear makes the tone at Δ, a note that isn't in the signal.
 
@@ -73,6 +83,8 @@ ear makes the tone at Δ, a note that isn't in the signal.
 | FREEZE | drone of pure sine pairs at the held level |
 
 #### 6 · CROSS — left/right spectral morph
+*Forecast: two weather fronts collide.*
+
 Left input = modulator, right input = carrier (64 ms latency). With only IN L patched,
 both sides are the same signal.
 
@@ -87,6 +99,8 @@ both sides are the same signal.
 | TRIG | toggle holding the carrier |
 
 #### 7 · STRETCH — extreme time-stretch
+*Forecast: one second, smeared across an afternoon.*
+
 A phase vocoder with phase locking reads a recorded buffer slowly: 0.30 s
 stereo or 0.89 s mono.
 
@@ -100,9 +114,11 @@ stereo or 0.89 s mono.
 | FREEZE | stop recording |
 | TRIG | jump to the newest audio |
 | Options | 1 stereo · 2 mono (longer) |
-| Save | the buffer |
+| Keeps | the buffer |
 
 #### 8 · SPREEK — voice
+*Forecast: everything starts talking (and singing).*
+
 LPC speech analysis, five-formant vowels and a singing carrier.
 
 | Control | |
@@ -117,6 +133,8 @@ LPC speech analysis, five-formant vowels and a singing carrier.
 | Options | 1 adult formants · 2 child formants |
 
 #### 9 · CAPTURE — captured wavetable voice
+*Forecast: catch a sound, play it like a synth.*
+
 FREEZE turns the last half second of input into a 16-frame wavetable. The
 table is band-limited per octave, so it stays alias-free up high. Until the
 first capture it plays a sine → saw table.
@@ -130,9 +148,11 @@ first capture it plays a sine → saw table.
 | TEXTURE | brightness |
 | SIZE | envelope: pluck → pad |
 | TRIG | gate. Drones until the first gate arrives |
-| Save / morph | the table / yes |
+| Keeps / morph | the table / yes |
 
 #### 10 · GENDY — dynamic stochastic synthesis (Xenakis)
+*Forecast: Brownian drizzle, organised by Xenakis.*
+
 Two independent GENDYN voices (left/right). The breakpoints of a waveform
 take bounded random walks.
 
@@ -145,9 +165,11 @@ take bounded random walks.
 | POSITION | random distribution: Cauchy → logistic → hyperbolic cosine → arcsine |
 | FREEZE | freeze the walks (the waveform repeats exactly) |
 | TRIG | reseed the breakpoints from the input's last period |
-| Save | the breakpoints |
+| Keeps | the breakpoints |
 
 #### 11 · SHIMMER — shimmer cascade
+*Forecast: a reverb whose echoes keep climbing toward the sun.*
+
 A diffuse four-line delay network with pitch shifters inside, so every pass
 climbs (or falls) again.
 
@@ -162,6 +184,8 @@ climbs (or falls) again.
 | TRIG | clear the tail |
 
 #### 12 · TAPE — multi-head tape echo
+*Forecast: warm, wobbly, three heads at the ready.*
+
 Variable-speed tape with an anti-aliased record path: slower tape gives
 longer, darker echoes. Heads at 1×, 2× and 3× spacing (0.2 / 0.4 / 0.6 s at
 1× in stereo, about twice that in mono).
@@ -176,9 +200,11 @@ longer, darker echoes. Heads at 1×, 2× and 3× spacing (0.2 / 0.4 / 0.6 s at
 | FREEZE | loop hold: repeats sustain, no new input |
 | TRIG | tape stop (spins down); next TRIG spins back up |
 | Options | 1 stereo · 2 mono (twice as long) |
-| Save | the tape |
+| Keeps | the tape |
 
 #### 13 · PLATES — sympathetic plates (after the Ronin plates)
+*Forecast: sheet metal (and glass, and wood) singing back.*
+
 24 plate modes from real plate physics, read by two pickups and excited by
 the input.
 
@@ -193,6 +219,8 @@ the input.
 | TRIG | strike |
 
 #### 14 · CHLOE — the Chloaelis strip
+*Forecast: your Chloaelis, shrunk to fit the cloud.*
+
 Your Chloaelis channel strip, one per side, hard left and right: multimode
 filter → 12AX7 tube → delay. The Lorenz attractor pushes the left and right
 cutoffs apart and lets the filter wander between low-pass and band-pass.

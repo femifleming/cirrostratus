@@ -1,4 +1,4 @@
-// Monsoon HiFi firmware - entry point.
+// Cirrostratus firmware - entry point.
 //
 // Hardware: Monsoon (Jak Plugg), a 12HP Clouds variant: STM32F405 + WM8731.
 // Audio runs at 48 kHz in blocks of 32 frames from the codec DMA interrupt;
@@ -95,7 +95,21 @@ void Init() {
   sys.StartTimers();
 }
 
+// The startup code doesn't run C++ static constructors, and every mode is
+// a static object with a vtable, so run them here before anything else.
+extern "C" {
+extern void (*__init_array_start[])(void);
+extern void (*__init_array_end[])(void);
+}
+
+static void RunStaticConstructors() {
+  for (void (**f)(void) = __init_array_start; f < __init_array_end; ++f) {
+    (*f)();
+  }
+}
+
 int main(void) {
+  RunStaticConstructors();
   Init();
   while (1) {
     ui.DoEvents();

@@ -1,4 +1,4 @@
-# Monsoon HiFi firmware.
+# Cirrostratus - alternative firmware for the Monsoon.
 #   make -f monsoon/makefile          build build/monsoon/monsoon.bin
 #   make -f monsoon/makefile wav      firmware update as audio (bootloader)
 #   make -f monsoon/makefile upload   flash over SWD (ST-Link + OpenOCD)
@@ -13,7 +13,7 @@ BOOTLOADER        = monsoon_bootloader
 
 UPLOAD_COMMAND  = upload_jtag
 
-TARGET         = monsoon
+TARGET         = cirrostratus
 PACKAGES       = monsoon \
 		monsoon/drivers \
 		monsoon/dsp \
@@ -34,7 +34,7 @@ CCFLAGS += -fno-math-errno -Wno-unused-local-typedefs
 # Firmware update as a WAV for the Clouds/Monsoon audio bootloader.
 wav: $(TARGET_BIN)
 	python3 tools/qpsk_encoder.py -s 48000 -b 12000 -c 6000 -p 256 \
-		-o $(BUILD_DIR)monsoon_hifi.wav $(TARGET_BIN)
+		-o $(BUILD_DIR)cirrostratus.wav $(TARGET_BIN)
 
 # Link libm after the objects (stmlib's rule puts libraries first).
 $(TARGET_ELF): $(OBJS)

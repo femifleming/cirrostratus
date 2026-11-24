@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds docs/Monsoon-HiFi-Manual.md and .pdf from docs/MANUAL.md and the
+"""Builds docs/Cirrostratus-Manual.md and .pdf from docs/MANUAL.md and the
 per-bank mode chapters (docs/modes_*.md). Needs `markdown` and Chrome."""
 import glob, os, subprocess, markdown
 
@@ -10,10 +10,10 @@ def build():
     text = open(os.path.join(DOCS, "MANUAL.md")).read()
     modes = "".join(open(f).read() + "\n" for f in sorted(glob.glob(os.path.join(DOCS, "modes_*.md"))))
     text = text.replace("<!-- MODES -->", modes)
-    md_out = os.path.join(DOCS, "Monsoon-HiFi-Manual.md")
+    md_out = os.path.join(DOCS, "Cirrostratus-Manual.md")
     open(md_out, "w").write(text)
     body = markdown.markdown(text, extensions=["tables", "fenced_code"])
-    html = """<!doctype html><html><head><meta charset="utf-8"><title>Monsoon HiFi</title>
+    html = """<!doctype html><html><head><meta charset="utf-8"><title>Cirrostratus</title>
 <style>
  @page { size: A4; margin: 16mm 15mm; }
  body { font: 10pt/1.45 -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; color: #1c1c1c; }
@@ -31,7 +31,7 @@ def build():
 </style></head><body>""" + body + "</body></html>"
     html_path = os.path.join(DOCS, "manual.html")
     open(html_path, "w").write(html)
-    pdf = os.path.join(DOCS, "Monsoon-HiFi-Manual.pdf")
+    pdf = os.path.join(DOCS, "Cirrostratus-Manual.pdf")
     chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     subprocess.run([chrome, "--headless", "--disable-gpu", "--no-pdf-header-footer",
                     "--print-to-pdf=" + pdf, "file://" + html_path],

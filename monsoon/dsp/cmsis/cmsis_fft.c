@@ -8,7 +8,7 @@
 #endif
 
 #include "stmlib/third_party/STM/CMSIS/CM3_f4xx/arm_math.h"
-#include "stmlib/third_party/STM/CMSIS/CM3_f4xx/arm_const_structs.h"
+#include "stmlib/third_party/STM/CMSIS/CM3_f4xx/arm_common_tables.h"
 #include "monsoon/dsp/cmsis/cmsis_fft.h"
 
 /* C version of the assembly arm_bitreversal_32 (same algorithm). */
@@ -29,7 +29,39 @@ int monsoon_cmsis_rfft(float* in, float* out, int n, int inverse) {
   int i = n == 256 ? 0 : n == 512 ? 1 : n == 1024 ? 2 : n == 2048 ? 3 : -1;
   if (i < 0) return 0;
   if (!ready[i]) {
-    arm_rfft_fast_init_f32(&instances[i], (uint16_t)n);
+    /* Like arm_rfft_fast_init_f32, but only for the four sizes Cirrostratus
+       uses, so the linker can drop the tables for every other size
+       (about 70 KB of flash). */
+    arm_rfft_fast_instance_f32* S = &instances[i];
+    arm_cfft_instance_f32* c = &S->Sint;
+    S->fftLenRFFT = (uint16_t)n;
+    c->fftLen = (uint16_t)(n / 2);
+    switch (n) {
+      case 256:
+        c->bitRevLength = ARMBITREVINDEXTABLE_128_TABLE_LENGTH;
+        c->pBitRevTable = (uint16_t*)armBitRevIndexTable128;
+        c->pTwiddle = (float32_t*)twiddleCoef_128;
+        S->pTwiddleRFFT = (float32_t*)twiddleCoef_rfft_256;
+        break;
+      case 512:
+        c->bitRevLength = ARMBITREVINDEXTABLE_256_TABLE_LENGTH;
+        c->pBitRevTable = (uint16_t*)armBitRevIndexTable256;
+        c->pTwiddle = (float32_t*)twiddleCoef_256;
+        S->pTwiddleRFFT = (float32_t*)twiddleCoef_rfft_512;
+        break;
+      case 1024:
+        c->bitRevLength = ARMBITREVINDEXTABLE_512_TABLE_LENGTH;
+        c->pBitRevTable = (uint16_t*)armBitRevIndexTable512;
+        c->pTwiddle = (float32_t*)twiddleCoef_512;
+        S->pTwiddleRFFT = (float32_t*)twiddleCoef_rfft_1024;
+        break;
+      default:  /* 2048 */
+        c->bitRevLength = ARMBITREVINDEXTABLE1024_TABLE_LENGTH;
+        c->pBitRevTable = (uint16_t*)armBitRevIndexTable1024;
+        c->pTwiddle = (float32_t*)twiddleCoef_1024;
+        S->pTwiddleRFFT = (float32_t*)twiddleCoef_rfft_2048;
+        break;
+    }
     ready[i] = 1;
   }
   arm_rfft_fast_f32(&instances[i], in, out, (uint8_t)inverse);
@@ -39,6 +71,4 @@ int monsoon_cmsis_rfft(float* in, float* out, int n, int inverse) {
 #include "stmlib/third_party/STM/CMSIS/DSP_Lib/TransformFunctions/arm_cfft_radix8_f32.c"
 #include "stmlib/third_party/STM/CMSIS/DSP_Lib/TransformFunctions/arm_cfft_f32.c"
 #include "stmlib/third_party/STM/CMSIS/DSP_Lib/TransformFunctions/arm_rfft_fast_f32.c"
-#include "stmlib/third_party/STM/CMSIS/DSP_Lib/TransformFunctions/arm_rfft_fast_init_f32.c"
 #include "stmlib/third_party/STM/CMSIS/DSP_Lib/CommonTables/arm_common_tables.c"
-#include "stmlib/third_party/STM/CMSIS/DSP_Lib/CommonTables/arm_const_structs.c"

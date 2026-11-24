@@ -65,6 +65,7 @@ class Ui {
   void OnLongPress(uint8_t id);
   void OnRelease(uint8_t id, uint32_t duration);
   void PaintLeds();
+  void PaintSplash(uint32_t now);
   void ShowBinary(uint8_t value, bool green, uint8_t brightness);
   void ApplyModeMenu();
   void SaveSlot();
