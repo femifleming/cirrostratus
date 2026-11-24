@@ -140,3 +140,73 @@ MONSOON_TEST(plates_input_excites_and_stays_bounded) {
   CHECK(b.finite && b.peak <= 1.0f, "bounded");
   return true;
 }
+
+// Frequency of the strongest component in [lo, hi] within [from, to).
+static float PeakHz(const std::vector<FloatFrame>& v, float lo, float hi,
+                    size_t from, size_t to) {
+  float best = lo, best_a = -1.0f;
+  for (float hz = lo; hz <= hi; hz += 0.25f) {
+    float a = ToneAmplitude(v, hz, from, to);
+    if (a > best_a) { best_a = a; best = hz; }
+  }
+  return best;
+}
+
+MONSOON_TEST(plates_bal_fbk_rvb_do_what_they_say) {
+  // BAL: left snaps the modes onto harmonics, right stretches the series.
+  float worst_off = 0.0f, second[3];
+  const float bals[3] = { 0.5f, 0.0f, 1.0f };
+  for (int k = 0; k < 3; ++k) {
+    Module m;
+    m.SetMode(MODE_PLATES);
+    Controls c = Base();
+    c.size = 0.0f;  // square plate: (1,2) at 2.5 x
+    c.bal = bals[k];
+    m.Render(Silence(0.1f), [&](size_t) { return c; });
+    PlatesMode* p = Plates(m);
+    second[k] = p->mode_frequency(1) / p->mode_frequency(0);
+    if (k == 1) {
+      for (int i = 0; i < PlatesMode::kNumModes; ++i) {
+        float r = p->mode_frequency(i) / p->mode_frequency(0);
+        worst_off = std::fmax(worst_off, std::fabs(r - std::round(r)));
+      }
+    }
+  }
+  std::printf("    (1,2) mode: noon %.3f, left %.3f, right %.3f x root; left: worst"
+              " distance from a harmonic %.4f\n", second[0], second[1], second[2], worst_off);
+  CHECK(worst_off < 0.01f, "BAL left should tune every mode to a harmonic");
+  CHECK(second[2] > second[0] * 1.6f, "BAL right should stretch the series");
+
+  // FBK: tension. Right after a strike the root rings sharp, later it is
+  // back at pitch.
+  float early[2], late[2];
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Base();
+    c.density = 0.8f;
+    c.pitch = 12.0f;  // root 130.8 Hz
+    c.fbk = k == 0 ? 0.0f : 1.0f;
+    auto out = Strike(c, 3.0f);
+    const size_t s = 4 * kBlockSize;
+    early[k] = PeakHz(out, 120.0f, 165.0f, s + 480, s + 4800);
+    late[k] = PeakHz(out, 120.0f, 165.0f, s + 96000, s + 120000);
+    CHECK(Measure(out).finite && Measure(out).peak < 1.0f, "bounded");
+  }
+  std::printf("    root after the strike: noon %.1f -> %.1f Hz, FBK %.1f -> %.1f Hz\n",
+              early[0], late[0], early[1], late[1]);
+  CHECK(12.0f * std::log2(early[1] / early[0]) > 1.0f, "FBK: a hard hit rings sharp");
+  CHECK(std::fabs(12.0f * std::log2(late[1] / late[0])) < 0.5f, "FBK: and glides back");
+
+  // RVB = FDN: a short plate gets a tail.
+  float tail[2];
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Base();
+    c.density = 0.0f;  // 0.3 s plate
+    c.rvb = k == 0 ? 0.0f : 0.8f;
+    auto out = Strike(c, 2.5f);
+    tail[k] = Measure(out, 48000 * 3 / 2, 48000 * 2).rms;
+  }
+  std::printf("    1.5-2 s after the strike: %.1f dB dry, %.1f dB with RVB\n",
+              Db(tail[0]), Db(tail[1]));
+  CHECK(Db(tail[1]) - Db(tail[0]) > 30.0f, "RVB should add a reverb tail");
+  return true;
+}

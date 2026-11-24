@@ -6,6 +6,16 @@
 //  - 5 parallel formant resonators interpolating the vowels a-e-i-o-u.
 // The source is the input itself (its LPC residual for the talkbox path)
 // or an internal band-limited glottal sawtooth at PITCH.
+//
+// Per-mode knobs (they shape the internal carrier, so they need DENSITY
+// above zero):
+//   BAL  noon = v1.0. Left: glide (portamento on PITCH, an octave takes
+//        up to ~0.6 s). Right: vibrato (5.3 Hz, up to +/-1 semitone).
+//   FBK  growl: alternate glottal periods get weaker and longer (period
+//        doubling, pitch kept), from a rough edge to a fry/growl with an
+//        undertone an octave below.
+//   RVB  choir: two more carriers join, detuned up to +/-22 cents and
+//        drifting slowly, so one voice becomes a small chorus.
 
 #ifndef MONSOON_DSP_MODES_SPREEK_H_
 #define MONSOON_DSP_MODES_SPREEK_H_
@@ -57,6 +67,11 @@ class SpreekMode : public Mode {
   float f_freq_[kFormants], f_amp_[kFormants], f_q_[kFormants];
 
   float phase_;
+  float choir_phase_[2];  // RVB: the two extra carriers
+  float drift_phase_;     // RVB: their slow detune drift
+  float vib_phase_;       // BAL right: vibrato
+  float glide_;           // BAL left: carrier pitch after the glide (st)
+  bool odd_period_;       // FBK: alternate periods for the growl
   float lpc_mix_;
   Envelope env_;
   float out_env_;

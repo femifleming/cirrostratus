@@ -5,6 +5,16 @@
 // distribution, reflected off mirror barriers. Two independent voices
 // (left / right). Rendered at 96 kHz and decimated with a half-band FIR,
 // so the corners of the segments do not alias.
+//
+// Per-mode knobs:
+//   BAL  noon = v1.0 (both voices around PITCH). The right voice moves by
+//        whole semitones: left down to an octave below, right up to an
+//        octave above (fifths, fourths, octaves for a two-voice drone).
+//   FBK  cross-coupling: each new segment of one voice is stretched or
+//        squeezed by where the other voice's waveform is (up to +/-80%),
+//        so the two walks start to steer each other.
+//   RVB  the engine's FDN reverb (a raw synth voice with no space of its
+//        own).
 
 #ifndef MONSOON_DSP_MODES_GENDY_H_
 #define MONSOON_DSP_MODES_GENDY_H_
@@ -25,6 +35,7 @@ class GendyMode : public Mode {
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
   bool frozen() const { return frozen_; }
+  float reverb_amount(const Controls& c) const { return c.rvb; }
 
   size_t GetPersistentData(PersistentChunk* chunks);
   bool LoadPersistentData(const uint8_t* data, size_t size);
@@ -64,7 +75,8 @@ class GendyMode : public Mode {
   Voice voice_[2];
 
   // Block-rate parameters.
-  float mean_length_;          // samples at 96 kHz per breakpoint
+  float mean_length_[2];       // samples at 96 kHz per breakpoint
+  float coupling_;             // FBK: cross-coupling depth
   float amp_step_, dur_step_;
   float barrier_;              // duration mirror half-width
   float dist_zone_;            // 0..3, selects/morphs the distribution

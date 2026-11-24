@@ -137,3 +137,54 @@ MONSOON_TEST(spreek_freeze_drones_and_trig_bursts) {
   CHECK(Db(burst) - Db(quiet) > 20.0f, "TRIG should make a consonant burst");
   return true;
 }
+
+MONSOON_TEST(spreek_bal_fbk_rvb_do_what_they_say) {
+  auto in = Sine(1000.0f, 3.0f, 0.3f);
+  const float f0 = 130.81f;
+  auto render = [&](float bal, float fbk, float rvb, bool jump) {
+    return RenderSpreek(in, [&](size_t b, Controls* c) {
+      c->position = kVowelA;
+      c->density = 1.0f;   // internal carrier
+      c->bal = bal;
+      c->fbk = fbk;
+      c->rvb = rvb;
+      c->pitch = jump && b * kBlockSize >= 72000 ? 12.0f : 0.0f;
+    });
+  };
+  // BAL left = glide: 30-60 ms after a +12 st jump the carrier is still
+  // near the old note (energy around f0, which the new note lacks).
+  auto neutral_jump = render(0.5f, 0.0f, 0.0f, true);
+  auto glide_jump = render(0.0f, 0.0f, 0.0f, true);
+  const size_t j0 = 72000 + 1440, j1 = 72000 + 2880;
+  float arrived = ToneAmplitude(neutral_jump, f0, j0, j1);
+  float gliding = ToneAmplitude(glide_jump, f0, j0, j1);
+  // BAL right = vibrato: the 4th harmonic smears over +/-1 st.
+  auto neutral = render(0.5f, 0.0f, 0.0f, false);
+  auto vibrato = render(1.0f, 0.0f, 0.0f, false);
+  float h4 = ToneAmplitude(neutral, 4 * f0, 48000, 144000);
+  float h4_vib = ToneAmplitude(vibrato, 4 * f0, 48000, 144000);
+  // FBK = growl: period doubling puts an undertone series at f0 / 2.
+  auto growl = render(0.5f, 1.0f, 0.0f, false);
+  float sub = ToneAmplitude(neutral, 1.5f * f0, 48000, 144000);
+  float sub_growl = ToneAmplitude(growl, 1.5f * f0, 48000, 144000);
+  // RVB = choir: detuned voices take energy off the exact harmonic.
+  auto choir = render(0.5f, 0.0f, 1.0f, false);
+  float h8 = ToneAmplitude(neutral, 8 * f0, 48000, 144000) /
+      BandRms(neutral, 8 * f0, 48000, 144000, 20.0f);
+  float h8_choir = ToneAmplitude(choir, 8 * f0, 48000, 144000) /
+      BandRms(choir, 8 * f0, 48000, 144000, 20.0f);
+  std::printf("    glide: f0 30-60 ms after the octave jump %.1f dB vs %.1f dB neutral\n",
+              Db(gliding), Db(arrived));
+  std::printf("    vibrato: 4f0 %.1f dB vs %.1f dB | growl: 1.5f0 %.1f dB vs %.1f dB\n",
+              Db(h4_vib), Db(h4), Db(sub_growl), Db(sub));
+  std::printf("    choir: 8f0 line/band %.1f dB vs %.1f dB neutral\n", Db(h8_choir), Db(h8));
+  for (auto* v : { &glide_jump, &vibrato, &growl, &choir }) {
+    Stats s = Measure(*v);
+    CHECK(s.finite && s.peak < 1.0f, "bounded");
+  }
+  CHECK(Db(gliding) - Db(arrived) > 15.0f, "BAL left should glide");
+  CHECK(Db(h4) - Db(h4_vib) > 6.0f, "BAL right should add vibrato");
+  CHECK(Db(sub_growl) - Db(sub) > 20.0f, "FBK should growl (period doubling)");
+  CHECK(Db(h8) - Db(h8_choir) > 3.0f, "RVB should detune a choir around the carrier");
+  return true;
+}

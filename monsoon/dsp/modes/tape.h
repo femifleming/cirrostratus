@@ -5,6 +5,15 @@
 // the tape, so slower tape stores fewer samples per second - longer and
 // darker echoes, exactly like the real thing. Three playback heads sit at
 // 1, 2 and 3 x the head spacing behind the record head.
+//
+// Per-mode knobs (they act on the repeats, not on FREEZE's held loop):
+//   BAL  noon = v1.0. Left: the repeats get darker (loop low-pass 7 kHz ->
+//        500 Hz). Right: the repeats get thinner (loop high-pass up to
+//        2 kHz), the dub telephone fade.
+//   FBK  ping-pong: the repeats cross over to the other channel (fully
+//        right = every repeat swaps sides). Stereo tape only.
+//   RVB  diffusion in the loop: a chain of allpasses smears every pass a
+//        little more, so the echoes melt into a spring-like wash.
 
 #ifndef MONSOON_DSP_MODES_TAPE_H_
 #define MONSOON_DSP_MODES_TAPE_H_
@@ -56,6 +65,10 @@ class TapeMode : public Mode {
   Svf aa_[2][3];            // 6-pole anti-alias filter before the tape
   Svf bump_[2];             // head bump
   OnePole loss_[2];         // repeat loss in the loop
+  OnePole thin_[2];         // BAL right: high-pass in the loop
+  float* diffuser_[2];      // RVB: four allpasses per channel
+  uint16_t ap_pos_[4];
+  float diffuse_mix_;
   float fb_[2];
   float head_gain_[kHeads];
   float fb_gain_[kHeads];

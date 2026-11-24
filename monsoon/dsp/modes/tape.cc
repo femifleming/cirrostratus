@@ -1,10 +1,14 @@
 // Mode 12: TAPE (see tape.h).
 
 #include "monsoon/dsp/modes/tape.h"
+#include "monsoon/dsp/modes/cold_code.h"
 
 namespace monsoon {
 
 static const size_t kTapeBytes = 118 * 1024;  // fits a save slot
+// RVB diffuser: allpass lengths (one buffer holds all four per channel).
+static const uint16_t kApLen[4] = { 41, 97, 173, 263 };
+static const size_t kApTotal = 41 + 97 + 173 + 263;
 
 // Head combinations selected by POSITION (9 zones). Output weights per
 // head, and which heads feed the repeats.
@@ -28,6 +32,13 @@ static const HeadZone kZones[kNumZones] = {
 bool TapeMode::Init(Arena* arena) {
   channels_ = init_option_ == 1 ? 1 : 2;
   if (!tape_.Init(arena, kTapeBytes, channels_)) return false;
+  for (int ch = 0; ch < 2; ++ch) {
+    diffuser_[ch] = arena->Allocate<float>(kApTotal);
+    if (!diffuser_[ch]) return false;
+    thin_[ch].Init();
+  }
+  for (int k = 0; k < 4; ++k) ap_pos_[k] = 0;
+  diffuse_mix_ = 0.0f;
   staged_ = 0;
   acc_ = 0.0f;
   // Heads at 1, 2, 3 x spacing; keep room for wow and the interpolator.
@@ -61,7 +72,7 @@ bool TapeMode::Init(Arena* arena) {
   return true;
 }
 
-void TapeMode::WriteTapeSample(float l, float r) {
+MONSOON_COLD void TapeMode::WriteTapeSample(float l, float r) {
   stage_[staged_].l = l;
   stage_[staged_].r = channels_ == 1 ? l : r;
   if (++staged_ == kBlockSize) {
@@ -111,6 +122,27 @@ void TapeMode::Process(const Controls& c, const FloatFrame* in,
   const float bump = texture * 0.6f;
   const float feedback = frozen_ ? 1.0f : Clamp(c.density, 0.0f, 1.0f) * 1.1f;
   const float in_target = frozen_ ? 0.0f : 1.0f;
+
+  // BAL: darker (left: loop low-pass 7 kHz -> 500 Hz) or thinner (right:
+  // loop high-pass 40 Hz -> 2 kHz) repeats. At noon the low-pass gets
+  // exactly its v1.0 coefficient.
+  const float bal = KnobBipolar(c.bal);
+  const bool thin = bal > 0.0f;
+  const float f = (thin ? 40.0f : 7000.0f) / kSampleRate *
+      exp2f(bal * (thin ? 5.64f : 3.81f));
+  const float k = 1.0f - expf(-kTwoPi * f);
+  for (int ch = 0; ch < 2; ++ch) {
+    if (bal < 0.0f) {
+      loss_[ch].set_coefficient(k);
+    } else {
+      loss_[ch].set_f(7000.0f / kSampleRate);  // as in Init
+    }
+    thin_[ch].set_coefficient(k);  // only used when thin
+  }
+  // FBK: ping-pong cross-feed of the repeats.
+  const float cross = channels_ == 2 ? Clamp(c.fbk, 0.0f, 1.0f) : 0.0f;
+  // RVB: diffusion amount (smoothed per sample).
+  const float diffuse_target = Clamp(c.rvb, 0.0f, 1.0f);
 
   float spd = speed_start;
   for (size_t i = 0; i < n; ++i) {
@@ -170,15 +202,44 @@ void TapeMode::Process(const Controls& c, const FloatFrame* in,
     out[i].r = o[1];
 
     // --- Record head: input + repeats, saturated and resampled to tape.
+    if (cross > 0.0f) {
+      const float l = fbs[0];
+      fbs[0] += cross * (fbs[1] - fbs[0]);
+      fbs[1] += cross * (l - fbs[1]);
+    }
+    diffuse_mix_ += 0.001f * (diffuse_target - diffuse_mix_);
+    const bool diffuse = diffuse_mix_ > 0.0005f && !frozen_;
     for (int ch = 0; ch < 2; ++ch) {
       float src = ch == 0 ? in[i].l : in[i].r;
       if (channels_ == 1) src = 0.5f * (in[i].l + in[i].r);
       float repeat = frozen_ ? fbs[ch] : loss_[ch].Lp(fbs[ch]);
+      if (!frozen_) {
+        const float hp = thin_[ch].Hp(repeat);  // runs always: no step
+        if (thin) repeat = hp;
+      }
+      if (diffuse) {
+        // Four allpasses in series (g = 0.62), mixed in: |gain| <= 1.
+        float d = repeat;
+        float* line = diffuser_[ch];
+        for (int k = 0; k < 4; ++k) {
+          float z = line[ap_pos_[k]];
+          float v = d + 0.62f * z;
+          line[ap_pos_[k]] = v;
+          d = z - 0.62f * v;
+          line += kApLen[k];
+        }
+        repeat += diffuse_mix_ * (d - repeat);
+      }
       float w = src * input_gain_ + repeat * feedback;
       if (!frozen_) w = SoftClip(w * drive) * inv_drive;
       w = aa_[ch][2].Lp(aa_[ch][1].Lp(aa_[ch][0].Lp(w)));
       float* h = hist_[ch];
       h[0] = h[1]; h[1] = h[2]; h[2] = h[3]; h[3] = w;
+    }
+    if (diffuse) {
+      for (int k = 0; k < 4; ++k) {
+        if (++ap_pos_[k] >= kApLen[k]) ap_pos_[k] = 0;
+      }
     }
 
     acc_ += speed_;

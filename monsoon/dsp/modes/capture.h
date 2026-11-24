@@ -6,6 +6,16 @@
 // 1024 points with a loop crossfade, and its harmonics are rebuilt by FFT
 // into 8 band-limited mip levels (128 -> 1 harmonics, 8x oversampled). Playback picks the
 // mip level from the note so it never aliases.
+//
+// Per-mode knobs:
+//   BAL  noon = v1.0. Left: phase-distortion bend (the first half of the
+//        cycle is read up to 6x faster, CZ style). Right: sync formant (the
+//        table is read up to 6x per cycle under a smooth window, a
+//        resonant peak that sweeps up). The mip level follows, so it stays
+//        clean.
+//   FBK  self-FM: each voice's own output bends its read phase (DX-style
+//        operator feedback): warmer, then saw-like, then rasping noise.
+//   RVB  the engine's FDN reverb (a dry voice with no space of its own).
 
 #ifndef MONSOON_DSP_MODES_CAPTURE_H_
 #define MONSOON_DSP_MODES_CAPTURE_H_
@@ -33,6 +43,7 @@ class CaptureMode : public Mode {
   bool LoadPersistentData(const uint8_t* data, size_t size);
   void SetMorphSource(const uint8_t* data, size_t size);
   bool supports_morph() const { return true; }
+  float reverb_amount(const Controls& c) const { return c.rvb; }
   bool frozen() const { return frozen_; }
 
   // For tests.
@@ -62,6 +73,9 @@ class CaptureMode : public Mode {
   float period_[kFrames];
 
   float phase_[kMaxVoices];
+  float fm_[kMaxVoices];     // FBK: each voice's recent output
+  float fm_depth_;           // FBK, smoothed
+  float bal_;                // BAL, bipolar and smoothed
   float envelope_;
   int env_stage_;  // 0 idle/release, 1 attack, 2 decay/sustain
   bool gated_;
