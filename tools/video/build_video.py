@@ -356,6 +356,72 @@ def build_chapters():
     return ch
 
 
+def short_chapters():
+    """The 90-second poem: the manual, condensed, for posting."""
+    allk = ["sl0", "sl1", "sl2", "sl3"]
+    ch = [
+        dict(code="cs", title="cirrostratus", sub="a thin, high sheet of cloud",
+             desc="Firmware for the Monsoon. Thirty kinds of weather, at forty-eight kilohertz, in floating point.",
+             say="Cirrostratus. A thin, high sheet of cloud, drawn across the Monsoon. Thirty kinds of weather, "
+                 "sung at forty-eight kilohertz. The same panel. A different sky.",
+             rows=[row("modes", "30 · two banks", hl=[]), row("engine", "48 kHz · float", hl=[]),
+                   row("look up", "always", hl=[])], kind="intro"),
+        dict(code="pn", title="the panel", sub="four sliders, one big knob, three new hands",
+             desc="POSITION, DENSITY, SIZE, TEXTURE shape the sky. TUNE is pitch. BAL, FBK and RVB belong to "
+                  "each mode. WET blends.",
+             say="Four sliders shape the sky: position, density, size and texture. Tune is pitch, and it leans "
+                 "into every semitone. The three small knobs, BAL, FBK and RVB, become new hands in every mode. "
+                 "And wet decides how much of the sky you let in.",
+             rows=[row("sliders", "position · density · size · texture", hl=allk),
+                   row("tune", "pitch, v/oct", hl=["tune", "voct"]),
+                   row("bal fbk rvb", "new hands in every mode", hl=["k1", "k2", "k3"]),
+                   row("wet", "how much sky", hl=["k0"])], kind="panel"),
+        dict(code="mn", title="thirty skies", sub="hold disp, slide position, let go",
+             desc="Hold DISP: the lights count in binary, green for the first bank, red for the second. "
+                  "POSITION browses, WRITE crosses banks, FREEZE picks an option.",
+             say="Hold display, and the four lights count in binary. Green is the first bank, red the second. "
+                 "Slide position to wander, tap write to cross over, and let go.",
+             rows=[row("hold disp", "the lights count", hl=["disp", "leds"]),
+                   row("position", "wander", hl=["sl0"]), row("write", "cross the banks", hl=["write"]),
+                   row("let go", "the new sky fades in", hl=["disp"])], kind="menu"),
+        dict(code="wx", title="the weather", sub="a few of the thirty",
+             desc="Grains falling in shapes. Spectra held and refracted. Strings with a buzzing bridge. "
+                  "Tabla and tanpura. Plates of glass. A choir of you. Rooms that loop forever.",
+             say="Grains, falling in shapes. A spectrum, held and refracted into its colours. Strings with a "
+                 "buzzing bridge, a tabla and its tanpura, plates of metal and glass, a choir made of you, "
+                 "and rooms that loop back into themselves forever.",
+             rows=[row("grains", "falling in shapes", hl=[]), row("spectral", "held, refracted", hl=[]),
+                   row("tantri", "tabla · tanpura", hl=[]), row("choir", "made of you", hl=[])], kind="menu"),
+        dict(code="fz", title="hold the moment", sub="freeze, trig, four jars of sky",
+             desc="FREEZE holds the moment. TRIG asks every mode a different question. WRITE keeps what you "
+                  "caught in four jars of sky.",
+             say="Freeze holds the moment still. Trig asks every mode a different question. And four jars of "
+                 "sky keep whatever you caught: a buffer, a spectrum, a tape.",
+             rows=[row("freeze", "the moment, held", hl=["freeze", "fgate"]),
+                   row("trig", "a question per mode", hl=["trig"]),
+                   row("write", "four jars of sky", hl=["write"])], kind="steps"),
+        dict(code="os", title="the output", sub="hard stereo, a sub in the middle",
+             desc="Left is left, right is right. Below sixty hertz the bass gathers in the middle. A limiter "
+                  "that never argues.",
+             say="Left stays left, and right stays right. Below sixty hertz, the bass gathers in the middle of "
+                 "the room. And a limiter that never argues.",
+             rows=[row("hard stereo", "left is left", hl=["out_l", "out_r"]),
+                   row("mono bass", "< 60 Hz, centred", hl=["out_l", "out_r"]),
+                   row("limiter", "−1 dBFS", hl=["out_l", "out_r"])], kind="output"),
+        dict(code="su", title="sunrise", sub="every time you power on",
+             desc="Ice crystals. Two amber halos. The sun breaking through to green. Then the forecast.",
+             say="And every time you wake it: ice crystals, two amber halos, the sun breaking through to green, "
+                 "and then the forecast. Cirrostratus. Look up.",
+             rows=[row("ice", "crystals", hl=["leds"]), row("halo", "amber, twice", hl=["leds", "freeze"]),
+                   row("sun", "through to green", hl=["leds"])], kind="sunrise"),
+    ]
+    for i, c in enumerate(ch):
+        c["index"] = i
+        c["ground"] = hexrgb(GROUNDS[i % len(GROUNDS)])
+        c["accent"] = hexrgb(ACCENTS[i % len(ACCENTS)])
+    return ch
+
+
 def segments(c):
     """What is spoken, in order: (text, row index or None)."""
     segs = [(c["say"], None)]
@@ -855,9 +921,10 @@ def main():
     ap.add_argument("--jobs", type=int, default=max(1, os.cpu_count() - 2))
     ap.add_argument("--still", help="write one frame per chapter as PNG at this time (s) and stop")
     ap.add_argument("--print", action="store_true", help="print the spoken text and stop")
+    ap.add_argument("--short", action="store_true", help="the 90-second poem instead of the full manual")
     a = ap.parse_args()
 
-    chapters = build_chapters()
+    chapters = short_chapters() if a.short else build_chapters()
     sel = chapters
     if a.only:
         lo, hi = (int(x) for x in a.only.split("-"))

@@ -19,3 +19,6 @@ What was asked for, in order (2026-11-23 → 24).
 
 ## 2026-11-24 — 1.1: per-mode BAL / FBK / RVB, hard stereo, mono bass
 > on the monsoon, bal feedback and reverb can have unique controls in each mode, i rarely need stereo width as an option, it can be hard stereo, and by default keep bass mono on the main out, below 60hz. implement those knobs as more controls for the modes, make the new firmware and update the manual and video manual.
+
+## 2026-11-24 — 90-second version
+> make a poetic condendes but in depth 1 minute 30 second version of the manual for cirrostratus for me to post.
