@@ -6,6 +6,8 @@
 //
 // Spectra use ShyFFT's real layout: re[k] = x[k], im[k] = x[N/2 + k],
 // for k in 1 .. N/2-1. Bin 0 (DC) and N/2 are cleared by the framework.
+// NOTE: ShyFFT's imaginary part has the opposite sign to the textbook DFT
+// (phase = atan2(-im, re)); a round trip has a gain of N.
 
 #ifndef MONSOON_DSP_STFT_H_
 #define MONSOON_DSP_STFT_H_
@@ -26,12 +28,17 @@ inline size_t FftPasses(size_t n) {
   while ((size_t(1) << p) < n) ++p;
   return p;
 }
-// Real FFT of any power-of-two size up to kMaxFftSize (ShyFFT layout).
-inline void FftDirect(float* in, float* out, size_t n) {
+// Real FFT of any power-of-two size up to kMaxFftSize, in ShyFFT layout.
+// Implemented with CMSIS-DSP in fft_cmsis.cc (256..2048), ShyFFT otherwise.
+void FftDirect(float* in, float* out, size_t n);
+void FftInverse(float* in, float* out, size_t n);
+
+// The original ShyFFT path, kept for the equivalence test.
+inline void ShyFftDirect(float* in, float* out, size_t n) {
   if (n == kMaxFftSize) SharedFft().Direct(in, out);
   else SharedFft().Direct(in, out, FftPasses(n));
 }
-inline void FftInverse(float* in, float* out, size_t n) {
+inline void ShyFftInverse(float* in, float* out, size_t n) {
   if (n == kMaxFftSize) SharedFft().Inverse(in, out);
   else SharedFft().Inverse(in, out, FftPasses(n));
 }

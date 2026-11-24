@@ -23,6 +23,7 @@ enum ModeId {
   MODE_SHIMMER,      // 11 shimmer cascade
   MODE_TAPE,         // 12 multi-head tape echo
   MODE_PLATES,       // 13 sympathetic plates (modal)
+  MODE_CHLOE,        // 14 Chloaelis strip: filter > tube > delay
   MODE_LAST
 };
 

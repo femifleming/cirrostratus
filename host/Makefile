@@ -8,7 +8,8 @@ CXX ?= clang++
 CXXFLAGS := -std=c++14 -O2 -g -Wall -Wextra -Wno-unused-parameter \
             -Wno-missing-field-initializers -DTEST -I$(ROOT)
 SAN := -fsanitize=address,undefined -fno-sanitize=pointer-overflow -fno-omit-frame-pointer
-DSP_SRC := $(wildcard $(ROOT)/monsoon/dsp/*.cc) $(wildcard $(ROOT)/monsoon/dsp/modes/*.cc)
+DSP_SRC := $(wildcard $(ROOT)/monsoon/dsp/*.cc) $(wildcard $(ROOT)/monsoon/dsp/modes/*.cc) $(BUILD)/cmsis_fft.o
+CMSIS_INC := -I$(ROOT)/stmlib/third_party/STM/CMSIS/CM3_f4xx
 TEST_SRC := $(wildcard tests_*.cc) test_main.cc
 HDRS := $(wildcard $(ROOT)/monsoon/dsp/*.h) $(wildcard $(ROOT)/monsoon/dsp/modes/*.h) $(wildcard *.h)
 
@@ -22,6 +23,10 @@ $(BUILD)/render: $(DSP_SRC) render.cc $(HDRS) | $(BUILD)
 
 $(BUILD):
 	mkdir -p $(BUILD)
+
+# CMSIS-DSP FFT, compiled as C (no sanitizers: third-party code).
+$(BUILD)/cmsis_fft.o: $(ROOT)/monsoon/dsp/cmsis/cmsis_fft.c | $(BUILD)
+	$(CC) -x c -O2 -w -DTEST -I$(ROOT) $(CMSIS_INC) -c $< -o $@
 
 test: $(BUILD)/tests
 	./$(BUILD)/tests $(T)

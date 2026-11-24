@@ -3,6 +3,7 @@
 #include "monsoon/dsp/engine.h"
 
 #include "monsoon/dsp/modes/capture.h"
+#include "monsoon/dsp/modes/chloe.h"
 #include "monsoon/dsp/modes/convolve.h"
 #include "monsoon/dsp/modes/cross.h"
 #include "monsoon/dsp/modes/difference.h"
@@ -45,11 +46,13 @@ static GendyMode gendy_mode;
 static ShimmerMode shimmer_mode;
 static TapeMode tape_mode;
 static PlatesMode plates_mode;
+static ChloeMode chloe_mode;
 
 static Mode* const kModes[MODE_LAST] = {
   &grains_mode, &spectral_mode, &convolve_mode, &resonator_mode,
   &difference_mode, &cross_mode, &stretch_mode, &spreek_mode,
-  &capture_mode, &gendy_mode, &shimmer_mode, &tape_mode, &plates_mode
+  &capture_mode, &gendy_mode, &shimmer_mode, &tape_mode, &plates_mode,
+  &chloe_mode
 };
 
 static const size_t kFadeSamples = 480;  // 10 ms

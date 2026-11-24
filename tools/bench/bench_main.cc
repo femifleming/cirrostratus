@@ -7,6 +7,7 @@
 
 #include "monsoon/dsp/engine.h"
 #include "monsoon/dsp/memory.h"
+#include "monsoon/dsp/stft.h"
 
 using namespace monsoon;
 
@@ -100,11 +101,28 @@ int main() {
     t = Ticks();
     for (int k = 0; k < N; ++k) for (size_t i = 0; i < kBlockSize; ++i) { acc += FastSin(f[i].l) + FastCos(f[i].r); }
     Print("sin+cos "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / (N * kBlockSize))); Print("\n");
+    {
+      float* fa = (float*)block_main;
+      float* fb = fa + 2048;
+      for (int i = 0; i < 2048; ++i) fa[i] = Noise() / 32768.0f;
+      t = Ticks();
+      for (int k = 0; k < 20; ++k) { FftDirect(fa, fb, 2048); FftInverse(fb, fa, 2048); }
+      Print("fft2048 fwd+inv "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / 20)); Print("\n");
+      t = Ticks();
+      for (int k = 0; k < 20; ++k) { FftDirect(fa, fb, 512); FftInverse(fb, fa, 512); }
+      Print("fft512 fwd+inv "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / 20)); Print("\n");
+      t = Ticks();
+      for (int k = 0; k < 20000; ++k) acc += FastAtan2Cycles(fa[k & 1023], fa[(k + 7) & 1023]);
+      Print("atan2 "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / 20000)); Print("\n");
+      t = Ticks();
+      for (int k = 0; k < 20000; ++k) acc += sqrtf(fabsf(fa[k & 1023]));
+      Print("sqrtf "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / 20000)); Print("\n");
+    }
     if (acc == 12345.0f) Print("x");
   }
   Controls c;
   memset(&c, 0, sizeof(c));
-  const int kBlocks = 150;  // 1 s of audio
+  const int kBlocks = 750;  // 1 s of audio
   for (int scenario = 0; scenario < 2; ++scenario) {
     for (int m = 0; m < MODE_LAST; ++m) {
       engine.RequestMode((ModeId)m, 0);

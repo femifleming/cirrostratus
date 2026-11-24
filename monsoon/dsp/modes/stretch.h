@@ -1,20 +1,82 @@
-// STUB - replaced by the real implementation.
+// Mode 7: STRETCH - extreme time stretch (phase vocoder <-> Paulstretch).
+//
+// A recording buffer is read by a slowly moving analysis window. Each
+// synthesis frame keeps per-bin running phases driven by instantaneous
+// frequencies (coherent, phase-vocoder sound) and TEXTURE blends in random
+// phases (Paulstretch smear). Uses its own lean STFT (it never analyses
+// the live input, so it needs no input ring), which frees memory for the
+// buffer.
+
 #ifndef MONSOON_DSP_MODES_STRETCH_H_
 #define MONSOON_DSP_MODES_STRETCH_H_
 
 #include "monsoon/dsp/mode.h"
+#include "monsoon/dsp/sample_buffer.h"
 
 namespace monsoon {
 
 class StretchMode : public Mode {
  public:
+  static const size_t kFftSize = 2048;
+  static const size_t kHop = 512;
+  static const size_t kBins = kFftSize / 2;
+
   const char* name() const { return "stretch"; }
-  bool Init(Arena* arena) { (void)arena; return true; }
+  bool Init(Arena* arena);
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
-               size_t n) {
-    (void)c;
-    for (size_t i = 0; i < n; ++i) out[i] = in[i];
+               size_t n);
+  void Prepare();
+
+  // 0 stereo buffer, 1 mono buffer (twice as long).
+  uint8_t num_options() const { return 2; }
+  bool option_requires_init() const { return true; }
+
+  size_t GetPersistentData(PersistentChunk* chunks) {
+    return buffer_.GetChunks(chunks);
   }
+  bool LoadPersistentData(const uint8_t* data, size_t size) {
+    return buffer_.Load(data, size) != 0;
+  }
+  bool frozen() const { return controls_.freeze; }
+
+  // For tests.
+  float buffer_seconds() const { return buffer_.seconds(); }
+  const float* inst(int ch) const { return inst_[ch]; }
+  size_t latency() const { return kFftSize + kHop; }
+  // Static stretch-factor mapping: frames advance by kHop / factor.
+  static float AdvancePerHop(float size);
+
+ private:
+  void AnalyseReference(int ch, int32_t start);
+  void ProcessChannel(int ch, int32_t start, float dist, bool update_ref,
+                      bool reset_ref);
+
+  SampleBuffer buffer_;
+  int channels_;
+  size_t ring_size_;
+  float* ring_[2];
+  float* frame_;     // time-domain frame / output spectrum
+  float* spectrum_;  // analysis spectrum / inverse output
+  uint16_t* ref_phase_[2];
+  uint16_t* synth_phase_[2];
+  float* inst_[2];
+  float* smear_[2];
+
+  Controls controls_;  // latest controls, read by Prepare()
+  Random rng_;
+  size_t pos_;
+  size_t hop_counter_;
+  volatile uint32_t hops_ready_;
+  uint32_t hops_done_;
+  volatile uint32_t written_;
+  volatile bool jump_pending_;
+  bool previous_trigger_;
+
+  float drift_;
+  uint32_t ref_written_;
+  float ref_delay_;
+  bool have_ref_;
+  uint32_t hops_since_ref_;
 };
 
 }  // namespace monsoon

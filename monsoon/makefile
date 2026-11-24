@@ -18,6 +18,7 @@ PACKAGES       = monsoon \
 		monsoon/drivers \
 		monsoon/dsp \
 		monsoon/dsp/modes \
+		monsoon/dsp/cmsis \
 		stmlib/utils \
 		stmlib/system
 RESOURCES      =

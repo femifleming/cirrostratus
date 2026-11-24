@@ -135,6 +135,8 @@ inline float FastSin(float phase) {
   float idx = phase * 1024.0f;
   int i = static_cast<int>(idx);
   float f = idx - i;
+  // A tiny negative phase can round to exactly 1.0 above: wrap it.
+  i &= 1023;
   return kSineTable[i] + (kSineTable[i + 1] - kSineTable[i]) * f;
 }
 inline float FastCos(float phase) { return FastSin(phase + 0.25f); }

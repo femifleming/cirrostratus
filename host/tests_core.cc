@@ -233,3 +233,34 @@ MONSOON_TEST(save_and_load_round_trip_every_mode) {
   }
   return true;
 }
+
+MONSOON_TEST(cmsis_fft_matches_shyfft_layout_and_scale) {
+  for (size_t n : { 256, 512, 1024, 2048 }) {
+    std::vector<float> x(n), a(n), b(n), ca(n), cb(n);
+    Random r;
+    r.Seed(n);
+    for (auto& v : x) v = r.Bipolar();
+    ca = x; cb = x;
+    ShyFftDirect(ca.data(), a.data(), n);
+    FftDirect(cb.data(), b.data(), n);
+    double err = 0, ref = 0;
+    for (size_t k = 0; k < n; ++k) {
+      if (k == 0 || k == n / 2) continue;  // DC/Nyquist slots: frameworks clear them
+      err += (a[k] - b[k]) * (a[k] - b[k]);
+      ref += a[k] * a[k];
+    }
+    float snr = 10 * std::log10(ref / (err + 1e-30));
+    // Inverse round trip.
+    std::vector<float> y(n), s2 = b;
+    FftInverse(s2.data(), y.data(), n);
+    double e2 = 0, r2 = 0;
+    for (size_t i = 0; i < n; ++i) {
+      double d = y[i] / float(n) - x[i];
+      e2 += d * d; r2 += x[i] * x[i];
+    }
+    float rt = 10 * std::log10(r2 / (e2 + 1e-30));
+    std::printf("    n=%4zu: CMSIS vs ShyFFT agree to %.1f dB, round trip %.1f dB\n", n, snr, rt);
+    CHECK(snr > 100.0f && rt > 100.0f, "mismatch");
+  }
+  return true;
+}
