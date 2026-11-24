@@ -167,8 +167,8 @@ void ShimmerMode::Process(const Controls& c, const FloatFrame* in,
       line_[i][write_[i]] = static_cast<int16_t>(v);
       if (++write_[i] >= length_[i]) write_[i] = 0;
     }
-    out[s].l = dc_[0].Process(outl * 0.7f);
-    out[s].r = dc_[1].Process(outr * 0.7f);
+    out[s].l = dc_[0].Process(outl * 0.95f);
+    out[s].r = dc_[1].Process(outr * 0.95f);
   }
 }
 

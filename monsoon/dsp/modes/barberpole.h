@@ -1,20 +1,89 @@
-// STUB - replaced by the real implementation.
+// Mode 22: BARBERPOLE - frequency-shift spirals.
+//
+// A single-sideband frequency shifter sits inside a delay feedback loop:
+// every trip round the loop shifts the sound further, so repeats climb (or
+// fall) endlessly - the audio version of a barber's pole.
+//
+// | Control  | Function                                                    |
+// |----------|-------------------------------------------------------------|
+// | POSITION | Shift amount, bipolar: noon = 0 Hz, CW up, CCW down,        |
+// |          | 0.1 Hz -> 2 kHz (exponential). Small dead zone at noon.     |
+// | SIZE     | Loop delay 1.5 ms -> 500 ms (exponential).                  |
+// | DENSITY  | Feedback 0 -> 0.98.                                         |
+// | TEXTURE  | Up/down mix: 0 both sides shift the same way, 1 = left goes |
+// |          | the POSITION way, right the opposite way.                   |
+// | PITCH    | Multiplies the shift, V/oct (+12 st = twice the shift).     |
+// | FREEZE   | Infinite spiral: input muted, feedback 1.                   |
+// | TRIG     | Flip the shift direction.                                   |
+// | Options  | none                                                        |
+//
+// The loop holds 30 Hz high-pass and 14 kHz low-pass filters so shifted
+// material leaves the band instead of folding round DC or Nyquist.
+// Memory: block-floating-point stereo loop (~96 KB, 500 ms).
+
 #ifndef MONSOON_DSP_MODES_BARBERPOLE_H_
 #define MONSOON_DSP_MODES_BARBERPOLE_H_
 
 #include "monsoon/dsp/mode.h"
+#include "monsoon/dsp/sample_buffer.h"
 
 namespace monsoon {
+
+// 90-degree phase splitter (Olli Niemitalo's allpass pair), a private copy
+// of the one in DIFFERENCE.
+class BarberSplitter {
+ public:
+  void Init() {
+    memset(sa_, 0, sizeof(sa_));
+    memset(sb_, 0, sizeof(sb_));
+    a_delay_ = 0.0f;
+  }
+  inline void Process(float x, float* re, float* im) {
+    float a = x;
+    for (int i = 0; i < 4; ++i) a = Section(&sa_[i], ka_[i], a);
+    float b = x;
+    for (int i = 0; i < 4; ++i) b = Section(&sb_[i], kb_[i], b);
+    *re = a_delay_;
+    *im = b;
+    a_delay_ = a;
+  }
+
+ private:
+  struct State { float x1, x2, y1, y2; };
+  static inline float Section(State* s, float k, float x) {
+    float y = k * (x + s->y2) - s->x2;
+    s->x2 = s->x1; s->x1 = x;
+    s->y2 = s->y1; s->y1 = y;
+    return y;
+  }
+  static const float ka_[4];
+  static const float kb_[4];
+  State sa_[4], sb_[4];
+  float a_delay_;
+};
 
 class BarberpoleMode : public Mode {
  public:
   const char* name() const { return "barberpole"; }
-  bool Init(Arena* arena) { (void)arena; return true; }
+  bool Init(Arena* arena);
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
-               size_t n) {
-    (void)c;
-    for (size_t i = 0; i < n; ++i) out[i] = in[i];
-  }
+               size_t n);
+  bool frozen() const { return frozen_; }
+
+  // Shift (Hz) applied to the left / right side in the last block.
+  float shift_hz(int side) const { return shift_[side]; }
+
+ private:
+  SampleBuffer loop_;
+  BarberSplitter splitter_[2];
+  Svf hp_[2], lp_[2];
+  float phase_[2];
+  float shift_[2];
+  float delay_;
+  float feedback_;
+  float input_gain_;
+  float direction_;
+  bool frozen_;
 };
 
 }  // namespace monsoon
