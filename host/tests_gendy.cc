@@ -222,3 +222,76 @@ MONSOON_TEST(gendy_save_load_restores_breakpoints) {
   std::printf("    %zu-byte slot restored all breakpoints\n", slot.size());
   return true;
 }
+
+// Frequency of the strongest component in [lo, hi] (Goertzel scan).
+static float PeakHz(const std::vector<FloatFrame>& v, float lo, float hi, bool left) {
+  float best = lo, best_a = -1.0f;
+  for (float hz = lo; hz <= hi; hz += 0.1f) {
+    float a = ToneAmplitude(v, hz, 24000, 96000, left);
+    if (a > best_a) { best_a = a; best = hz; }
+  }
+  return best;
+}
+
+MONSOON_TEST(gendy_bal_fbk_rvb_do_what_they_say) {
+  // Static walks (TEXTURE 0): each voice is a fixed periodic waveform.
+  auto run = [](float bal, float fbk, float rvb) {
+    Module m;
+    m.SetMode(MODE_GENDY);
+    auto in = Silence(2.0f);
+    return m.Render(in, [&](size_t) {
+      Controls c = Base();
+      c.texture = 0.0f;
+      c.density = 0.2f;
+      c.pitch = 12.0f;   // ~131 Hz
+      c.bal = bal;
+      c.fbk = fbk;
+      c.rvb = rvb;
+      return c;
+    });
+  };
+  // BAL: interval of the right voice against the left one.
+  float ratio[4];
+  const float bals[4] = { 0.5f, 1.0f, 0.0f, 0.8f };  // 0, +12, -12, +7 st
+  const float expect[4] = { 1.0f, 2.0f, 0.5f, 1.4983f };
+  for (int k = 0; k < 4; ++k) {
+    auto out = run(bals[k], 0.0f, 0.0f);
+    float fl = PeakHz(out, 120.0f, 140.0f, true);
+    float fr = PeakHz(out, 120.0f * expect[k], 140.0f * expect[k], false);
+    ratio[k] = fr / fl;
+    CHECK(fl > 125.0f && fl < 136.0f, "left voice moved: %.1f Hz", fl);
+  }
+  std::printf("    right/left pitch: noon %.3f, right %.3f, left %.3f, 0.8 %.3f\n",
+              ratio[0], ratio[1], ratio[2], ratio[3]);
+  for (int k = 0; k < 4; ++k) {
+    CHECK(std::fabs(ratio[k] / expect[k] - 1.0f) < 0.02f,
+          "BAL %.1f: interval %.3f, want %.3f", bals[k], ratio[k], expect[k]);
+  }
+  // FBK: the voices steer each other, so the left voice stops repeating.
+  auto plain = run(0.8f, 0.0f, 0.0f);
+  auto coupled = run(0.8f, 1.0f, 0.0f);
+  float per_plain = BestAutocorr(plain, 24000, 72000, 355, 375);
+  float per_coupled = BestAutocorr(coupled, 24000, 72000, 355, 375);
+  std::printf("    left-voice periodicity: %.3f uncoupled, %.3f with FBK\n",
+              per_plain, per_coupled);
+  CHECK(per_plain > 0.95f, "uncoupled static walk repeats");
+  CHECK(per_coupled < 0.8f, "FBK should cross-couple the voices");
+  // RVB = FDN: the voices are the same with or without it (it does not
+  // touch the walks), so wet - dry is the reverb itself.
+  auto up = run(1.0f, 0.0f, 0.0f);
+  auto wet = run(1.0f, 0.0f, 0.8f);
+  std::vector<FloatFrame> tail(up.size());
+  for (size_t i = 0; i < up.size(); ++i) {
+    tail[i].l = wet[i].l - up[i].l;
+    tail[i].r = wet[i].r - up[i].r;
+  }
+  float dry_rms = Measure(up, 48000).rms, rev_rms = Measure(tail, 48000).rms;
+  std::printf("    RVB 0.8 adds a reverb at %.1f dB re the dry voices (%.1f dB)\n",
+              Db(rev_rms) - Db(dry_rms), Db(dry_rms));
+  CHECK(Db(rev_rms) - Db(dry_rms) > -12.0f, "RVB should add the reverb");
+  for (auto* v : { &up, &coupled, &wet }) {
+    Stats s = Measure(*v);
+    CHECK(s.finite && s.peak < 1.0f, "bounded");
+  }
+  return true;
+}

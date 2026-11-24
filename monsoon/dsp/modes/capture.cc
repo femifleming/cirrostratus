@@ -1,6 +1,7 @@
 // Mode 9: CAPTURE (see capture.h, docs/DESIGN.md).
 
 #include "monsoon/dsp/modes/capture.h"
+#include "monsoon/dsp/modes/cold_code.h"
 
 #include "monsoon/dsp/stft.h"
 
@@ -16,7 +17,7 @@ static const uint32_t kCaptureMagic = 0x52545043;  // "CPTR"
 static const size_t kCaptureBytes = 48 * 1024;
 static const float kVoiceGain = 0.6f;
 
-bool CaptureMode::Init(Arena* arena) {
+MONSOON_COLD bool CaptureMode::Init(Arena* arena) {
   table_ = arena->Allocate<int16_t>(kFrames * kFrameSize);
   work_ = arena->Allocate<float>(kCycle);
   spectrum_ = arena->Allocate<float>(kCycle);
@@ -28,7 +29,11 @@ bool CaptureMode::Init(Arena* arena) {
     BuildDefaultFrame(f);
     period_[f] = 0.0f;
   }
-  for (int v = 0; v < kMaxVoices; ++v) phase_[v] = v * 0.137f;
+  for (int v = 0; v < kMaxVoices; ++v) {
+    phase_[v] = v * 0.137f;
+    fm_[v] = 0.0f;
+  }
+  bal_ = fm_depth_ = 0.0f;
   envelope_ = 0.0f;
   env_stage_ = 0;
   gated_ = false;
@@ -81,7 +86,7 @@ void CaptureMode::BuildLevels(int frame) {
 }
 
 // Sine (frame 0) morphing to sawtooth (frame 15).
-void CaptureMode::BuildDefaultFrame(int frame) {
+MONSOON_COLD void CaptureMode::BuildDefaultFrame(int frame) {
   memset(spectrum_, 0, sizeof(float) * kCycle);
   const float mix = static_cast<float>(frame) / (kFrames - 1);
   float* im = spectrum_ + kCycle / 2;
@@ -137,7 +142,7 @@ float CaptureMode::DetectPeriod(int32_t start) {
   return 0.0f;
 }
 
-void CaptureMode::BuildFrameFromCapture(int frame) {
+MONSOON_COLD void CaptureMode::BuildFrameFromCapture(int frame) {
   const int32_t head = static_cast<int32_t>(build_head_);
   const int32_t filled = static_cast<int32_t>(build_filled_);
   const int32_t usable = filled - 4200;
@@ -234,10 +239,34 @@ void CaptureMode::Process(const Controls& c, const FloatFrame* in,
   f0 = Clamp(f0, 8.0f, 10000.0f);
   const int voices = 1 + static_cast<int>(Clamp(c.density, 0.0f, 1.0f) * 6.0f + 0.5f);
   const float detune_cents = c.density * 30.0f;
+  // BAL: phase distortion. Left bends the cycle (kink at `knee`), right
+  // reads the table `sync` times per cycle under a window.
+  // Both knobs glide (one-pole per block, ~20 ms) so CV does not jump
+  // the read phase.
+  const float bal_target = KnobBipolar(c.bal);
+  bal_ += 0.05f * (bal_target - bal_);
+  if (fabsf(bal_target - bal_) < 1e-4f) bal_ = bal_target;
+  const float bal = bal_;
+  const float knee = 0.5f + 0.42f * (bal < 0.0f ? bal : 0.0f);
+  const float knee_a = 0.5f / knee;
+  const float knee_b = 0.5f / (1.0f - knee);
+  const float sync = 1.0f + 5.0f * (bal > 0.0f ? bal : 0.0f);
+  // Window 1 - a + 5a p(1-p): a hump peaking at 1.25, faded in with BAL.
+  const float window = Clamp(4.0f * bal, 0.0f, 1.0f);
+  const float win_dc = 1.0f - window, win_hump = 5.0f * window;
+  const bool bend = bal < 0.0f, synced = bal > 0.0f;
+  // FBK: operator feedback depth in cycles.
+  const float fbk = Clamp(c.fbk, 0.0f, 1.0f);
+  fm_depth_ += 0.05f * (0.3f * fbk * fbk - fm_depth_);
+  if (fbk == 0.0f && fm_depth_ < 1e-5f) fm_depth_ = 0.0f;
+  const float fm = fm_depth_;
+  const float fm_k = fm * (1.0f / 32767.0f);  // per table unit
   // Mip level: both levels that get mixed must keep every harmonic below
   // 23 kHz, so start one level above the exact limit. TEXTURE lowers the
-  // brightness further.
-  float l0 = log2f(128.0f * f0 / 23000.0f) + 1.0f;
+  // brightness further. Phase distortion reads the table faster (by up
+  // to knee_a or sync), so it moves the level up with it.
+  const float stretch = (bal < 0.0f ? knee_a : sync) * (1.0f + 2.0f * fm);
+  float l0 = log2f(128.0f * f0 * stretch / 23000.0f) + 1.0f;
   if (l0 < 0.0f) l0 = 0.0f;
   float lf = l0 + (1.0f - Clamp(c.texture, 0.0f, 1.0f)) * 5.0f;
   if (lf > kLevels - 1.001f) lf = kLevels - 1.001f;
@@ -267,13 +296,27 @@ void CaptureMode::Process(const Controls& c, const FloatFrame* in,
     float gl = (pan > 0.0f ? 1.0f - pan : 1.0f) * norm;
     float gr = (pan < 0.0f ? 1.0f + pan : 1.0f) * norm;
     float phase = phase_[v];
+    float fb = fm_[v];
     float env = env_start;
     const float env_inc = (env_end - env_start) / static_cast<float>(n);
     for (size_t i = 0; i < n; ++i) {
       phase += inc;
       if (phase >= 1.0f) phase -= 1.0f;
+      // Read phase: self-FM (+0 at zero), then the bend or the sync
+      // multiply under its window. Exact at noon.
+      float rp = phase + fm_k * fb;
+      if (rp < 0.0f) rp += 1.0f;
+      if (rp >= 1.0f) rp -= 1.0f;
+      float w = 1.0f;
+      if (bend) {
+        rp = rp < knee ? rp * knee_a : 0.5f + (rp - knee) * knee_b;
+      } else if (synced) {
+        w = win_dc + win_hump * rp * (1.0f - rp);
+        rp *= sync;
+        rp -= static_cast<float>(static_cast<int32_t>(rp));
+      }
       // Level a.
-      float xa = phase * sa;
+      float xa = rp * sa;
       int32_t ia = static_cast<int32_t>(xa);
       float fa_t = xa - ia;
       const size_t ma = sa - 1;
@@ -286,7 +329,7 @@ void CaptureMode::Process(const Controls& c, const FloatFrame* in,
       float va = a0 + (a1 - a0) * frame_frac;
       float value = va;
       if (level_frac > 0.001f) {
-        float xb = phase * sb;
+        float xb = rp * sb;
         int32_t ib = static_cast<int32_t>(xb);
         float fb_t = xb - ib;
         const size_t mb = sb - 1;
@@ -299,12 +342,15 @@ void CaptureMode::Process(const Controls& c, const FloatFrame* in,
         float vb = b0 + (b1 - b0) * frame_frac;
         value += (vb - va) * level_frac;
       }
+      fb = 0.5f * (fb + value);  // table units
+      value *= w;
       env += env_inc;
       value *= env;
       out[i].l += value * gl;
       out[i].r += value * gr;
     }
     phase_[v] = phase;
+    fm_[v] = fb;
   }
 }
 

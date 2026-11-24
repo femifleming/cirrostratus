@@ -3,6 +3,15 @@
 // A 4-line diffuse delay network (Hadamard feedback, 16-bit lines) with
 // three pitch shifters inside the loop, so every pass through the network
 // climbs (or falls) by the chosen harmonic set.
+//
+// Per-mode knobs:
+//   BAL  noon = v1.0. Left: less of each pass is shifted (fully left = a
+//        plain reverb in any set). Right: mirror - the fourth line, which
+//        never shifts, now shifts by the inverse of the set's first
+//        interval, so the cascade falls as well as climbs.
+//   FBK  tank modulation: the four delay lines wobble (two slow LFOs, up
+//        to ~1.3 ms), smearing the ringing into a lush, chorused tail.
+//   RVB  pre-delay, 0 -> 250 ms before the network (glides when turned).
 
 #ifndef MONSOON_DSP_MODES_SHIMMER_H_
 #define MONSOON_DSP_MODES_SHIMMER_H_
@@ -23,7 +32,7 @@ class ShimmerShifter {
     phase_ = 0.0f;
   }
   void Clear() { memset(buffer_, 0, kLength * sizeof(float)); }
-  inline float Process(float x, float ratio) {
+  __attribute__((noinline)) float Process(float x, float ratio) {
     buffer_[write_] = x;
     phase_ += (1.0f - ratio) / kWindow;
     if (phase_ >= 1.0f) phase_ -= 1.0f;
@@ -60,6 +69,7 @@ class ShimmerMode : public Mode {
  public:
   static const int kLines = 4;
   static const int kShifters = 3;
+  static const size_t kPreDelay = 12000;  // 250 ms
 
   const char* name() const { return "shimmer"; }
   bool Init(Arena* arena);
@@ -71,6 +81,7 @@ class ShimmerMode : public Mode {
   void Clear();
   inline float ReadLine(int i, float delay) const;
   inline float Diffuse(int i, float x);
+  void PreDelay(const FloatFrame* in, FloatFrame* out, size_t n, float target);
 
   int16_t* line_[kLines];
   size_t length_[kLines];
@@ -79,6 +90,14 @@ class ShimmerMode : public Mode {
   float size_smoothed_;
   ShimmerShifter shifter_[kShifters];
   float shift_mix_[kShifters];
+  ShimmerShifter mirror_;   // BAL right: the fourth line falls
+  float mirror_mix_;
+  float mod_[kLines];       // FBK: current line modulation (samples)
+  float mod_depth_;
+  float mod_phase_;
+  int16_t* pre_;            // RVB: pre-delay line (stereo, interleaved)
+  size_t pre_write_;
+  float pre_delay_;         // smoothed pre-delay (samples)
   float* ap_buffer_[4];
   size_t ap_pos_[4];
   DcBlocker dc_[2];

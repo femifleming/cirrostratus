@@ -172,3 +172,90 @@ MONSOON_TEST(tape_save_and_load_restore_the_tape) {
   CHECK(std::fabs(Db(ra) - Db(rb)) < 3.0f, "reloaded tape differs");
   return true;
 }
+
+MONSOON_TEST(tape_bal_fbk_rvb_do_what_they_say) {
+  // A short noise burst on the left only, head 1, repeats on.
+  auto in = Silence(2.0f);
+  Random rng;
+  rng.Seed(3);
+  for (size_t i = 0; i < 480; ++i) in[4800 + i].l = 0.6f * rng.Bipolar();
+  float delay = 0.0f;
+  auto run = [&](float bal, float fbk, float rvb) {
+    Module m;
+    m.SetMode(MODE_TAPE);
+    auto out = m.Render(in, [&](size_t) {
+      Controls c = TapeControls();
+      c.density = 0.6f;
+      c.bal = bal;
+      c.fbk = fbk;
+      c.rvb = rvb;
+      return c;
+    });
+    delay = static_cast<TapeMode*>(m.engine().mode_instance(MODE_TAPE))
+        ->head_delay_seconds(0);
+    return out;
+  };
+  auto neutral = run(0.5f, 0.0f, 0.0f);
+  const size_t d = size_t(delay * 48000.0f);
+  // The 3rd repeat (two passes through the loop filters).
+  const size_t r3 = 4800 + 3 * d;
+  auto hi_lo = [&](const std::vector<FloatFrame>& v) {
+    std::vector<FloatFrame> w(v.begin() + r3 - 480, v.begin() + r3 + 1440);
+    float lo = 0, hi = 0;
+    Svf a, b;
+    a.Init(); b.Init();
+    a.set(300.0f / 48000.0f, 0.7f);
+    b.set(4000.0f / 48000.0f, 0.7f);
+    for (auto& f : w) {
+      float l = a.Lp(f.l), h = b.Hp(f.l);
+      lo += l * l;
+      hi += h * h;
+    }
+    return Db(std::sqrt(hi)) - Db(std::sqrt(lo));
+  };
+  auto dark = run(0.0f, 0.0f, 0.0f);
+  auto thin = run(1.0f, 0.0f, 0.0f);
+  std::printf("    3rd repeat, >4 kHz minus <300 Hz: noon %+.1f, BAL left %+.1f,"
+              " BAL right %+.1f dB\n", hi_lo(neutral), hi_lo(dark), hi_lo(thin));
+  CHECK(hi_lo(neutral) - hi_lo(dark) > 15.0f, "BAL left should darken the repeats");
+  CHECK(hi_lo(thin) - hi_lo(neutral) > 15.0f, "BAL right should thin the repeats");
+
+  // FBK: ping-pong. The 2nd repeat of a left-only burst lands on the right.
+  auto pong = run(0.5f, 1.0f, 0.0f);
+  const size_t r2 = 4800 + 2 * d;
+  float right_only[2], left_only[2];
+  for (int k = 0; k < 2; ++k) {
+    const auto& v = k == 0 ? neutral : pong;
+    double l = 0, r = 0;
+    for (size_t i = r2 - 480; i < r2 + 960; ++i) { l += v[i].l * v[i].l; r += v[i].r * v[i].r; }
+    left_only[k] = float(std::sqrt(l));
+    right_only[k] = float(std::sqrt(r));
+  }
+  std::printf("    2nd repeat right minus left: noon %+.1f dB, FBK %+.1f dB\n",
+              Db(right_only[0]) - Db(left_only[0]), Db(right_only[1]) - Db(left_only[1]));
+  // (Only the engine's mono bass below 60 Hz reaches the right at noon.)
+  CHECK(Db(right_only[0]) - Db(left_only[0]) < -20.0f, "noon: the repeats stay left");
+  CHECK(Db(right_only[1]) - Db(left_only[1]) > 20.0f, "FBK should ping-pong the repeats");
+
+  // RVB: diffusion smears each repeat: less of the 3rd repeat's energy
+  // sits in its first 15 ms.
+  auto wash = run(0.5f, 0.0f, 1.0f);
+  auto focus = [&](const std::vector<FloatFrame>& v) {
+    double core = 0, all = 0;
+    for (size_t i = r3 - 240; i < r3 + 4800; ++i) {
+      double e = v[i].l * v[i].l;
+      all += e;
+      if (i < r3 + 480 + 240) core += e;
+    }
+    return float(core / (all + 1e-20));
+  };
+  std::printf("    3rd repeat energy in its first 15 ms: noon %.2f, RVB %.2f\n",
+              focus(neutral), focus(wash));
+  CHECK(focus(neutral) > 0.8f, "noon repeat is a clean copy");
+  CHECK(focus(wash) < 0.5f, "RVB should smear the repeats");
+  for (auto* v : { &dark, &thin, &pong, &wash }) {
+    Stats s = Measure(*v);
+    CHECK(s.finite && s.peak < 1.0f, "bounded");
+  }
+  return true;
+}

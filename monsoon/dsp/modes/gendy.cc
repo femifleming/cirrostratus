@@ -1,6 +1,7 @@
 // Mode 10 - GENDY (see gendy.h and docs/DESIGN.md).
 
 #include "monsoon/dsp/modes/gendy.h"
+#include "monsoon/dsp/modes/cold_code.h"
 
 namespace monsoon {
 
@@ -29,7 +30,7 @@ static inline float Reflect(float x, float lo, float hi) {
   return Clamp(x, lo, hi);
 }
 
-bool GendyMode::Init(Arena* arena) {
+MONSOON_COLD bool GendyMode::Init(Arena* arena) {
   state_ = arena->Allocate<State>(1);
   history_ = arena->Allocate<float>(kHistorySize);
   fir_ring_[0] = arena->Allocate<float>(kFirRing);
@@ -71,7 +72,8 @@ bool GendyMode::Init(Arena* arena) {
   }
   for (int k = 0; k < 12; ++k) halfband_[k] *= 0.5f / sum;
 
-  mean_length_ = 20.0f;
+  mean_length_[0] = mean_length_[1] = 20.0f;
+  coupling_ = 0.0f;
   amp_step_ = dur_step_ = 0.0f;
   barrier_ = 0.1f;
   dist_zone_ = 0.0f;
@@ -129,7 +131,9 @@ float GendyMode::Render96k(int v) {
     if (!frozen_) Step(v, next);
     vo.from = vo.to;
     vo.to = state_->amplitude[v][next];
-    float len = state_->duration[v][vo.index] * mean_length_;
+    float len = state_->duration[v][vo.index] * mean_length_[v];
+    // FBK: the other voice's last breakpoint stretches this segment.
+    if (coupling_ > 0.0f) len *= 1.0f + coupling_ * voice_[1 - v].from;
     vo.length = len < 1.0f ? 1.0f : len;
     if (vo.position >= vo.length) vo.position = 0.0f;
   }
@@ -166,11 +170,16 @@ void GendyMode::Process(const Controls& c, const FloatFrame* in,
   // Block-rate parameters.
   const float f = Clamp(65.41f * SemitonesToRatio(c.pitch), 8.0f, 3000.0f);
   period_1x_ = kSampleRate / f;
+  // BAL: interval of the right voice, whole semitones.
+  const float interval = roundf(KnobBipolar(c.bal) * 12.0f);
+  const float ratio = interval != 0.0f ? SemitonesToRatio(interval) : 1.0f;
+  const float f_hi = ratio > 1.0f ? Clamp(f * ratio, 8.0f, 6000.0f) : f;
+  coupling_ = 0.8f * Clamp(c.fbk, 0.0f, 1.0f);
   int k = kMinBreakpoints +
       static_cast<int>(Clamp(c.density, 0.0f, 1.0f) *
                        (kMaxBreakpoints - kMinBreakpoints) + 0.5f);
   // Keep at least ~2 samples (96 kHz) per segment.
-  int k_max = static_cast<int>(2.0f * kSampleRate / (f * 2.0f));
+  int k_max = static_cast<int>(2.0f * kSampleRate / (f_hi * 2.0f));
   if (k > k_max) k = k_max;
   if (k < kMinBreakpoints) k = kMinBreakpoints;
   if (static_cast<uint32_t>(k) != state_->num_breakpoints) {
@@ -179,7 +188,8 @@ void GendyMode::Process(const Controls& c, const FloatFrame* in,
       if (voice_[v].index >= k) voice_[v].index = 0;
     }
   }
-  mean_length_ = 2.0f * kSampleRate / (f * k);
+  mean_length_[0] = 2.0f * kSampleRate / (f * k);
+  mean_length_[1] = ratio != 1.0f ? mean_length_[0] / ratio : mean_length_[0];
   const float t = Clamp(c.texture, 0.0f, 1.0f);
   amp_step_ = 0.3f * t * t;
   dur_step_ = 0.35f * t * t;

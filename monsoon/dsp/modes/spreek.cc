@@ -1,6 +1,7 @@
 // Mode 8: SPREEK (see spreek.h).
 
 #include "monsoon/dsp/modes/spreek.h"
+#include "monsoon/dsp/modes/cold_code.h"
 
 namespace monsoon {
 
@@ -43,9 +44,19 @@ inline float PolyBlep(float t, float dt) {
   return 0.0f;
 }
 
+// One sample of a band-limited saw; returns true in `wrapped` when the
+// phase wrapped. Out of line: it serves the carrier and the choir.
+__attribute__((noinline)) float BlepSaw(float* phase, float dt, bool* wrapped) {
+  float p = *phase + dt;
+  *wrapped = p >= 1.0f;
+  if (*wrapped) p -= 1.0f;
+  *phase = p;
+  return 2.0f * p - 1.0f - PolyBlep(p, dt);
+}
+
 }  // namespace
 
-bool SpreekMode::Init(Arena* arena) {
+MONSOON_COLD bool SpreekMode::Init(Arena* arena) {
   ring_ = arena->Allocate<float>(kWindow);
   frame_ = arena->Allocate<float>(kWindow);
   if (!ring_ || !frame_) return false;
@@ -67,6 +78,12 @@ bool SpreekMode::Init(Arena* arena) {
     f_q_[i] = 5.0f;
   }
   phase_ = 0.0f;
+  choir_phase_[0] = 0.31f;
+  choir_phase_[1] = 0.67f;
+  drift_phase_ = 0.0f;
+  vib_phase_ = 0.0f;
+  glide_ = 0.0f;
+  odd_period_ = false;
   lpc_mix_ = 0.0f;
   env_.Init(0.005f, 0.08f);
   out_env_ = 0.0f;
@@ -202,9 +219,42 @@ void SpreekMode::Process(const Controls& c, const FloatFrame* in,
 
   // --- Source.
   const float density = frozen_ ? 1.0f : Clamp(c.density, 0.0f, 1.0f);
-  const float f0 = Clamp(130.81f * SemitonesToRatio(c.pitch), 20.0f, 4000.0f);
+  // BAL: glide (left) or vibrato (right) on the carrier's pitch.
+  const float bal = KnobBipolar(c.bal);
+  float pitch = c.pitch;
+  if (bal < 0.0f) {
+    const float tau = bal * bal * (0.25f * kSampleRate);  // samples
+    glide_ += static_cast<float>(n) / (tau + n) * (c.pitch - glide_);
+    pitch = glide_;
+  } else {
+    glide_ = c.pitch;
+    if (bal > 0.0f) {
+      vib_phase_ += 5.3f * n / kSampleRate;
+      if (vib_phase_ >= 1.0f) vib_phase_ -= 1.0f;
+      const float x = 2.0f * vib_phase_ - 1.0f;  // parabolic sine
+      pitch += bal * 4.0f * x * (1.0f - fabsf(x));
+    }
+  }
+  const float f0 = Clamp(130.81f * SemitonesToRatio(pitch), 20.0f, 4000.0f);
   const float dt = f0 / kSampleRate;
   const float breath = texture * 0.6f;
+  // FBK: growl. Every other glottal period is weaker and longer (and the
+  // ones between shorter, so the pitch stays put).
+  const float growl = Clamp(c.fbk, 0.0f, 1.0f);
+  const float dt_even = dt / (1.0f - 0.08f * growl);
+  const float dt_odd = dt / (1.0f + 0.08f * growl);
+  const float gain_odd = 1.0f - 0.7f * growl;
+  // RVB: choir. Two more carriers, detuned (up to +/-22 cents) and
+  // drifting with a slow triangle, out of phase with each other.
+  const float choir = Clamp(c.rvb, 0.0f, 1.0f);
+  float dt_choir[2];
+  drift_phase_ += 0.23f * n / kSampleRate;
+  if (drift_phase_ >= 1.0f) drift_phase_ -= 1.0f;
+  const float drift = fabsf(2.0f * drift_phase_ - 1.0f);
+  const float detune = 0.0128f * choir;
+  dt_choir[0] = dt * (1.0f - detune * (0.55f + 0.45f * drift));
+  dt_choir[1] = dt * (1.0f + detune * (1.0f - 0.45f * drift));
+  const float choir_norm = 1.0f / sqrtf(1.0f + 2.0f * choir * choir);
 
   for (size_t s = 0; s < n; ++s) {
     float x = 0.5f * (in[s].l + in[s].r);
@@ -233,9 +283,16 @@ void SpreekMode::Process(const Controls& c, const FloatFrame* in,
     lpc_mix_ += 0.002f * (lpc_target - lpc_mix_);
 
     // Glottal source: band-limited saw with breath noise.
-    phase_ += dt;
-    if (phase_ >= 1.0f) phase_ -= 1.0f;
-    float saw = 2.0f * phase_ - 1.0f - PolyBlep(phase_, dt);
+    bool wrapped;
+    float saw = BlepSaw(&phase_, odd_period_ ? dt_odd : dt_even, &wrapped);
+    if (wrapped) odd_period_ = !odd_period_;
+    if (odd_period_) saw *= gain_odd;
+    if (choir > 0.0f) {
+      for (int k = 0; k < 2; ++k) {
+        saw += choir * BlepSaw(&choir_phase_[k], dt_choir[k], &wrapped);
+      }
+      saw *= choir_norm;
+    }
     float noise = rng_.Bipolar() * 1.7f * kSawRms;
     float carrier = ((1.0f - breath) * saw + breath * noise) / kSawRms;
 
