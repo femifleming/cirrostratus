@@ -1,6 +1,8 @@
 /* CMSIS-DSP arm_rfft_fast_f32 built as one C translation unit, so the
    firmware and the host tests use exactly the same FFT code. */
+#ifndef ARM_MATH_CM4
 #define ARM_MATH_CM4
+#endif
 #ifndef __FPU_PRESENT
 #define __FPU_PRESENT 1
 #endif
