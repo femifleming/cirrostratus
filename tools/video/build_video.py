@@ -787,7 +787,7 @@ def static_layer(c, chapters):
             y += 32
         y += 10
     nrows = len(c["rows"])
-    maxlines = 5 if nrows <= 6 else (4 if nrows <= 8 else 2)
+    maxlines = 5 if nrows <= 6 else 4
     for ln in wrap(c["desc"], F_BODY, TEXT_R - 96)[:maxlines]:
         d.text((96, y), ln, font=F_BODY, fill=INK)
         y += 36

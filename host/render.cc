@@ -4,7 +4,9 @@
 //       --set position=0.3 --set density=0.7 --freeze-at 4 --trig-every 0.5
 //
 // --in accepts a .wav path, or: music, noise, sine:<hz>, silence.
-// --sweep <param> sweeps a knob 0..1 over the render.
+// --sweep <param> sweeps a knob 0..1 over the render; --ramp <param>=a:b
+// moves it from a to b. --quality 0..5 sets the buffer quality (48k 16-bit ..
+// 16k 8-bit).
 
 #include <cstdio>
 #include <cstdlib>
@@ -33,7 +35,8 @@ int main(int argc, char** argv) {
   std::string mode_name = "grains", in_name = "music", out_name = "out.wav";
   std::string sweep;
   float secs = 10.0f, freeze_at = -1.0f, unfreeze_at = -1.0f, trig_every = 0.0f;
-  int option = 0;
+  int option = 0, quality = 0;
+  std::vector<std::pair<std::string, std::pair<float, float>>> ramps;
   Controls base = DefaultControls();
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
@@ -47,6 +50,19 @@ int main(int argc, char** argv) {
     else if (a == "--unfreeze-at") unfreeze_at = std::atof(next().c_str());
     else if (a == "--trig-every") trig_every = std::atof(next().c_str());
     else if (a == "--sweep") sweep = next();
+    else if (a == "--quality") quality = std::atoi(next().c_str());
+    else if (a == "--ramp") {
+      std::string kv = next();
+      size_t eq = kv.find('='), co = kv.find(':');
+      if (eq == std::string::npos || co == std::string::npos ||
+          !Param(&base, kv.substr(0, eq))) {
+        std::fprintf(stderr, "bad ramp %s\n", kv.c_str());
+        return 1;
+      }
+      ramps.push_back({kv.substr(0, eq),
+                       {float(std::atof(kv.substr(eq + 1, co - eq - 1).c_str())),
+                        float(std::atof(kv.substr(co + 1).c_str()))}});
+    }
     else if (a == "--set") {
       std::string kv = next();
       size_t eq = kv.find('=');
@@ -65,6 +81,7 @@ int main(int argc, char** argv) {
     if (mode_name == monsoon::Engine::mode_name(monsoon::ModeId(m))) mode = m;
   }
   if (mode < 0) { std::fprintf(stderr, "unknown mode %s\n", mode_name.c_str()); return 1; }
+  module.engine().set_buffer_quality(uint8_t(quality));
   module.SetMode(monsoon::ModeId(mode), option);
 
   std::vector<FloatFrame> in;
@@ -84,6 +101,10 @@ int main(int argc, char** argv) {
     Controls c = base;
     float t = b * block_s;
     if (!sweep.empty()) *Param(&c, sweep) = float(b) / blocks;
+    for (auto& r : ramps) {
+      const float x = float(b) / blocks;
+      *Param(&c, r.first) = r.second.first + (r.second.second - r.second.first) * x;
+    }
     c.freeze = freeze_at >= 0 && t >= freeze_at && (unfreeze_at < 0 || t < unfreeze_at);
     c.trigger = trig_blocks && (b % trig_blocks) == 0;
     c.gate = trig_blocks && (b % trig_blocks) < trig_blocks / 2;
