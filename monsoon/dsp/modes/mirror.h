@@ -3,8 +3,7 @@
 // The mid signal is analysed (FFT 1024, hop 256, sine windows). Every
 // partial (peak region of the spectrum) is moved as one block to a new
 // frequency f' = warp(f), resynthesised with running phases (phase
-// vocoder with rigid phase locking). Output is mono on both sides (STER
-// widens it).
+// vocoder with rigid phase locking). Output is mono on both sides.
 //
 // Warps, relative to the anchor A:
 //   stretch  f' = A (f/A)^1.6    partials spread apart: inharmonic, bell-like
@@ -22,6 +21,21 @@
 // | FREEZE   | hold the spectrum (the warp stays live on the held sound)   |
 // | TRIG     | grab a new spectrum while frozen                            |
 // | options  | none                                                        |
+//
+// Per-mode knobs:
+//   BAL  linear frequency shift after the warp: noon none, left down,
+//        right up, to -/+1 kHz (fine near noon: shift = BAL^2). Every
+//        partial moves by the same number of Hz, so harmonic sounds turn
+//        inharmonic; shifts below 0 Hz reflect back up (through zero).
+//   FBK  warp feedback: each hop's warped spectrum is warped again
+//        (per bin, the louder of the new input and 0.95 x FBK of the
+//        last output, energy-normalised, at most +3 dB over the input
+//        while it plays; ~0.7 s tail at full). Partials spiral: stretch
+//        glides them away from the anchor, BAL slides them in Hz, fold
+//        piles them under it; at no warp it is a spectral sustain.
+//   RVB  the engine's FDN reverb: MIRROR's output is mono, so the
+//        space comes from there.
+//
 
 #ifndef MONSOON_DSP_MODES_MIRROR_H_
 #define MONSOON_DSP_MODES_MIRROR_H_
@@ -44,12 +58,17 @@ class MirrorMode : public Mode, public MonoStftClient {
   void Prepare() { stft_.Prepare(); }
   bool frozen() const { return ctl_.freeze; }
 
+  // RVB is the engine's FDN reverb.
+  float reverb_amount(const Controls& c) const { return c.rvb; }
+
   void Transform(float* in, float* out[2], size_t fft_size);
 
   // The warp (in bins), exposed for tests.
   static float Warp(float f, float anchor, float position, float amount);
 
  private:
+  __attribute__((noinline)) void Feedback(float fbk);
+
   MonoStft stft_;
   float* mag_;        // smoothed / frozen magnitudes
   float* freq_;       // instantaneous frequency (bins)
@@ -59,6 +78,10 @@ class MirrorMode : public Mode, public MonoStftClient {
   float* best_;       // strongest contribution so far
   float* pfreq_;      // warped frequency of the peak owning the bin
   int16_t* off_;      // bin offset from its peak (0 = the peak itself)
+  float* fb_mag_;     // FBK: what is warped (input or fed-back output)
+  float* fb_freq_;
+  float src_energy_;  // FBK: energy of the last warped source
+  float ref_energy_;  // FBK: decaying input energy (level cap)
   Controls ctl_;
   volatile bool grab_;
 };

@@ -2,6 +2,8 @@
 
 #include "monsoon/dsp/modes/polish.h"
 
+#include "monsoon/dsp/modes/bal_knob.h"
+
 #include "monsoon/dsp/modes/spectral_util.h"
 
 namespace monsoon {
@@ -44,13 +46,17 @@ bool PolishMode::Init(Arena* arena) {
   c200_.Set(200.0f, q);
   c3k_.Set(3000.0f, q);
   c120_.Set(120.0f, q);
+  c6k_.Set(6000.0f, q);
+  memset(air_hp_, 0, sizeof(air_hp_));
+  ny_mix_ = 0.0f;
+  air_mix_ = 0.0f;
   memset(s1a_, 0, sizeof(s1a_)); memset(s1l_, 0, sizeof(s1l_));
   memset(s1h_, 0, sizeof(s1h_)); memset(s2a_, 0, sizeof(s2a_));
   memset(s2l_, 0, sizeof(s2l_)); memset(s2h_, 0, sizeof(s2h_));
   memset(ap_, 0, sizeof(ap_));
   memset(&side_hp_, 0, sizeof(side_hp_));
   memset(&side_hp2_, 0, sizeof(side_hp2_));
-  for (int b = 0; b < 3; ++b) {
+  for (int b = 0; b < 4; ++b) {
     env_[b] = 0.0f;
     gr_db_[b] = 0.0f;
     gain_[b] = 1.0f;
@@ -67,6 +73,13 @@ bool PolishMode::Init(Arena* arena) {
   return true;
 }
 
+// A knob amount gliding towards its target (~10 ms), exactly 0 when off.
+static __attribute__((noinline)) void Glide(float* v, float target) {
+  target = Clamp(target, 0.0f, 1.0f);
+  *v += 0.06f * (target - *v);
+  if (target == 0.0f && *v < 1e-4f) *v = 0.0f;
+}
+
 void PolishMode::Process(const Controls& c, const FloatFrame* in,
                          FloatFrame* out, size_t n) {
   const float inv_n = 1.0f / static_cast<float>(n);
@@ -78,23 +91,44 @@ void PolishMode::Process(const Controls& c, const FloatFrame* in,
   const float slope = 1.0f - 1.0f / ratio;
   const float makeup = 0.35f * (-thr) * slope;
   const float block_s = static_cast<float>(n) / kSampleRate;
-  static const float kAttack[3] = { 0.020f, 0.010f, 0.005f };
-  static const float kRelease[3] = { 0.250f, 0.150f, 0.100f };
-  float g_start[3], g_inc[3];
-  for (int b = 0; b < 3; ++b) {
+  // Band 3 is FBK's smashed copy (see below).
+  static const float kAttack[4] = { 0.020f, 0.010f, 0.005f, 0.002f };
+  static const float kRelease[4] = { 0.250f, 0.150f, 0.100f, 0.120f };
+  float g_start[4], g_inc[4];
+  // BAL: shift the low and high bands' thresholds in opposite directions.
+  const float lean = 9.0f * BalKnob(c.bal);
+  // FBK: parallel compression. A smashed copy of the multiband output
+  // (fast detector, 10:1 at -30 dBFS, +15 dB) is blended in; as the copy
+  // is the same signal, the blend is a gain of 1 + mix * g.
+  // (Blend glides ~10 ms, then ramps per sample: no zipper under CV.)
+  const float ny_mix_start = ny_mix_;
+  Glide(&ny_mix_, 0.5f * c.fbk);
+  const bool ny = ny_mix_start > 0.0f || ny_mix_ > 0.0f;
+  const float ny_mix_inc = (ny_mix_ - ny_mix_start) * inv_n;
+  const int bands = ny ? 4 : 3;
+  for (int b = 0; b < bands; ++b) {
     const float level = 3.0103f * FastLog2(env_[b] + 1e-12f);  // dB
-    const float over = level - thr;
+    const float th = b == 3 ? -30.0f : thr + lean * static_cast<float>(1 - b);
+    const float sl = b == 3 ? 0.9f : slope;
+    const float over = level - th;
     float target = 0.0f;
-    if (over > 3.0f) target = over * slope;
-    else if (over > -3.0f) target = (over + 3.0f) * (over + 3.0f) / 12.0f * slope;
+    if (over > 3.0f) target = over * sl;
+    else if (over > -3.0f) target = (over + 3.0f) * (over + 3.0f) / 12.0f * sl;
     const float tc = target > gr_db_[b] ? kAttack[b] : kRelease[b];
     gr_db_[b] += (1.0f - FastExp2(-block_s / tc * 1.4427f)) * (target - gr_db_[b]);
-    const float g = FastExp2((makeup - gr_db_[b]) * 0.16609640f);
+    const float g = FastExp2(((b == 3 ? 15.0f : makeup) - gr_db_[b]) * 0.16609640f);
     g_start[b] = gain_[b];
     g_inc[b] = (g - gain_[b]) * inv_n;
     gain_[b] = g;
   }
   const float env_a = 1.0f - expf(-1.0f / (0.01f * kSampleRate));
+  const float ny_env_a = 1.0f - expf(-1.0f / (0.002f * kSampleRate));
+
+  // RVB: air exciter amount (ramped).
+  const float air_start = air_mix_;
+  Glide(&air_mix_, 0.8f * c.rvb);
+  const bool air = air_start > 0.0f || air_mix_ > 0.0f;
+  const float air_inc = (air_mix_ - air_start) * inv_n;
 
   // Tilt (+/- 4 dB), saturation, width, trim, bypass.
   const float tilt = (c.position - 0.5f) * 2.0f;
@@ -154,6 +188,16 @@ void PolishMode::Process(const Controls& c, const FloatFrame* in,
       y[1] += r * g;
     }
 
+    if (ny) {
+      const float fi = static_cast<float>(i + 1);
+      const float ms = y[0] * y[0] > y[1] * y[1] ? y[0] * y[0] : y[1] * y[1];
+      env_[3] += ny_env_a * (ms - env_[3]);
+      const float k = 1.0f + (ny_mix_start + ny_mix_inc * fi) *
+          (g_start[3] + g_inc[3] * fi);
+      y[0] *= k;
+      y[1] *= k;
+    }
+
     if (saturate) {
       for (int ch = 0; ch < 2; ++ch) {
         float* us = up_state_[ch];
@@ -166,6 +210,17 @@ void PolishMode::Process(const Controls& c, const FloatFrame* in,
         const float d1 = Ap1(Ap1(s1, kHb[1], &ds[2]), kHb[3], &ds[3]);
         const float sat = 0.5f * (d0 + d1);
         y[ch] += sat_mix * (sat - y[ch]);
+      }
+    }
+
+    if (air) {
+      // Full-wave rectified highs: their even harmonics, above 6 kHz.
+      const float amt = air_start + air_inc * static_cast<float>(i + 1);
+      const float gh = g_start[2] + g_inc[2] * static_cast<float>(i + 1);
+      for (int ch = 0; ch < 2; ++ch) {
+        float lp, bp, hp;
+        Svf(c6k_, &air_hp_[ch], fabsf(band[2][ch] * gh), &lp, &bp, &hp);
+        y[ch] += amt * hp;
       }
     }
 

@@ -2,6 +2,8 @@
 
 #include "monsoon/dsp/modes/gamelan.h"
 
+#include "monsoon/dsp/modes/bal_knob.h"
+
 namespace monsoon {
 
 static const float kTuningCents[2][GamelanMode::kKeys] = {
@@ -22,6 +24,11 @@ static const float kAmps[kInstruments][GamelanMode::kPartials] = {
 };
 static const float kDecayScale[kInstruments] = { 1.0f, 1.5f, 3.0f };
 
+// Tutup: 60 dB over 90 blocks (60 ms) at full FBK: a per-block gain of
+// 1 - fbk * rate on the damped key (1 - rate = 10^(-3 / 90)).
+static const int kChokeBlocks = 90;
+static const float kChokeRate = 0.0738f;
+
 // Transparent below 0.9, smooth saturation above (safety only).
 static inline float Safe(float x) {
   float a = fabsf(x);
@@ -34,6 +41,10 @@ bool GamelanMode::Init(Arena* arena) {
   res_ = arena->Allocate<Resonator>(kResonators);
   if (!res_) return false;
   for (int i = 0; i < 6; ++i) cache_[i] = -1000.0f;
+  mallet_ = 0.0f;
+  prev_key_ = -1;
+  choke_key_ = -1;
+  choke_left_ = 0;
   for (int k = 0; k < kKeys; ++k) key_hz_[k] = 261.63f;
   first_ = true;
   frozen_ = false;
@@ -112,7 +123,8 @@ void GamelanMode::Strike(int key, float amp) {
   if (key >= kKeys) key = kKeys - 1;
   for (int j = 0; j < kPartials * 2; ++j) {
     Resonator& r = res_[key * kPartials * 2 + j];
-    r.re += amp * r.amp;
+    // BAL: mallet hardness tilts the upper partials (2^0 = 1 at noon).
+    r.re += amp * r.amp * exp2f(mallet_ * static_cast<float>(j >> 1));
   }
 }
 
@@ -121,7 +133,26 @@ void GamelanMode::Process(const Controls& c, const FloatFrame* in,
   frozen_ = c.freeze;
   Update(c);
   if (c.trigger) {
-    Strike(static_cast<int>(Clamp(c.position, 0.0f, 0.999f) * kKeys), 0.5f);
+    const int key = static_cast<int>(Clamp(c.position, 0.0f, 0.999f) * kKeys);
+    mallet_ = 0.8f * BalKnob(c.bal);
+    Strike(key, 0.5f);
+    // FBK (tutup): the other hand damps the key struck before.
+    if (key == choke_key_) choke_left_ = 0;
+    if (c.fbk > 0.0f && prev_key_ >= 0 && prev_key_ != key) {
+      choke_key_ = prev_key_;
+      choke_left_ = kChokeBlocks;
+    }
+    prev_key_ = static_cast<int8_t>(key);
+  }
+  // While choking, the damped key loses FBK x 60 dB over 60 ms.
+  if (choke_left_ > 0) {
+    --choke_left_;
+    const float g = 1.0f - Clamp(c.fbk, 0.0f, 1.0f) * kChokeRate;
+    Resonator* q = res_ + choke_key_ * kPartials * 2;
+    for (int j = 0; j < kPartials * 2; ++j) {
+      q[j].re *= g;
+      q[j].im *= g;
+    }
   }
   for (size_t s = 0; s < n; ++s) {
     const float x = 0.5f * (in[s].l + in[s].r);

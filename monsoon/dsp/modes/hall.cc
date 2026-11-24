@@ -2,6 +2,8 @@
 
 #include "monsoon/dsp/modes/hall.h"
 
+#include "monsoon/dsp/modes/bal_knob.h"
+
 namespace monsoon {
 
 namespace {
@@ -66,7 +68,9 @@ void HallMode::Clear() {
     write_[i] = 0;
     ap_pos_[i] = 0;
     lp_[i] = 0.0f;
+    lo_[i] = 0.0f;
   }
+  echo_ = 0.0f;
   for (int i = 0; i < 4; ++i) {
     memset(in_ap_[i], 0, kInApLengths[i] * sizeof(float));
     in_ap_pos_[i] = 0;
@@ -84,22 +88,39 @@ inline float HallMode::ReadLine(int i, float delay) const {
   return (l[a] + (l[b] - l[a]) * t) * kLineInv;
 }
 
-inline float HallMode::LineAllpass(int i, float x) {
-  float* buf = ap_[i];
-  float d = buf[ap_pos_[i]];
-  float v = x + kLineApGain * d;
-  buf[ap_pos_[i]] = v;
-  if (++ap_pos_[i] >= kApLengths[i]) ap_pos_[i] = 0;
-  return d - kLineApGain * v;
+// BAL: the bass's extra loop gain per line, for its own T60.
+void HallMode::BassGains(float t60, const float* gain, float* extra) const {
+  const float kb = -9.9657843f / (t60 * kSampleRate);  // 10^-3x = 2^(x kb')
+  for (int i = 0; i < kLines; ++i) {
+    const float loop = kLengths[i] * scale_ + kApLengths[i];
+    extra[i] = exp2f(kb * loop) - gain[i];
+  }
 }
 
-inline float HallMode::InputAllpass(int i, float x) {
+// BAL: the part of each line below ~250 Hz gets its own loop gain.
+void HallMode::Bass(float* y, const float* extra) {
+  for (int i = 0; i < kLines; ++i) {
+    lo_[i] += 0.0322f * (lp_[i] - lo_[i]);
+    y[i] += lo_[i] * extra[i];
+  }
+}
+
+inline float HallMode::LineAllpass(int i, float x, float g) {
+  float* buf = ap_[i];
+  float d = buf[ap_pos_[i]];
+  float v = x + g * d;
+  buf[ap_pos_[i]] = v;
+  if (++ap_pos_[i] >= kApLengths[i]) ap_pos_[i] = 0;
+  return d - g * v;
+}
+
+inline float HallMode::InputAllpass(int i, float x, float g) {
   float* buf = in_ap_[i];
   float d = buf[in_ap_pos_[i]];
-  float v = x + kInApGain * d;
+  float v = x + g * d;
   buf[in_ap_pos_[i]] = v;
   if (++in_ap_pos_[i] >= kInApLengths[i]) in_ap_pos_[i] = 0;
-  return d - kInApGain * v;
+  return d - g * v;
 }
 
 void HallMode::Process(const Controls& c, const FloatFrame* in,
@@ -125,13 +146,31 @@ void HallMode::Process(const Controls& c, const FloatFrame* in,
 
   const float density = Clamp(c.density, 0.0f, 1.0f);
   const float t60 = 0.4f * powf(100.0f, density);  // damping shortens it to ~30 s
-  float gain[kLines];
+  // BAL: the bass decays with its own T60 (x0.25 ... x3 of DENSITY's).
+  const float bal = BalKnob(c.bal);
+  const bool bass = bal != 0.0f && !frozen_;
+  const float bass_t60 = t60 * (bal > 0.0f ? 1.0f + 2.0f * bal
+                                           : 1.0f + 0.75f * bal);
+  float gain[kLines], bass_extra[kLines];
   for (int i = 0; i < kLines; ++i) {
     float loop = kLengths[i] * scale_ + kApLengths[i];
     gain[i] = frozen_ ? 1.0f : powf(10.0f, -3.0f * loop / (t60 * kSampleRate));
   }
+  if (bass) BassGains(bass_t60, gain, bass_extra);
+
+  // FBK: the pre-delay repeats (its output re-enters its input), every
+  // echo feeding the hall. Faded in over the first 50 ms of pre-delay so a
+  // near-zero delay never becomes a one-sample loop.
+  const float echo_fb = 0.75f * Clamp(c.fbk, 0.0f, 1.0f) *
+      Clamp(pre_start * (1.0f / 2400.0f), 0.0f, 1.0f);
+
   const float damp_hz = 1200.0f * powf(13.33f, Clamp(c.texture, 0.0f, 1.0f));
   const float damp = frozen_ ? 1.0f : 1.0f - expf(-kTwoPi * damp_hz / kSampleRate);
+  // RVB: the diffusers back off (allpass gains -> 0): the smooth wash
+  // turns grainy, the hall's echoes come apart.
+  const float diffuse = 1.0f - Clamp(c.rvb, 0.0f, 1.0f);
+  const float line_ap = kLineApGain * diffuse;
+  const float in_ap = kInApGain * diffuse;
   const float in_gain = frozen_ ? 0.0f : 0.35f;
 
   // PITCH -> modulation depth (samples) and rate.
@@ -147,6 +186,7 @@ void HallMode::Process(const Controls& c, const FloatFrame* in,
 
     // Pre-delay (mono, 16-bit), then input diffusion.
     float mono = 0.5f * (in[s].l + in[s].r);
+    mono += echo_fb * echo_;  // (exactly v1.0 at FBK 0)
     float v = Clamp(mono, -1.99f, 1.99f) * kLineScale;
     pre_[pre_pos_] = static_cast<int16_t>(v);
     float rp = static_cast<float>(pre_pos_) - pre;
@@ -156,8 +196,9 @@ void HallMode::Process(const Controls& c, const FloatFrame* in,
     int32_t ib = ia + 1 >= static_cast<int32_t>(kPreSize) ? 0 : ia + 1;
     float x = (pre_[ia] + (pre_[ib] - pre_[ia]) * ft) * kLineInv;
     if (++pre_pos_ >= kPreSize) pre_pos_ = 0;
-    float early = InputAllpass(1, InputAllpass(0, x));
-    x = InputAllpass(3, InputAllpass(2, early));
+    echo_ = x;
+    float early = InputAllpass(1, InputAllpass(0, x, in_ap), in_ap);
+    x = InputAllpass(3, InputAllpass(2, early, in_ap), in_ap);
     // Early diffuse sound fills the gap before the tank's first return.
     const float early_l = early * in_gain * 0.5f;
     const float early_r = x * in_gain * 0.5f;
@@ -173,12 +214,14 @@ void HallMode::Process(const Controls& c, const FloatFrame* in,
       float d = kLengths[i] * scale;
       if (i == 0 || i == 5) d += m0;
       if (i == 2 || i == 7) d += m1;
-      float r = LineAllpass(i, ReadLine(i, d));
+      float r = LineAllpass(i, ReadLine(i, d), line_ap);
       lp_[i] += damp * (r - lp_[i]);
       y[i] = lp_[i] * gain[i];
     }
+    if (bass) Bass(y, bass_extra);
     float outl = y[0] - y[2] + y[4] - y[6] + 0.5f * (y[1] - y[5]);
     float outr = y[1] - y[3] + y[5] - y[7] + 0.5f * (y[2] - y[6]);
+
 
     // Fast Walsh-Hadamard transform, normalised.
     for (int h = 1; h < kLines; h <<= 1) {

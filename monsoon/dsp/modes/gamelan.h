@@ -15,6 +15,17 @@
 // | option 0 | pelog  (0 120 258 539 675 785 943 cents)                     |
 // | option 1 | slendro (0 231 474 717 955 1200 1431 cents)                  |
 //
+// Per-mode knobs:
+//   BAL  mallet: noon = v1.0. Left softer (padded mallet: the upper
+//        partials fade, a round dull tone), right harder (horn/wood:
+//        upper partials up to x5). Shapes TRIG strikes (the input still
+//        excites the bank evenly).
+//   FBK  tutup (damping): on every TRIG strike the player chokes the
+//        previously struck key, by FBK x 60 dB within 60 ms. 0 = let
+//        everything ring (v1.0).
+//   RVB  the engine's FDN reverb: the pendopo (the bank has no space of
+//        its own).
+//
 // Each key is 4 partials x 2 (the key and its ombak twin, tuned
 // +ombak Hz apart like a Balinese pengumbang/pengisep pair) = 8 rotating
 // complex resonators, 56 in all. The partial ratios morph (in log
@@ -41,6 +52,9 @@ class GamelanMode : public Mode {
   uint8_t num_options() const { return 2; }
   bool frozen() const { return frozen_; }
 
+  // RVB is the engine's FDN reverb.
+  float reverb_amount(const Controls& c) const { return c.rvb; }
+
   // Test hooks.
   float key_hz(int key) const { return key_hz_[key]; }
   void Strike(int key, float amp);
@@ -58,6 +72,10 @@ class GamelanMode : public Mode {
   Resonator* res_;
   float key_hz_[kKeys];
   float cache_[6];
+  float mallet_;             // BAL: log2 boost per partial index (strikes)
+  int8_t prev_key_;          // FBK: last key TRIG struck
+  int8_t choke_key_;         // key being damped (tutup)
+  int16_t choke_left_;       // blocks of damping left
   bool first_;
   bool frozen_;
   DcBlocker dc_[2];

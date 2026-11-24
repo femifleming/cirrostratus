@@ -17,6 +17,18 @@
 // | TRIG     | Clear the tail.                                             |
 // | Options  | none                                                        |
 //
+// Per-mode knobs:
+//   BAL  noon = v1.0. Bass decay (below ~250 Hz) relative to DENSITY's
+//        decay: left lows die sooner (x0.25 at full: a clear, airy
+//        hall), right lows ring longer (x3: a warm, heavy one).
+//   FBK  pre-delay echoes: the pre-delay repeats (time = POSITION, up to
+//        0.75 regeneration), and every echo blooms into the hall.
+//        Fades in over the first 50 ms of POSITION (no echoes at 0).
+//   RVB  diffusion: 0 = v1.0's smooth wash; turning it up backs the
+//        diffusers off (input and in-line allpasses, 0.65 / 0.55 -> 0),
+//        so the hall turns grainy and its echoes come apart: a stone
+//        stairwell, a flutter of slaps on every click.
+//
 // Memory: ~124 KB (lines 88 KB, pre-delay 24 KB, diffusers 12 KB).
 
 #ifndef MONSOON_DSP_MODES_HALL_H_
@@ -41,8 +53,12 @@ class HallMode : public Mode {
  private:
   void Clear();
   inline float ReadLine(int i, float delay) const;
-  inline float LineAllpass(int i, float x);
-  inline float InputAllpass(int i, float x);
+  inline float LineAllpass(int i, float x, float g);
+  inline float InputAllpass(int i, float x, float g);
+  // Per-mode knob helpers, out of line (they cost nothing when off).
+  __attribute__((noinline, cold)) void Bass(float* y, const float* extra);
+  __attribute__((noinline, cold)) void BassGains(
+      float t60, const float* gain, float* extra) const;
 
   int16_t* line_[kLines];
   size_t line_size_[kLines];
@@ -54,6 +70,8 @@ class HallMode : public Mode {
   int16_t* pre_;
   size_t pre_pos_;
   float lp_[kLines];
+  float lo_[kLines];     // BAL: bass part of each line (one-pole)
+  float echo_;           // FBK: last pre-delay output
   float scale_;
   float pre_delay_;
   float lfo_phase_;

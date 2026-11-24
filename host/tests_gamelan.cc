@@ -137,3 +137,77 @@ MONSOON_TEST(gamelan_input_excites_bank) {
   CHECK(Db(s.rms) > -45.0f && s.finite && s.peak <= 1.0f, "input excitation");
   return true;
 }
+
+// Per-mode knobs: BAL = mallet hardness, FBK = tutup (choke the previous
+// key on each strike), RVB = the engine's FDN (a pendopo).
+MONSOON_TEST(gamelan_bal_fbk_rvb_do_what_they_say) {
+  // BAL: third partial (5.40 f) relative to the fundamental, key 3.
+  const float f = 261.63f * std::pow(2.0f, 539.0f / 1200.0f);
+  float tilt[3];
+  const float bals[3] = { 0.0f, 0.5f, 1.0f };
+  for (int k = 0; k < 3; ++k) {
+    Controls c = Base();
+    c.bal = bals[k];
+    auto out = StrikeKey(c, 3, 0.5f);
+    tilt[k] = Db(ToneAmplitude(out, f * 5.40f, 2400, 12000)) -
+              Db(ToneAmplitude(out, f, 2400, 12000));
+  }
+  std::printf("    BAL: partial 3 vs fundamental: soft %+.1f dB, noon %+.1f dB, hard %+.1f dB\n",
+              tilt[0], tilt[1], tilt[2]);
+  CHECK(tilt[1] - tilt[0] > 6.0f, "soft mallet should dull the strike");
+  CHECK(tilt[2] - tilt[1] > 6.0f, "hard mallet should brighten the strike");
+
+  // FBK: strike key 0, then key 4 at 0.3 s; key 0's ring after that.
+  const float f0 = 261.63f;
+  float ring[2];
+  for (int k = 0; k < 2; ++k) {
+    Module m;
+    m.SetMode(MODE_GAMELAN);
+    auto out = m.Render(Silence(1.0f), [&](size_t b) {
+      Controls c = Base();
+      c.fbk = k ? 1.0f : 0.0f;
+      const bool second = b >= 450;
+      c.position = KeyPosition(second ? 4 : 0);
+      c.trigger = b == 4 || b == 450;
+      return c;
+    });
+    ring[k] = Db(ToneAmplitude(out, f0, 24000, 33600));
+  }
+  std::printf("    FBK: key 0 after key 4 is struck: off %.1f dB, full %.1f dB\n",
+              ring[0], ring[1]);
+  CHECK(ring[0] > -40.0f, "key 0 should ring on without tutup");
+  CHECK(ring[1] < ring[0] - 40.0f, "tutup should choke the previous key");
+
+  // RVB: short decay; a tail long after the bank has died.
+  float tail[2];
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Base();
+    c.density = 0.0f;
+    c.rvb = k ? 1.0f : 0.0f;
+    auto out = StrikeKey(c, 2, 2.5f);
+    tail[k] = Db(Measure(out, 72000, 120000 - 64).rms);
+  }
+  std::printf("    RVB: 1.5-2.5 s after a 0.3 s strike: off %.1f dB, full %.1f dB\n",
+              tail[0], tail[1]);
+  CHECK(tail[1] > tail[0] + 40.0f && tail[1] > -80.0f, "RVB should add a pendopo tail");
+
+  // Fast random knobs with a stream of strikes: bounded.
+  {
+    Module m;
+    m.SetMode(MODE_GAMELAN);
+    Random r;
+    r.Seed(4);
+    auto out = m.Render(Music(4.0f), [&](size_t b) {
+      Controls c = Base();
+      c.density = 1.0f;
+      c.position = r.Float();
+      c.trigger = b % 50 == 0;
+      c.bal = r.Float(); c.fbk = r.Float(); c.rvb = r.Float();
+      return c;
+    });
+    Stats st = Measure(out);
+    std::printf("    random CV + strikes: peak %.2f\n", st.peak);
+    CHECK(st.finite && st.peak <= 1.0f, "bounded");
+  }
+  return true;
+}
