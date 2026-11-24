@@ -4,6 +4,22 @@
 
 #include "monsoon/dsp/modes/capture.h"
 #include "monsoon/dsp/modes/chloe.h"
+#include "monsoon/dsp/modes/faltung.h"
+#include "monsoon/dsp/modes/quell.h"
+#include "monsoon/dsp/modes/leitner.h"
+#include "monsoon/dsp/modes/tantri.h"
+#include "monsoon/dsp/modes/harmonizer.h"
+#include "monsoon/dsp/modes/putz.h"
+#include "monsoon/dsp/modes/ensemble.h"
+#include "monsoon/dsp/modes/barberpole.h"
+#include "monsoon/dsp/modes/specdelay.h"
+#include "monsoon/dsp/modes/choir.h"
+#include "monsoon/dsp/modes/folder.h"
+#include "monsoon/dsp/modes/hall.h"
+#include "monsoon/dsp/modes/bloom.h"
+#include "monsoon/dsp/modes/gamelan.h"
+#include "monsoon/dsp/modes/mirror.h"
+#include "monsoon/dsp/modes/polish.h"
 #include "monsoon/dsp/modes/convolve.h"
 #include "monsoon/dsp/modes/cross.h"
 #include "monsoon/dsp/modes/difference.h"
@@ -47,12 +63,31 @@ static ShimmerMode shimmer_mode;
 static TapeMode tape_mode;
 static PlatesMode plates_mode;
 static ChloeMode chloe_mode;
+static FaltungMode faltung_mode;
+static QuellMode quell_mode;
+static LeitnerMode leitner_mode;
+static TantriMode tantri_mode;
+static HarmonizerMode harmonizer_mode;
+static PutzMode putz_mode;
+static EnsembleMode ensemble_mode;
+static BarberpoleMode barberpole_mode;
+static SpecDelayMode specdelay_mode;
+static ChoirMode choir_mode;
+static FolderMode folder_mode;
+static HallMode hall_mode;
+static BloomMode bloom_mode;
+static GamelanMode gamelan_mode;
+static MirrorMode mirror_mode;
+static PolishMode polish_mode;
 
 static Mode* const kModes[MODE_LAST] = {
   &grains_mode, &spectral_mode, &convolve_mode, &resonator_mode,
   &difference_mode, &cross_mode, &stretch_mode, &spreek_mode,
   &capture_mode, &gendy_mode, &shimmer_mode, &tape_mode, &plates_mode,
-  &chloe_mode
+  &chloe_mode,
+  &faltung_mode, &quell_mode, &leitner_mode, &tantri_mode, &harmonizer_mode,
+  &putz_mode, &ensemble_mode, &barberpole_mode, &specdelay_mode, &choir_mode, &folder_mode,
+  &hall_mode, &bloom_mode, &gamelan_mode, &mirror_mode, &polish_mode
 };
 
 static const size_t kFadeSamples = 480;  // 10 ms

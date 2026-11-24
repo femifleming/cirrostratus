@@ -220,3 +220,152 @@ darker echoes. Three heads at 1, 2, 3 × spacing.
 - POSITION: strike/pickup position (mode amplitudes).
 - DENSITY: decay. TEXTURE: material (metal → glass → wood damping).
 - FREEZE: infinite ring, input cut. TRIG: strike.
+
+---
+
+## Bank 2 and the rest of bank 1 (modes 15–30)
+
+Menu: hold DISP; POSITION picks one of 15 modes in the current bank; tap
+WRITE to switch bank (LEDs green = bank 1, red = bank 2, binary 1–15).
+
+General rules for these modes (same as before): every control does
+something useful; document the final control mapping in a comment table at
+the top of the mode's header (the manual is written from it); total CPU
+(engine ~940 + mode, measured with tools/bench/run.sh) ≤ 2400 instructions
+per frame at both bench settings; RAM from the arena only; object ≤ 1.5 KB.
+
+### 15 FALTUNG — convolution with a built-in IR library
+8 impulse responses stored in flash (no RAM for the IR spectra), generated
+by a build-time script (tools/gen_irs.py → monsoon/dsp/modes/faltung_irs.cc):
+small room, large hall, plate, spring, cabinet, wooden body, metal sheet,
+cathedral-ish dense tail. All synthesized (no third-party IRs), ~0.17 s each,
+stereo (L/R IR), stored as int16 partition spectra ready for the MAC loop.
+Mono (L+R) input → stereo out. Reuse CONVOLVE's partitioned engine ideas.
+- POSITION: which IR (8 zones, 30 ms crossfade on change).
+- SIZE: IR length (shorter also costs less CPU).
+- DENSITY: pre-delay 0–200 ms.
+- TEXTURE: tilt EQ on the wet signal.
+- PITCH: input pre-shift is too costly; use it for wet low-cut (20–800 Hz).
+- FREEZE: input muted, wet fed back at unity through the IR (endless).
+- TRIG: next IR.
+
+### 16 QUELL — resonance suppressor (spectral dynamic EQ)
+STFT (choose size/overlap within budget). Find narrow peaks standing above
+a smoothed spectral envelope and attenuate them dynamically, linked stereo.
+- POSITION: frequency focus (weights detection toward lows ↔ highs).
+- SIZE: selectivity (only sharp peaks ↔ broad areas).
+- DENSITY: depth (0–24 dB max cut).
+- TEXTURE: speed (slow, smooth ↔ fast).
+- PITCH: output trim −12 … +12 dB.
+- FREEZE: hold the current cut curve (static EQ).
+- TRIG: toggle "delta" (hear only what is removed).
+
+### 17 LEITNER — spatial path panner (after Leitner/Xenakis)
+Mono source moves along a path around the listener: ITD (≤0.7 ms) + ILD +
+head-shadow low-pass + distance gain + air absorption + Doppler (variable
+delay ≤ 30 ms) + 4 early reflections from a virtual room.
+- POSITION: path centre azimuth. SIZE: radius / distance.
+- DENSITY: speed 0.02–4 Hz. TEXTURE: room (reflections amount/size).
+- PITCH: Doppler strength (noon = physical, CCW none, CW exaggerated).
+- FREEZE: stop moving. TRIG: next path (circle, figure-8, line, spiral,
+  random flight).
+
+### 18 TANTRI — tabla + tanpura (from ~/tantri, M4-lite)
+Read ~/tantri for the models. Dayan/bayan modal drums + a 4-string tanpura
+(Pa Sa Sa Sa) with jawari.
+- TRIG: strike (stroke chosen by POSITION: Na, Tin, Tun, Ge, Ka …).
+- PITCH: dayan / Sa pitch, V/oct. SIZE: bayan palm glide (pitch bend).
+- DENSITY: tanpura drone level + auto-pluck rate.
+- TEXTURE: jawari amount. Input excites strings and drums.
+- FREEZE: drone sustains forever.
+
+### 19 HARMONIZER — scale-quantized harmonizer
+Pitch-track the input (NSDF/YIN), up to 3 pitch-shifted voices (pitch-
+synchronous overlap-add or two-tap shifter) on scale degrees.
+- POSITION: chord / interval set (3rd, 5th, 3rd+5th, octaves, 4th+7th …).
+- PITCH: key root, V/oct. Option: scale (major, minor, dorian, pentatonic).
+- DENSITY: number of voices 1–3 and their level. SIZE: humanize (detune,
+  small delays). TEXTURE: stereo spread of voices.
+- FREEZE: latch the current notes. TRIG: next chord in the set.
+
+### 20 PUTZ — spectral cleaner
+Noise profile learned while FREEZE is held (or minimum-statistics tracking
+when never learned), Wiener-style gain with smoothing, plus a hum comb.
+- DENSITY: reduction amount. SIZE: smoothing (less musical noise).
+- TEXTURE: transient protection. POSITION: hum comb depth.
+- PITCH: hum fundamental (noon = 50 Hz; option 1 = 60 Hz base).
+- FREEZE (hold): learn noise. TRIG: toggle "listen to what is removed".
+
+### 21 ENSEMBLE — string-machine ensemble
+Three modulated delays (5–15 ms) driven by two LFOs (slow ~0.6 Hz + fast
+~6 Hz) at 120° phases, stereo; optional BBD darkness.
+- POSITION: chorus ↔ ensemble ↔ vibrato. DENSITY: depth.
+- SIZE: base delay. TEXTURE: clean hi-fi ↔ dark BBD.
+- PITCH: LFO rate (V/oct). FREEZE: stop the LFOs. TRIG: reset phases.
+
+### 22 BARBERPOLE — frequency-shift spirals
+SSB frequency shifter (reuse DIFFERENCE's Hilbert pair) inside a delay
+feedback loop: each pass shifts further → endless rising/falling spirals.
+- POSITION: shift amount, bipolar (CCW down, CW up, 0.1–2000 Hz exp).
+- PITCH: multiplies the shift (V/oct). DENSITY: feedback.
+- SIZE: loop delay 1–500 ms. TEXTURE: up/down mix (L up, R down at max).
+- FREEZE: infinite spiral, input muted. TRIG: flip direction.
+
+### 23 SPECDELAY — spectral delay
+STFT; each bin has its own delay (frames) and feedback, stored compactly
+(e.g. int16 complex, N=512/hop 128, ~32 frames).
+- POSITION: delay curve (lows later ↔ highs later). SIZE: max delay.
+- DENSITY: feedback. TEXTURE: feedback tilt / smear.
+- PITCH: bin shift per pass (spectral spirals). FREEZE: infinite hold.
+
+### 24 CHOIR — formant choir
+4 voices on a chord following V/oct; each voice = pitched resonator/comb at
+its note + vowel formant filter. Excitation = input and/or an internal
+glottal source.
+- POSITION: vowel a-e-i-o-u. DENSITY: chord type (unison, 5ths, maj, min,
+  sus, 7th). SIZE: voice spread (detune, stereo). TEXTURE: input ↔ glottal
+  excitation (breath). PITCH: root V/oct.
+- FREEZE: sustain chord on the internal source. TRIG: next inversion.
+
+### 25 FOLDER — west-coast folder + low-pass gate
+Input (+ internal sine at PITCH) → wavefolder (series folds, ADAA or
+oversampled) → vactrol LPG (envelope follower and TRIG pings).
+- POSITION: fold amount. SIZE: symmetry / bias. DENSITY: LPG mode
+  (low-pass ↔ combo ↔ VCA). TEXTURE: vactrol decay. PITCH: sine V/oct.
+- FREEZE: LPG held open (drone). TRIG: ping the LPG.
+
+### 26 HALL — big algorithmic reverb
+Large modulated tank (most of the arena, int16 lines), decay up to ~30 s,
+lush and dense; separate from the output-section reverb.
+- POSITION: pre-delay 0–250 ms. SIZE: size. DENSITY: decay.
+- TEXTURE: damping. PITCH: modulation depth/rate.
+- FREEZE: infinite. TRIG: clear.
+
+### 27 BLOOM — swells + reverse bloom
+Removes attacks (envelope-driven slow-attack gain) and adds reverse
+pre-swells: buffer the input, play reversed windows with rising envelopes
+ahead of the (delayed) dry.
+- POSITION: swell time. SIZE: reverse window (= latency) 0.1–1 s.
+- DENSITY: reverse-bloom amount. TEXTURE: diffusion/smear.
+- PITCH: transposition of the reverse bloom. FREEZE: hold the bloom.
+
+### 28 GAMELAN — metallophones
+7 keys tuned pelog (option 0) or slendro (option 1), each key a small modal
+set (saron bar ratios ↔ bonang kettle ↔ gong), paired-key detune → ombak
+beating. Input excites the bank; TRIG strikes the key chosen by POSITION.
+- PITCH: root V/oct. SIZE: ombak rate 0–10 Hz. DENSITY: decay.
+- TEXTURE: instrument (saron ↔ bonang ↔ gong). FREEZE: infinite ring.
+
+### 29 MIRROR — spectral warping
+STFT; output bin k reads input at f(k): stretch (k^a, inharmonic),
+inversion around a mirror frequency, folding.
+- POSITION: warp type morph (stretch → invert → fold). SIZE: amount.
+- PITCH: mirror / anchor frequency (V/oct). DENSITY: spectral blur.
+- TEXTURE: dry-spectrum blend + tilt. FREEZE: hold the spectrum.
+
+### 30 POLISH — mastering chain
+3-band compressor (LR crossovers ~200 Hz / 3 kHz) → tape saturation
+(oversampled) → M/S width with mono bass. (The engine limiter follows.)
+- DENSITY: compression amount (macro). TEXTURE: saturation.
+- POSITION: tone tilt. SIZE: width. PITCH: output trim ±12 dB.
+- FREEZE: bypass (A/B). TRIG: auto-gain re-match.

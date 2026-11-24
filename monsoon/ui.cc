@@ -15,6 +15,7 @@ using namespace stmlib;
 const uint32_t kLongPress = 1000;
 const uint32_t kPageTimeout = 6000;
 const uint32_t kSplashDuration = 1200;
+const int kModesPerBank = 15;
 
 void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
               Meter* meter) {
@@ -42,6 +43,7 @@ void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
 
   const SettingsData& d = settings_->data();
   menu_mode_ = d.mode;
+  menu_bank_ = d.mode / kModesPerBank;
   menu_option_ = d.option[d.mode];
   if (d.display == 1) previous_page_ = UI_PAGE_KNOBS;
   engine_->RequestMode(static_cast<ModeId>(d.mode), d.option[d.mode]);
@@ -137,6 +139,7 @@ void Ui::OnLongPress(uint8_t id) {
       (page_ == UI_PAGE_VU_METER || page_ == UI_PAGE_KNOBS)) {
     previous_page_ = page_;
     menu_mode_ = engine_->mode();
+    menu_bank_ = menu_mode_ / kModesPerBank;
     menu_option_ = engine_->option();
     cv_scaler_->set_hold_position(true);
     page_ = UI_PAGE_MODE_MENU;
@@ -185,7 +188,12 @@ void Ui::OnRelease(uint8_t id, uint32_t duration) {
 
     case SWITCH_WRITE:
       if (modifier) break;
-      if (page_ == UI_PAGE_VU_METER || page_ == UI_PAGE_KNOBS) {
+      if (page_ == UI_PAGE_MODE_MENU) {
+        // Tap WRITE in the menu: other bank. DoEvents re-reads POSITION.
+        menu_bank_ = menu_bank_ ? 0 : 1;
+        if (menu_bank_ * kModesPerBank >= MODE_LAST) menu_bank_ = 0;
+        menu_mode_ = 0xff;
+      } else if (page_ == UI_PAGE_VU_METER || page_ == UI_PAGE_KNOBS) {
         previous_page_ = page_;
         page_ = UI_PAGE_LOAD;
       } else if (page_ == UI_PAGE_LOAD) {
@@ -214,14 +222,18 @@ void Ui::OnRelease(uint8_t id, uint32_t duration) {
 }
 
 uint8_t Ui::ModeFromPosition() const {
+  // POSITION spans the 15 modes of the current bank.
   float p = cv_scaler_->raw_position();
-  int m = static_cast<int>(p * MODE_LAST);
-  if (m < 0) m = 0;
+  int zone = static_cast<int>(p * kModesPerBank);
+  if (zone < 0) zone = 0;
+  if (zone >= kModesPerBank) zone = kModesPerBank - 1;
+  int m = menu_bank_ * kModesPerBank + zone;
   if (m >= MODE_LAST) m = MODE_LAST - 1;
   return static_cast<uint8_t>(m);
 }
 
 void Ui::ApplyModeMenu() {
+  if (menu_mode_ >= MODE_LAST) menu_mode_ = ModeFromPosition();
   SettingsData* d = settings_->mutable_data();
   bool mode_changed = menu_mode_ != engine_->mode();
   if (mode_changed) {
@@ -333,7 +345,9 @@ void Ui::PaintLeds() {
           leds_.set_status(o & 3, o >= 4 ? 255 : 0, o >= 4 ? 0 : 255);
         }
       } else {
-        ShowBinary(menu_mode_ + 1, true, 255);
+        // Bank 1 green 1-15, bank 2 red 1-15 (= modes 16-30).
+        ShowBinary(menu_mode_ % kModesPerBank + 1,
+                   menu_mode_ < kModesPerBank, 255);
       }
       break;
 

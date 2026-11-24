@@ -24,6 +24,22 @@ enum ModeId {
   MODE_TAPE,         // 12 multi-head tape echo
   MODE_PLATES,       // 13 sympathetic plates (modal)
   MODE_CHLOE,        // 14 Chloaelis strip: filter > tube > delay
+  MODE_FALTUNG,     // 15  IR library convolution
+  MODE_QUELL,       // 16  resonance suppressor
+  MODE_LEITNER,     // 17  spatial path panner
+  MODE_TANTRI,      // 18  tabla + tanpura
+  MODE_HARMONIZER,  // 19  scale harmonizer
+  MODE_PUTZ,        // 20  spectral cleaner
+  MODE_ENSEMBLE,    // 21  string ensemble chorus
+  MODE_BARBERPOLE,  // 22  frequency-shift spirals
+  MODE_SPECDELAY,   // 23  spectral delay
+  MODE_CHOIR,       // 24  formant choir
+  MODE_FOLDER,      // 25  wavefolder + LPG
+  MODE_HALL,        // 26  big reverb
+  MODE_BLOOM,       // 27  swells + reverse bloom
+  MODE_GAMELAN,     // 28  pelog/slendro metallophones
+  MODE_MIRROR,      // 29  spectral warping
+  MODE_POLISH,      // 30  mastering chain
   MODE_LAST
 };
 

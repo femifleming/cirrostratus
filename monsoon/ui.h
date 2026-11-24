@@ -2,8 +2,10 @@
 //
 //   FREEZE            tap: freeze on/off
 //   DISP              tap: LEDs show input level <-> WET/STER/FDB/RVB
-//   DISP (hold)       mode menu: POSITION picks the mode (shown in binary),
-//                     FREEZE cycles the mode's option, release to apply
+//   DISP (hold)       mode menu: POSITION picks the mode (shown in binary,
+//                     green = bank 1, modes 1-15; red = bank 2, 16-30),
+//                     WRITE tap switches bank, FREEZE cycles the mode's
+//                     option, release DISP to apply
 //   DISP hold + WRITE hold 1 s   V/OCT calibration (as on stock firmware)
 //   WRITE             tap: load page   hold: save page
 //                     (DISP picks the slot, WRITE confirms; in the load page
@@ -86,6 +88,7 @@ class Ui {
   uint32_t panic_until_;
 
   uint8_t menu_mode_;
+  uint8_t menu_bank_;
   uint8_t menu_option_;
   uint8_t slot_;
   int8_t morph_slot_;
