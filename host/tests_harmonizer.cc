@@ -124,3 +124,83 @@ MONSOON_TEST(harmonizer_freeze_latches_notes) {
   CHECK(g > 0.05f && g > 5.0f * a, "latch");
   return true;
 }
+
+MONSOON_TEST(harmonizer_bal_fbk_rvb_do_what_they_say) {
+  // One voice a 5th up (G over C4), no humanise.
+  auto base = [](Controls* c) {
+    c->position = Zone(1);
+    c->density = 0.0f;
+    c->size = 0.0f;
+  };
+
+  // BAL: the voice's register.
+  const float bals[3] = { 0.0f, 0.5f, 1.0f };
+  const float g[3] = { 196.0f, 392.0f, 784.0f };
+  float on[3][3];
+  for (int k = 0; k < 3; ++k) {
+    Module m;
+    m.SetMode(MODE_HARMONIZER);
+    auto out = m.Render(Sine(261.63f, 1.5f, 0.3f), [&](size_t) {
+      Controls c = DefaultControls();
+      base(&c);
+      c.bal = bals[k];
+      return c;
+    });
+    for (int j = 0; j < 3; ++j) on[k][j] = ToneAmplitude(out, g[j], 24000, 72000 - 32);
+    std::printf("    BAL %.1f: G3 %.1f dB, G4 %.1f dB, G5 %.1f dB\n", bals[k],
+                Db(on[k][0]), Db(on[k][1]), Db(on[k][2]));
+    CHECK(on[k][k] > 0.05f, "voice level");
+    for (int j = 0; j < 3; ++j) {
+      if (j != k) CHECK(on[k][k] > 10.0f * on[k][j], "register");
+    }
+  }
+
+  // FBK: after the input stops, the voice (G4) echoes on; the input's own
+  // pitch (C4) does not.
+  float tail_g[2], tail_c[2];
+  for (int k = 0; k < 2; ++k) {
+    Module m;
+    m.SetMode(MODE_HARMONIZER);
+    auto in = Sine(261.63f, 3.0f, 0.3f);
+    for (size_t i = 48000; i < in.size(); ++i) in[i].l = in[i].r = 0.0f;
+    auto out = m.Render(in, [&](size_t) {
+      Controls c = DefaultControls();
+      base(&c);
+      c.fbk = k ? 0.8f : 0.0f;
+      return c;
+    });
+    tail_g[k] = ToneAmplitude(out, 392.0f, 48000 + 4800, 48000 + 72000);
+    tail_c[k] = ToneAmplitude(out, 261.63f, 48000 + 4800, 48000 + 72000);
+    if (k) CHECK(Measure(out).peak < 1.0f, "echo bounded");
+  }
+  std::printf("    FBK 0.1-1.6 s after the input stops: G4 %.1f -> %.1f dB, "
+              "C4 %.1f -> %.1f dB\n", Db(tail_g[0]), Db(tail_g[1]), Db(tail_c[0]),
+              Db(tail_c[1]));
+  CHECK(tail_g[1] > 0.01f && tail_g[1] > 30.0f * tail_g[0] &&
+        tail_g[1] > 10.0f * tail_c[1], "canon");
+
+  // RVB: input C4 -> D4 at 2 s. The voice goes G4 -> A4; with glide
+  // (RVB 0.5, ~0.2 s) it is only part of the way 50-200 ms later.
+  float a4[2], between[2];
+  for (int k = 0; k < 2; ++k) {
+    Module m;
+    m.SetMode(MODE_HARMONIZER);
+    auto in = Sine(261.63f, 3.0f, 0.3f);
+    for (size_t i = 96000; i < in.size(); ++i) {
+      in[i].l = in[i].r = 0.3f * std::sin(2 * M_PI * 293.66 * i / 48000.0);
+    }
+    auto out = m.Render(in, [&](size_t) {
+      Controls c = DefaultControls();
+      base(&c);
+      c.rvb = k ? 0.5f : 0.0f;
+      return c;
+    });
+    a4[k] = ToneAmplitude(out, 440.0f, 96000 + 2400, 96000 + 9600);
+    between[k] = ToneAmplitude(out, 410.0f, 96000 + 2400, 96000 + 9600);
+  }
+  std::printf("    RVB 50-200 ms after the step: A4 %.1f -> %.1f dB, "
+              "G#4-ish (on the way) %.1f -> %.1f dB\n", Db(a4[0]), Db(a4[1]),
+              Db(between[0]), Db(between[1]));
+  CHECK(a4[1] < 0.3f * a4[0] && between[1] > 2.0f * between[0], "glide");
+  return true;
+}

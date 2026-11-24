@@ -24,6 +24,16 @@
 // | TRIG     | next chord set                                              |
 // | options  | scale: 0 major, 1 natural minor, 2 dorian, 3 major          |
 // |          | pentatonic (LED 1-4 green)                                  |
+//
+// Per-mode knobs:
+//   BAL  register of the voices: noon = v1.0, left third = every voice an
+//        octave lower, right third = an octave higher (bass harmony /
+//        descant), the chord shape unchanged.
+//   FBK  canon: the voices (not your input) echo every 340 ms, darker
+//        each time; FBK raises the send and the repeats (up to 0.75
+//        feedback).
+//   RVB  glide: the voices slide into each new note like singers finding
+//        the chord, 10 ms (v1.0) -> ~0.8 s portamento.
 
 #ifndef MONSOON_DSP_MODES_HARMONIZER_H_
 #define MONSOON_DSP_MODES_HARMONIZER_H_
@@ -40,6 +50,7 @@ class HarmonizerMode : public Mode {
   static const size_t kWindow = 384;         // analysis window (12 kHz)
   static const int kMinLag = 12;             // 1 kHz
   static const int kMaxLag = 200;            // 60 Hz
+  static const size_t kEchoSize = 16384;     // 341 ms, int16
 
   const char* name() const { return "harmonizer"; }
   bool Init(Arena* arena);
@@ -80,6 +91,14 @@ class HarmonizerMode : public Mode {
   bool was_trigger_;
   int set_offset_;
   float gain_[kVoices];
+
+  // Knobs.
+  float glide_note_[kVoices];    // RVB: gliding target note (MIDI)
+  int16_t* echo_;                // FBK: canon line
+  size_t echo_pos_;
+  float echo_lp_;
+  float echo_amt_;               // smoothed FBK
+  int32_t echo_tail_;            // samples left to drain after FBK -> 0
 };
 
 }  // namespace monsoon

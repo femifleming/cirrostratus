@@ -70,7 +70,12 @@ static inline float Safe(float x) {
 
 static inline float AllpassDcDelay(float k) { return (1.0f + k) / (1.0f - k); }
 
-bool TantriMode::Init(Arena* arena) {
+// First string / Sa for BAL's three tunings (a hair flat, like Pa).
+static const float kPaRatio = 0.749154f;
+static const float kMaRatio = 0.665914f;
+static const float kNiRatio = 0.936443f;
+
+__attribute__((cold)) bool TantriMode::Init(Arena* arena) {
   dayan_.modes = arena->Allocate<Mode2>(kDayanModes);
   bayan_.modes = arena->Allocate<Mode2>(kBayanModes);
   if (!dayan_.modes || !bayan_.modes) return false;
@@ -124,13 +129,15 @@ bool TantriMode::Init(Arena* arena) {
   rng_.Seed(0x7A47);
   dc_[0].Init();
   dc_[1].Init();
+  first_ratio_ = kPaRatio;
+  ring_force_ = 0.0f;
   return true;
 }
 
 // ---------------------------------------------------------------------------
 // Tabla.
 
-void TantriMode::StrikeDrum(Drum* d, const float* drive, float amp,
+__attribute__((cold)) void TantriMode::StrikeDrum(Drum* d, const float* drive, float amp,
                             float contact_ms, const float* damp, float noise,
                             float noise_hz) {
   int len = static_cast<int>(contact_ms * 0.001f * kSampleRate);
@@ -145,7 +152,7 @@ void TantriMode::StrikeDrum(Drum* d, const float* drive, float amp,
   d->noise_env = noise * amp;
 }
 
-void TantriMode::Play(int stroke) {
+__attribute__((cold)) void TantriMode::Play(int stroke) {
   const float v = 0.85f;      // velocity 0.8 in Tantri terms
   const float hard = 0.81f;   // contact-time scale for that velocity
   const float snap = 0.7f;    // noise scale (Tantri: snap 0.35 x 2)
@@ -184,7 +191,10 @@ void TantriMode::Play(int stroke) {
 }
 
 void TantriMode::UpdateDrum(Drum* d, const float* ratios, const float* t60s,
-                            const uint8_t* groups, float f0) {
+                            const uint8_t* groups, float f0, float ring) {
+  // FBK: ring stretches every T60 and opens the closed strokes' damping.
+  const float ring_t60 = 1.0f + 4.0f * ring;
+  const float damp = 1.0f - ring;
   for (int i = 0; i < d->count; ++i) {
     Mode2& m = d->modes[i];
     float f = f0 * ratios[i];
@@ -192,9 +202,9 @@ void TantriMode::UpdateDrum(Drum* d, const float* ratios, const float* t60s,
       m.cr = m.ci = 0.0f;
       continue;
     }
-    float t60 = t60s[i];
+    float t60 = t60s[i] * ring_t60;
     float ed = d->extra_damp[groups[i]];
-    if (ed > 0.0f) t60 = 1.0f / (1.0f / t60 + 1.0f / ed);
+    if (ed > 0.0f) t60 = 1.0f / (1.0f / t60 + damp / ed);
     float x = 6.9078f / (t60 * kSampleRate);
     float r = 1.0f - x + 0.5f * x * x;   // exp(-x), x < 0.01
     float s = FastSin(f / kSampleRate);
@@ -233,9 +243,9 @@ inline float TantriMode::TickDrum(Drum* d, float input) {
 // ---------------------------------------------------------------------------
 // Tanpura.
 
-void TantriMode::TuneStrings(float sa, bool frozen) {
+__attribute__((cold)) void TantriMode::TuneStrings(float sa, bool frozen) {
   // Pa (one octave down from the scale's fifth), Sa, Sa (beating), sa.
-  string_hz_[0] = sa * 0.749154f;
+  string_hz_[0] = sa * first_ratio_;
   string_hz_[1] = sa * 0.999769f;
   string_hz_[2] = sa * 1.000520f;
   string_hz_[3] = sa * 0.5f;
@@ -300,7 +310,12 @@ void TantriMode::Process(const Controls& c, const FloatFrame* in,
       s.boost = 0.0f;
     }
   }
-  if (fabsf(sa - last_sa_) > 0.01f || frozen_ != last_frozen_) {
+  // BAL: the first string's tuning (thirds of the knob: Ma, Pa, Ni).
+  const float first = c.bal < 0.33f ? kMaRatio
+                                    : (c.bal > 0.67f ? kNiRatio : kPaRatio);
+  if (fabsf(sa - last_sa_) > 0.01f || frozen_ != last_frozen_ ||
+      first != first_ratio_) {
+    first_ratio_ = first;
     TuneStrings(sa, frozen_);
     last_sa_ = sa;
     last_frozen_ = frozen_;
@@ -323,9 +338,11 @@ void TantriMode::Process(const Controls& c, const FloatFrame* in,
     int stroke = static_cast<int>(Clamp(c.position, 0.0f, 0.999f) * NUM_STROKES);
     Play(stroke);
   }
-  UpdateDrum(&dayan_, kDayanRatio, kDayanT60, kDayanGroup, dayan_f0_);
+  const float ring = Clamp(c.fbk, 0.0f, 1.0f);
+  UpdateDrum(&dayan_, kDayanRatio, kDayanT60, kDayanGroup, dayan_f0_, ring);
   UpdateDrum(&bayan_, kBayanRatio, kBayanT60, kBayanGroup,
-             bayan_f0_ * bayan_pm_);
+             bayan_f0_ * bayan_pm_, ring);
+  const float couple = 0.01f * ring;  // drone -> drum heads
 
   // Jawari and the average-wrap pitch compensation.
   const float jaw = Clamp(c.texture, 0.0f, 1.0f);
@@ -363,8 +380,10 @@ void TantriMode::Process(const Controls& c, const FloatFrame* in,
     const float x = 0.5f * (in[t].l + in[t].r);
 
     // Tabla: dayan on the right, bayan on the left (player's view).
-    float dy = TickDrum(&dayan_, x * drum_in);
-    float by = TickDrum(&bayan_, x * drum_in);
+    float din = x * drum_in;
+    if (couple > 0.0f) din += couple * ring_force_;
+    float dy = TickDrum(&dayan_, din);
+    float by = TickDrum(&bayan_, din);
     float l = 0.62f * by + 0.38f * dy;
     float r = 0.62f * dy + 0.38f * by;
 
@@ -420,6 +439,7 @@ void TantriMode::Process(const Controls& c, const FloatFrame* in,
     for (int j = 0; j < 4; ++j) body += kBodyGain[j] * body_[j].BpNormalized(force);
     float tl = (0.4f * sl + 0.6f * body) * tan_gain;
     float tr = (0.4f * sr + 0.6f * body) * tan_gain;
+    ring_force_ = force;
 
     out[t].l = Safe(dc_[0].Process(l * 0.3f + tl));
     out[t].r = Safe(dc_[1].Process(r * 0.3f + tr));

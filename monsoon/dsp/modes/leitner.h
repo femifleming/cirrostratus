@@ -21,6 +21,19 @@
 // |          | random flight -> circle ...                                 |
 // | Options  | none                                                        |
 //
+// Per-mode knobs:
+//   BAL  noon = v1.0 (a smooth glide along the path). Left, after Leitner:
+//        the path becomes 8 loudspeaker stations; the source rests at each
+//        and hops to the next (all the way: hops take 15 % of the time).
+//        Right, after Xenakis: chance; each trip round the path takes a
+//        length drawn from an exponential law (mean = DENSITY's), faded
+//        in from regular trips at noon.
+//   FBK  trail: the sound is re-emitted every 150 ms (darker each time,
+//        up to 0.85 feedback) from wherever the source has moved to, so
+//        echoes are left along the path.
+//   RVB  the engine's FDN reverb: the room's late tail round the path (the
+//        Leitner plug-in's one room for the whole sphere).
+//
 // Memory: one 8192-sample float delay line (32 KB).
 
 #ifndef MONSOON_DSP_MODES_LEITNER_H_
@@ -44,11 +57,13 @@ class LeitnerMode : public Mode {
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
   bool frozen() const { return frozen_; }
+  float reverb_amount(const Controls& c) const { return c.rvb; }
 
   int path() const { return path_; }
   // Source position (metres, x forward, y left) after the last block.
   float source_x() const { return x_; }
   float source_y() const { return y_; }
+  float phase() const { return phase_; }
 
  private:
   void PathPoint(float phase, float radius, float centre, float* x, float* y);
@@ -65,6 +80,8 @@ class LeitnerMode : public Mode {
   float refl_lp_[2];
   Random rng_;
   bool frozen_;
+  float trip_;       // BAL right: this trip's length (x the mean)
+  float trail_gain_, trail_lp_;
 };
 
 }  // namespace monsoon

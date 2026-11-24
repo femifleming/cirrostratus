@@ -11,6 +11,8 @@ const float kMaxItd = 0.00066f * kSampleRate;   // ~32 samples
 const float kMaxDoppler = 0.030f * kSampleRate; // 30 ms
 const float kMinDelay = 3.0f;
 const float kMaxSlope = 16.0f;                  // samples per block
+const size_t kTrailDelay = 7200;                // 150 ms
+const float kStations = 8.0f;
 
 inline float SoftLimit(float x, float limit) {
   return x / (1.0f + x / limit);
@@ -18,7 +20,7 @@ inline float SoftLimit(float x, float limit) {
 
 }  // namespace
 
-bool LeitnerMode::Init(Arena* arena) {
+__attribute__((cold)) bool LeitnerMode::Init(Arena* arena) {
   line_ = arena->Allocate<float>(kLineSize);
   if (!line_) return false;
   write_ = 0;
@@ -36,6 +38,8 @@ bool LeitnerMode::Init(Arena* arena) {
   refl_lp_[0] = refl_lp_[1] = 0.0f;
   rng_.Seed(0x1E17);
   frozen_ = false;
+  trip_ = 1.0f;
+  trail_gain_ = trail_lp_ = 0.0f;
   return true;
 }
 
@@ -89,14 +93,19 @@ void LeitnerMode::Process(const Controls& c, const FloatFrame* in,
   frozen_ = c.freeze;
 
   const float radius = 1.0f + 9.0f * Clamp(c.size, 0.0f, 1.0f);
+  const float bal = KnobBipolar(c.bal);
   const float centre = Clamp(c.position, 0.0f, 1.0f) - 0.5f;  // cycles
-  const float speed = 0.02f * powf(200.0f, Clamp(c.density, 0.0f, 1.0f));
+  float speed = 0.02f * powf(200.0f, Clamp(c.density, 0.0f, 1.0f));
+  // Chance: this trip's length, faded in by BAL.
+  if (bal > 0.0f) speed /= Crossfade(1.0f, trip_, bal);
 
   // Advance along the path.
   if (!frozen_) {
     phase_ += speed * static_cast<float>(n) / kSampleRate;
     if (phase_ >= 1.0f) {
       phase_ -= 1.0f;
+      // Exponential law (mean 1, kept within 1/4 .. 4).
+      if (bal > 0.0f) trip_ = Clamp(-logf(rng_.Float() + 1e-6f), 0.25f, 4.0f);
       // New random-flight leg.
       flight_from_[0] = flight_to_[0];
       flight_from_[1] = flight_to_[1];
@@ -106,7 +115,16 @@ void LeitnerMode::Process(const Controls& c, const FloatFrame* in,
       flight_to_[1] = r * FastSin(a);
     }
   }
-  PathPoint(phase_, radius, centre, &x_, &y_);
+  float ph = phase_;
+  if (bal < 0.0f) {
+    // Stations: rest, then hop to the next one in the last 15 %.
+    const float u = ph * kStations;
+    const float st = FastFloor(u);
+    float hop = Clamp((u - st - 0.85f) * (1.0f / 0.15f), 0.0f, 1.0f);
+    hop = hop * hop * (3.0f - 2.0f * hop);
+    ph = Crossfade(ph, (st + hop) * (1.0f / kStations), -bal);
+  }
+  PathPoint(ph, radius, centre, &x_, &y_);
 
   // --- Direct sound.
   const float dist_raw = sqrtf(x_ * x_ + y_ * y_);
@@ -173,8 +191,21 @@ void LeitnerMode::Process(const Controls& c, const FloatFrame* in,
   }
   const float refl_coef = 1.0f - expf(-kTwoPi * 5000.0f / kSampleRate);
 
+  // FBK: trail feedback (ramped across the block; off = v1.0 exactly).
+  const float trail_target = 0.85f * Clamp(c.fbk, 0.0f, 1.0f);
+  const bool trail = trail_target > 0.0f || trail_gain_ > 0.0f;
+  const float trail_inc = (trail_target - trail_gain_) * inv_n;
+  const float trail_coef = 1.0f - expf(-kTwoPi * 3500.0f / kSampleRate);
+
   for (size_t s = 0; s < n; ++s) {
-    line_[write_] = 0.5f * (in[s].l + in[s].r);
+    float mono = 0.5f * (in[s].l + in[s].r);
+    if (trail) {
+      trail_gain_ += trail_inc;
+      const float e = line_[(write_ - kTrailDelay) & (kLineSize - 1)];
+      trail_lp_ += trail_coef * (e - trail_lp_);
+      mono += SoftClip(trail_gain_ * trail_lp_);
+    }
+    line_[write_] = mono;
     for (int i = 0; i < kParams; ++i) value_[i] += inc[i];
 
     float l = Tap(value_[0]) * value_[2];
@@ -197,6 +228,8 @@ void LeitnerMode::Process(const Controls& c, const FloatFrame* in,
     out[s].r = lp_[1] + refl_lp_[1];
     write_ = (write_ + 1) & (kLineSize - 1);
   }
+  trail_gain_ = trail_target;
+  if (!trail || trail_target == 0.0f) trail_lp_ = 0.0f;
 }
 
 }  // namespace monsoon

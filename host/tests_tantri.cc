@@ -190,3 +190,68 @@ MONSOON_TEST(tantri_input_excites_and_silence_is_silent) {
   CHECK(Db(p) > -45.0f, "input should excite strings and drums");
   return true;
 }
+
+MONSOON_TEST(tantri_bal_fbk_rvb_do_what_they_say) {
+  // BAL: the first string's tuning, and it is really heard there.
+  const float sa = 130.81f;
+  const float want[3] = { 2.0f / 3.0f, 0.75f, 15.0f / 16.0f };
+  const float bals[3] = { 0.0f, 0.5f, 1.0f };
+  const char* names[3] = { "Ma", "Pa", "Ni" };
+  for (int k = 0; k < 3; ++k) {
+    Module m;
+    m.SetMode(MODE_TANTRI);
+    Controls c = Base();
+    c.density = 0.8f;
+    c.bal = bals[k];
+    auto out = m.Render(Silence(4.0f), [&](size_t) { return c; });
+    auto* t = static_cast<TantriMode*>(m.engine().mode_instance(MODE_TANTRI));
+    float ratio = t->string_hz(0) / sa;
+    float found = PeakNear(out, sa * want[k], 30.0f, 48000, 48000 * 4 - 64);
+    float cents = 1200.0f * std::log2(found / (sa * want[k]));
+    std::printf("    BAL %.1f: first string %s %.2f Hz (x %.4f), heard at %+.1f cents\n",
+                bals[k], names[k], t->string_hz(0), ratio, cents);
+    CHECK(std::fabs(1200.0f * std::log2(ratio / want[k])) < 3.0f, "tuning");
+    CHECK(std::fabs(cents) < 10.0f, "heard");
+  }
+
+  // FBK: a closed Na rings on instead of being damped.
+  float ring[2];
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Base();
+    c.position = StrokeAt(0);  // Na
+    c.fbk = k ? 1.0f : 0.0f;
+    auto out = Render(c, 2.0f, 10);
+    ring[k] = Measure(out, 24000, 48000).rms;
+  }
+  std::printf("    FBK Na, 0.5-1 s after: %.1f dB -> %.1f dB\n", Db(ring[0]), Db(ring[1]));
+  CHECK(ring[1] > 4.0f * ring[0], "ring");
+
+  // FBK also lets the drone set the drum heads humming: energy at the
+  // dayan's pitch (upper Sa) with the drone alone.
+  float hum[2];
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Base();
+    c.density = 0.6f;
+    c.fbk = k ? 1.0f : 0.0f;
+    auto out = Render(c, 4.0f);
+    hum[k] = ToneAmplitude(out, 2.0f * sa, 96000, 192000 - 64);
+  }
+  std::printf("    FBK drone hum at upper Sa: %.1f dB -> %.1f dB\n", Db(hum[0]), Db(hum[1]));
+  CHECK(hum[1] > 1.4f * hum[0], "sympathetic drums");
+
+  // RVB: the engine's FDN: a room tail after a Tin.
+  float tail[2];
+  float peak = 0.0f;
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Base();
+    c.position = StrokeAt(1);  // Tin
+    c.rvb = k ? 1.0f : 0.0f;
+    auto out = Render(c, 5.0f, 10);
+    tail[k] = Measure(out, 48000 * 3, 48000 * 4).rms;
+    if (k) peak = Measure(out).peak;
+  }
+  std::printf("    RVB 3-4 s after a Tin: %.1f dB -> %.1f dB (peak %.2f)\n",
+              Db(tail[0]), Db(tail[1]), peak);
+  CHECK(tail[1] > 10.0f * tail[0] && peak < 0.95f, "room");
+  return true;
+}

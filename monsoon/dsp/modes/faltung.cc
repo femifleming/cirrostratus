@@ -14,7 +14,7 @@ static const size_t B = FaltungMode::kBlock;
 static const size_t NF = FaltungMode::kFft;
 static const int kFadeBlocks = 6;  // 6 x 5.3 ms = 32 ms
 
-bool FaltungMode::Init(Arena* arena) {
+__attribute__((cold)) bool FaltungMode::Init(Arena* arena) {
   predelay_ = arena->Allocate<int16_t>(kMaxPredelay);
   if (!predelay_) return false;
   for (size_t p = 0; p < kMaxPartitions; ++p) {
@@ -26,7 +26,30 @@ bool FaltungMode::Init(Arena* arena) {
   spec_ = arena->Allocate<float>(NF);
   acc_ = arena->Allocate<float>(NF);
   prev_ = arena->Allocate<float>(B);
-  if (!fdl_scale_ || !work_ || !spec_ || !acc_ || !prev_) return false;
+  part_energy_ = arena->Allocate<float>(kNumFaltungIrs * kMaxPartitions);
+  if (!fdl_scale_ || !work_ || !spec_ || !acc_ || !prev_ || !part_energy_) {
+    return false;
+  }
+  // Energy of every IR partition (both channels), for BAL's level match.
+  for (int ir = 0; ir < kNumFaltungIrs; ++ir) {
+    const FaltungIr& f = kFaltungIrs[ir];
+    for (size_t q = 0; q < f.partitions; ++q) {
+      float e = 0.0f;
+      for (int ch = 0; ch < 2; ++ch) {
+        const FaltungPartition& p = f.part[ch][q];
+        const int16_t* h = kFaltungData + p.offset;
+        float sum = 0.0f;
+        for (size_t k = 0; k < 2u * p.bins; ++k) {
+          sum += static_cast<float>(h[k]) * static_cast<float>(h[k]);
+        }
+        e += sum * p.scale * p.scale;
+      }
+      part_energy_[ir * kMaxPartitions + q] = e;
+    }
+  }
+  bal_ = 0.5f;
+  bal_peak_ = 1.0f;
+  fb_gain_ = fb_left_ = 0.0f;
   for (int i = 0; i < 2; ++i) {
     in_buf_[i] = arena->Allocate<float>(B);
     if (!in_buf_[i]) return false;
@@ -124,9 +147,18 @@ void FaltungMode::Process(const Controls& c, const FloatFrame* in,
   }
   const float power_coef = 1.0f / (0.1f * kSampleRate);
 
+  // BAL goes to Prepare(). FBK: loop gain 0.95 x FBK over the left IR's
+  // peak gain (x BAL's largest weight), smoothed per block.
+  bal_ = c.bal;
+  fb_gain_ += 0.2f * (0.95f * Clamp(c.fbk, 0.0f, 1.0f) /
+                      (peak_gain * bal_peak_) - fb_gain_);
+  if (c.fbk <= 0.0f && fb_gain_ < 1e-4f) fb_gain_ = 0.0f;
+  const bool feed = !frozen_ && fb_gain_ > 0.0f;
+
   for (size_t i = 0; i < n; ++i) {
     float m = frozen_ ? SoftClip(fb_sample_ * freeze_gain_)
                       : 0.5f * (in[i].l + in[i].r);
+    if (feed) m += fb_gain_ * fb_left_;
     // Pre-delay line (int16, 2x headroom).
     float q = Clamp(m, -1.99f, 1.99f) * 16383.0f;
     predelay_[pd_write_] = static_cast<int16_t>(q);
@@ -144,6 +176,7 @@ void FaltungMode::Process(const Controls& c, const FloatFrame* in,
     float wl = out_buf_[parity_][0][fill_];
     float wr = out_buf_[parity_][1][fill_];
     fb_sample_ = 0.5f * (wl + wr);
+    fb_left_ = wl;
     wet_power_ += power_coef * (fb_sample_ * fb_sample_ - wet_power_);
 
     float w[2] = { wl, wr };
@@ -172,8 +205,33 @@ void FaltungMode::Process(const Controls& c, const FloatFrame* in,
   }
 }
 
+// BAL: a gain per partition, exp2 of a ramp across the active IR (left:
+// falling, right: rising), scaled so the IR keeps its energy.
+__attribute__((cold)) void FaltungMode::BalWeights(int ir, size_t parts, float bal, float* weight) {
+  const FaltungIr& f = kFaltungIrs[ir];
+  if (parts > f.partitions) parts = f.partitions;
+  const float slope = (bal < 0.0f ? 6.0f : 8.0f) * bal /
+      static_cast<float>(parts > 1 ? parts - 1 : 1);
+  const float* e = part_energy_ + ir * kMaxPartitions;
+  float e0 = 0.0f, e1 = 0.0f;
+  for (size_t q = 0; q < parts; ++q) {
+    const float w = FastExp2(slope * static_cast<float>(q));
+    weight[q] = w;
+    e0 += e[q];
+    e1 += w * w * e[q];
+  }
+  const float norm = e1 > 1e-20f ? Clamp(sqrtf(e0 / e1), 0.0f, 16.0f) : 1.0f;
+  float peak = 1.0f;
+  for (size_t q = 0; q < kMaxPartitions; ++q) {
+    weight[q] = q < parts ? weight[q] * norm : 0.0f;
+    if (weight[q] > peak) peak = weight[q];
+  }
+  bal_peak_ = peak;
+}
+
 // acc += sum over partitions q of X[head - q] * H[ir][ch][q].
-void FaltungMode::Accumulate(int ir, size_t parts, int ch, float* acc) {
+void FaltungMode::Accumulate(int ir, size_t parts, int ch, float* acc,
+                             const float* weight) {
   const FaltungIr& f = kFaltungIrs[ir];
   if (parts > f.partitions) parts = f.partitions;
   float* acc_re = acc;
@@ -182,6 +240,7 @@ void FaltungMode::Accumulate(int ir, size_t parts, int ch, float* acc) {
     const size_t slot = (head_ + kMaxPartitions - q) % kMaxPartitions;
     const FaltungPartition& p = f.part[ch][q];
     float s = fdl_scale_[slot] * p.scale;
+    if (weight) s *= weight[q];
     // SIZE shorter than the IR: fade the last two partitions out.
     if (parts < f.partitions) {
       if (q + 1 == parts) s *= 0.35f;
@@ -240,16 +299,29 @@ void FaltungMode::ProcessAudioBlock() {
   }
   const size_t parts = active_partitions_;
   const float inv_n = 1.0f / static_cast<float>(NF);
+  const float bal = KnobBipolar(bal_);
+  float weight[kMaxPartitions], fade_weight[kMaxPartitions];
+  const float* w_new = NULL;
+  const float* w_old = NULL;
+  if (bal != 0.0f) {
+    BalWeights(fade_from_ >= 0 ? fade_from_ : playing_ir_, kMaxPartitions,
+               bal, fade_weight);
+    BalWeights(playing_ir_, parts, bal, weight);
+    w_new = weight;
+    w_old = fade_weight;
+  } else {
+    bal_peak_ = 1.0f;
+  }
 
   for (int ch = 0; ch < 2; ++ch) {
     memset(acc_, 0, NF * sizeof(float));
-    Accumulate(playing_ir_, parts, ch, acc_);
+    Accumulate(playing_ir_, parts, ch, acc_, w_new);
     FftInverse(acc_, work_, NF);
     float* o = out_buf_[p][ch];
     for (size_t i = 0; i < B; ++i) o[i] = work_[B + i] * inv_n;
     if (fade_blocks_ > 0 && fade_from_ >= 0) {
       memset(acc_, 0, NF * sizeof(float));
-      Accumulate(fade_from_, kMaxPartitions, ch, acc_);
+      Accumulate(fade_from_, kMaxPartitions, ch, acc_, w_old);
       FftInverse(acc_, work_, NF);
       // Weight of the new IR rises linearly across the whole fade.
       const float w0 = static_cast<float>(kFadeBlocks - fade_blocks_) / kFadeBlocks;
