@@ -1,36 +1,44 @@
 # CPU per mode
 
-Measured with `tools/bench/run.sh` (QEMU STM32F405 model, instruction counts, engine + output section included). Budget ≈ 2400; real cycles are roughly 1.0–1.3× these numbers.
+Measured with `tools/bench/run.sh` (QEMU STM32F405 model, instruction counts per stereo frame, engine + output section included, Process + Prepare averaged). Budget ≈ 2400; real cycles are roughly 1.0–1.3× these numbers.
 
-| Mode | Typical | Heavy |
-|---|---|---|
-| grains | 1643.9 | 1050.8 |
-| spectral | 1924.4 | 1894.3 |
-| convolve | 1803.7 | 2104.7 |
-| resonator | 2223.4 | 2227.5 |
-| difference | 1935.4 | 1918.6 |
-| cross | 1585.3 | 1577.5 |
-| stretch | 2387.9 | 2440.2 |
-| spreek | 1652.4 | 1645.4 |
-| capture | 1792.1 | 2097.1 |
-| gendy | 1512.9 | 1484.3 |
-| shimmer | 1874.1 | 1835.1 |
-| tape | 2371.8 | 2341.8 |
-| plates | 1458.9 | 1455.1 |
-| chloe | 2587.9 | 2340.9 |
-| faltung | 1781.8 | 1734.8 |
-| quell | 2268.1 | 2265.3 |
-| leitner | 1362.2 | 1353.9 |
-| tantri | 2250.4 | 2238.4 |
-| harmonizer | 2028.4 | 2030.3 |
-| putz | 1980.1 | 1980.7 |
-| ensemble | 1728.3 | 1719.8 |
-| barberpole | 1851.7 | 1894.6 |
-| specdelay | 1706.8 | 1692.6 |
-| choir | 1779.9 | 1769.6 |
-| folder | 1905.1 | 1893.1 |
-| hall | 2215.1 | 2203.5 |
-| bloom | 1948.5 | 1938.6 |
-| gamelan | 2045.9 | 2038.9 |
-| mirror | 2160.8 | 2081.1 |
-| polish | 1560.9 | 1558.3 |
+Bench knob settings: typical = sliders 0.4–0.6, PITCH +7, WET 0.7, BAL 0.6, FBK 0.4, RVB 0.5; heavy = DENSITY 1, SIZE 0.95, TEXTURE 0.9, FBK 0.9, RVB 0.9, PITCH −12.
+
+1.1.0 vs 1.0.0. In 1.0 every mode paid for the whole output section (FDN reverb ~430, widener ~65, feedback loop + tamer ~110). In 1.1 the widener is gone, the mono bass costs ~52, and the feedback loop and FDN only run for modes that map a knob to them, so most of that budget went into the new per-mode BAL/FBK/RVB controls. No mode got slower.
+
+| Mode | 1.0 typical | 1.1 typical | 1.0 heavy | 1.1 heavy | 1.1 worst ISR block (typ/heavy) |
+|---|---|---|---|---|---|
+| grains | 1643.9 | 1618.2 | 1050.8 | 1029.8 | 1616/1027 |
+| spectral | 1924.4 | 1421.6 | 1894.3 | 1384.6 | 298/300 |
+| convolve | 1803.7 | 1394.7 | 2104.7 | 1777.7 | 549/549 |
+| resonator | 2223.4 | 1845.8 | 2227.5 | 1848.3 | 1964/1970 |
+| difference | 1935.4 | 1897.2 | 1918.6 | 1889.1 | 1899/1889 |
+| cross | 1585.3 | 1474.5 | 1577.5 | 1464.9 | 797/791 |
+| stretch | 2387.9 | 1771.7 | 2440.2 | 1858.9 | 416/416 |
+| spreek | 1652.4 | 1080.3 | 1645.4 | 1080.3 | 1017/1017 |
+| capture | 1792.1 | 1718.8 | 2097.1 | 2078.4 | 1721/2077 |
+| gendy | 1512.9 | 1317.7 | 1484.3 | 1286.9 | 1520/1830 |
+| shimmer | 1874.1 | 1530.8 | 1835.1 | 1494.1 | 2224/2188 |
+| tape | 2371.8 | 1937.3 | 2341.8 | 1905.2 | 2105/2012 |
+| plates | 1458.9 | 1362.0 | 1455.1 | 1360.4 | 1366/1366 |
+| chloe | 2587.9 | 2133.5 | 2340.9 | 1890.4 | 2132/1889 |
+| faltung | 1781.8 | 1592.2 | 1734.8 | 1545.5 | 924/926 |
+| quell | 2268.1 | 1806.9 | 2265.3 | 1806.9 | 317/317 |
+| leitner | 1362.2 | 1191.4 | 1353.9 | 1181.0 | 1189/1183 |
+| tantri | 2250.4 | 2055.7 | 2238.4 | 2045.6 | 2108/2087 |
+| harmonizer | 2028.4 | 1440.3 | 2030.3 | 1440.3 | 805/806 |
+| putz | 1980.1 | 1443.9 | 1980.7 | 1443.9 | 753/753 |
+| ensemble | 1728.3 | 1573.0 | 1719.8 | 1563.9 | 1571/1564 |
+| barberpole | 1851.7 | 1488.9 | 1894.6 | 1528.0 | 1487/1526 |
+| specdelay | 1706.8 | 1124.6 | 1692.6 | 1116.4 | 301/301 |
+| choir | 1779.9 | 1579.6 | 1769.6 | 1570.9 | 1613/1603 |
+| folder | 1905.1 | 1747.1 | 1893.1 | 1738.9 | 1747/1738 |
+| hall | 2215.1 | 1715.9 | 2203.5 | 1709.4 | 1714/1707 |
+| bloom | 1948.5 | 1505.1 | 1938.6 | 1498.3 | 1507/1500 |
+| gamelan | 2045.9 | 1842.0 | 2038.9 | 1839.7 | 1890/1890 |
+| mirror | 2160.8 | 2009.9 | 2081.1 | 1936.5 | 760/760 |
+| polish | 1560.9 | 1002.2 | 1558.3 | 1001.9 | 1000/1000 |
+
+Output-section parts (instructions per frame): FDN reverb 432, feedback-loop tamer 78, mono bass 52, limiter 32.
+
+PLATES recomputes its mode coefficients while BAL is moving (≈ +500 per frame during the 10 ms glide, not in the table: the bench holds BAL still), still well under budget.

@@ -71,13 +71,54 @@ Engine services a mode may map a knob to (`Mode::feedback_amount(c)`,
 skipped):
 - Feedback loop: wet → 25 Hz HP → ResonanceTamer (two adaptive notches;
   depth rises with how much of the loop's energy sits in narrow peaks) →
-  soft clip → mode input. Gain curve: smoothstep(amount). Used by GRAINS
-  and the modes listed in docs/modes_*.md.
+  soft clip → mode input. Gain curve: smoothstep(amount). FBK in GRAINS,
+  CONVOLVE and BLOOM.
 - FDN: 8 lines, 16-bit (≈ 15 k samples, 32 KB of CCM), modulated, T60
-  0.5–16.5 s, amount sets send and decay.
+  0.5–16.5 s, amount sets send and decay. RVB in GRAINS, DIFFERENCE, CROSS,
+  CAPTURE, GENDY, PLATES, FALTUNG, LEITNER, TANTRI, ENSEMBLE, CHOIR,
+  FOLDER, GAMELAN, MIRROR (dry voices and mono modes with no space of their
+  own; several were chosen over a mode-specific idea to fit the flash).
 
 Envelope follower: input level can push WET, BAL, FBK or RVB up or down
 (per-mode routing, set in the ENV page).
+
+## Per-mode knobs (1.1)
+
+Full wording in docs/modes_*.md and each mode's header. BAL noon / FBK 0 /
+RVB 0 = v1.0 exactly (checked against v1.0 fingerprints in host/tests_v11.cc).
+
+| Mode | BAL (left / right of noon) | FBK | RVB |
+|---|---|---|---|
+| 1 GRAINS | noon = plain. Left: spray (grains scatter around the path, up to half the buffer away). Right: more and more grains play backwards, all of them at full | feedback: the cloud back into itself, Clouds style, with the howl tamer on duty | the 8-line FDN reverb: send and length together, 0.5 → 16 s |
+| 2 SPECTRAL | Turning it shifts every partial by the same number of Hz (not a ratio), so harmonic sounds go inharmonic. Left shifts down, right shifts up, exponential: a few Hz near noon, ±1 kHz at the ends | regeneration | phase diffusion: random phases blend in, coherent → a whispered wash in the same colours |
+| 3 CONVOLVE | Left: only the attacks of the input reach the IR. Right: only the body (attacks ducked, so hits swell instead of crack). It shapes the input before everything, so captures hear it too | feedback (the module's feedback loop, with its howl tamer): the IR rings on much longer | IR smear |
+| 4 RESONATOR | Left: detune, the strings spread up to ±25 cents (beating, a chorus of strings). Right: stretch, intervals widen up to +10 % (an octave ~+120 cents: piano-like, then bell-like) | sympathetic coupling | body |
+| 5 DIFFERENCE | Left: glide, the heard note slides to each new pitch (20 ms → 2 s). Right: dichotic, f to the left ear and f + Δ to the right; on headphones the difference tone gives way to binaural beats | spiral | reverb (the module's FDN reverb; both tones reverberate, so the phantom note survives) |
+| 6 CROSS | noon = as before (carrier = right input). Left: the carrier fades to white noise (whispered; consonants come through). Right: it fades to an internal buzz played by PITCH (C3 at noon, V/OCT), a classic vocoder from one input; PITCH then stops transposing R | formant emphasis | reverb (the module's FDN reverb; CROSS is mono, this gives it a stereo room) |
+| 7 STRETCH | Left: the read slows, stands still at 9 o'clock, and runs backwards at full left. Right: scatter, the read window jumps to random spots (up to half the buffer away, ~10 jumps/s) | re-record | octave halo: every partial also sounds an octave up, a shimmer over the stretch |
+| 8 SPREEK | Left: glide (PITCH slides; an octave takes up to ~0.6 s). Right: vibrato (5.3 Hz, up to ±1 semitone) | growl | choir |
+| 9 CAPTURE | Left: bend — phase distortion, the first half of each cycle read up to 6× faster (CZ style). Right: sync formant — the table read up to 6× per cycle under a soft window, a resonant peak sweeping up. Stays alias-free | self-FM | reverb (the module's reverb, for a voice with no space of its own) |
+| 10 GENDY | noon = both voices around PITCH. The right voice moves in whole semitones: left down to an octave below, right up to an octave above (fifths, fourths, octaves) | cross-coupling | reverb (the module's reverb) |
+| 11 SHIMMER | Left: less of each pass is shifted (fully left = a plain reverb in any set). Right: mirror — the fourth line falls by the inverse of the set's interval, so the cascade climbs and falls | tank modulation | pre-delay 0 → 250 ms before the network (glides when turned) |
+| 12 TAPE | Left: darker repeats (loop low-pass 7 kHz → 500 Hz). Right: thinner repeats (loop high-pass up to 2 kHz), the dub telephone fade | ping-pong | diffusion in the loop |
+| 13 PLATES | Left: the modes are pulled onto whole harmonics (fully left = a tuned, pitched plate). Right: the series stretches — more clang, bell / tam-tam | tension: hard hits ring sharp (up to ~3 semitones) and glide back down as they decay | reverb (the module's reverb, so a struck plate gets a room) |
+| 14 CHLOE | the Lorenz attractor: noon = as before. Left: calmer and shallower until it stops (both cutoffs together, the filter halfway LP/BP, ¼ speed). Right: up to 8× faster and ±3 octaves, the filter wandering LP → BP → HP | master feedback, crossed like the plug-in: left out → right in, right out → left in | diffusion in the regen loop |
+| 15 FALTUNG | early ↔ late: noon = the IR as it is. Left: the tail fades away (close, dry). Right: the early part fades and the tail swells (far away). Same loudness | feedback through the IR | a long smooth FDN tail (0.5 → 16 s) behind the space (the IRs are at most 170 ms) |
+| 16 QUELL | noon = stereo-linked. Left: mid only (the sides pass untouched). Right: sides only | hard threshold | halo: what's cut rings on as a soft spectral tail, 0.3 → 5 s (also heard in delta) |
+| 17 LEITNER | noon = a smooth glide. Left (Leitner): the path becomes 8 loudspeaker stations; the source rests at each and hops to the next. Right (Xenakis): every trip round the path takes a chance length | trail | the room's late tail (the FDN reverb) |
+| 18 TANTRI | the tanpura's first string: left third Ma, noon Pa, right third Ni | ring | a room round the drums and the drone (the FDN reverb) |
+| 19 HARMONIZER | register: left third every voice an octave down, right third an octave up (same chord shape) | canon: the voices (not you) echo every 340 ms, darker each time | glide: the voices slide into each new note, from a snap up to ~0.8 s |
+| 20 PUTZ | Left: the lows are cleaned harder (rumble, room) and the highs left alone. Right: hiss only, the bass untouched | de-crackle: clicks and vinyl crackle on the input are flattened, steady sound passes | de-reverb |
+| 21 ENSEMBLE | Left: only the slow LFO, deeper (a pure swirl). Right: only the fast one, deeper (pure shimmer, even in chorus) | regeneration: the taps go round again (with DENSITY low: flanger jets) | reverb: the string machine's hall (the module's FDN reverb) |
+| 22 BARBERPOLE | Left: every pass darker (the loop closes to 1.2 kHz). Right: every pass thinner (opens up to 1.5 kHz) | wow: the loop delay wobbles, so every pass is a little more out of tune, like tape | dispersion |
+| 23 SPECDELAY | Left: stripes (neighbouring bands answer early and late). Right: scatter (every band gets its own random delay) | blur: every repeat smears further across frequency, and tones widen into hiss | diffusion: every repeat smears further in time, and the echoes melt into a wash |
+| 24 CHOIR | noon = as before (altos). Left: bigger, darker singers (formants down). Right: smaller, brighter ones (formants up). The notes stay put | resonance: your input rings on and sings its chord for seconds (TEXTURE left of full) | reverb: a choir needs a church (the module's FDN reverb) |
+| 25 FOLDER | Left: your input bends the sine's phase (option 1). Right: the sine ring-modulates your input (in option 2 too: a ring mod at PITCH) | the folder feeds itself: growl, then chaos | reverb (the module's FDN reverb) |
+| 26 HALL | Left: the lows die sooner (bass decay down to ×0.25: a clear, airy hall). Right: the lows ring on (×3: warm and heavy) | pre-delay echoes | diffusion backs off |
+| 27 BLOOM | Left: more and more blooms fade out instead of in (reverse echoes that strike, then trail away). Right: more and more play forwards, swelling in, one window late | regeneration (the module's feedback loop): every bloom blooms again (reversed twice = forwards again …) | haze tail |
+| 28 GAMELAN | mallet: noon = as before. Left: softer, padded (upper partials fade, round and dull). Right: harder (upper partials up to ×5). Shapes TRIG strikes | tutup | the pendopo: a reverb around the bank (the module's FDN reverb) |
+| 29 MIRROR | frequency shift: noon none, left down, right up, up to ±1 kHz. Every partial moves by the same Hz, so harmonic sounds turn inharmonic; below 0 Hz they reflect back up | warp feedback | reverb (the module's FDN reverb; MIRROR's output is mono, the space comes from here) |
+| 30 POLISH | where the compressor leans: noon = as before. Left: the lows get squeezed harder (tight, dense bass). Right: the highs do (tames harshness) | parallel ("New York") compression | air: new harmonics above 6 kHz, made from the highs (sparkle, not EQ) |
 
 ## Modes
 
@@ -164,7 +205,7 @@ STFT 2048/512. Left = modulator, right = carrier.
 - SIZE: formant shift of the modulator envelope (×0.5 → ×2).
 - PITCH: carrier transposition.
 - FREEZE: hold the modulator spectrum. TRIG: toggle hold of the carrier.
-- Output mono (same on both sides).
+- Output mono (same on both sides); RVB (FDN) gives it a stereo room.
 
 ### 7 STRETCH — extreme time stretch
 SampleBuffer stereo (option 0) or mono (option 1), ≤ 118 KB; STFT

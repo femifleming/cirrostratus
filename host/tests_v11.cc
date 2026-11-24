@@ -281,7 +281,7 @@ MONSOON_TEST(every_mode_bal_fbk_rvb_sweeps_and_random_cv_are_safe) {
 
 // Every knob does something on every mode: its extreme setting changes the
 // output by a clear amount (more than -40 dB of difference) compared with the
-// neutral one, on music with a moving PITCH. (Each mode's own test checks
+// neutral one, on music with a moving PITCH and POSITION. (Each mode's own test checks
 // what the change is; this one catches dead knobs.)
 MONSOON_TEST(every_mode_bal_fbk_rvb_each_change_the_sound) {
   int dead = 0;
@@ -297,6 +297,7 @@ MONSOON_TEST(every_mode_bal_fbk_rvb_each_change_the_sound) {
         // controls that act on movement (glides, paths) have something to do.
         c.pitch = (b / 375) % 2 ? 7.0f : 0.0f;
         c.density = 0.65f;
+        c.position = 0.3f + 0.2f * float((b / 500) % 3);  // TRIG hits new keys
         if (knob == 0) c.bal = value;
         if (knob == 1) c.fbk = value;
         if (knob == 2) c.rvb = value;

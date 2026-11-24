@@ -2,7 +2,13 @@
 
 **Alternative firmware for the [Monsoon](https://github.com/jakplugg/Monsoon)**
 (Jak Plugg's 12HP Mutable Instruments Clouds variant): 30 modes in two
-banks, a 48 kHz floating-point engine, and a new output section.
+banks, a 48 kHz floating-point engine, and a clean output section.
+
+**Version 1.1.0.** BAL, FBK and RVB are now three extra controls in every
+mode (90 new controls, all with CV; BAL at noon and FBK/RVB at zero give the
+1.0 sound). The output is hard stereo, with the bass below 60 Hz kept mono
+(LR4 crossover; hold FREEZE and tap WRITE to switch it off). Settings and
+save slots from 1.0 load unchanged. Not yet run on a physical module.
 
 | Bank 1 (green) | | Bank 2 (red) | |
 |---|---|---|---|

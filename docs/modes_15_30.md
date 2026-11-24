@@ -230,6 +230,9 @@ of tail, separate from the output reverb.
 | PITCH | modulation: none ← gentle chorus (noon) → deep |
 | FREEZE | hold forever |
 | TRIG | clear the tail |
+| BAL | noon = as before. Left: the lows die sooner (bass decay down to ×0.25: a clear, airy hall). Right: the lows ring on (×3: warm and heavy) |
+| FBK | pre-delay echoes: the pre-delay repeats (time = POSITION), and every echo blooms into the hall. Nothing at POSITION 0 |
+| RVB | diffusion backs off: the smooth wash turns grainy and its echoes come apart, like a stone stairwell |
 
 #### 27 · BLOOM — swells + reverse blooms
 *Forecast: everything arrives backwards first, then gently.*
@@ -246,6 +249,9 @@ arrives with its attack smoothed into a swell.
 | PITCH | transposition of the reverse bloom (±12 st) |
 | FREEZE | the last window keeps blooming, over and over |
 | TRIG | restart the reverse heads now |
+| BAL | noon = as before. Left: more and more blooms fade out instead of in (reverse echoes that strike, then trail away). Right: more and more play forwards, swelling in, one window late |
+| FBK | regeneration (the module's feedback loop): every bloom blooms again (reversed twice = forwards again …) |
+| RVB | haze tail: the diffusion chain becomes a loop, so the blooms ring on after the note (reverse reverb → note → reverb) |
 
 #### 28 · GAMELAN — metallophones
 *Forecast: bronze rain, beating gently in pairs.*
@@ -262,6 +268,9 @@ so they beat (ombak).
 | PITCH | root, V/OCT (C4 at noon) |
 | FREEZE | ring forever |
 | TRIG | strike |
+| BAL | mallet: noon = as before. Left: softer, padded (upper partials fade, round and dull). Right: harder (upper partials up to ×5). Shapes TRIG strikes |
+| FBK | tutup: on each strike the other hand chokes the key struck before (up to 60 dB in 60 ms). 0 = everything rings |
+| RVB | the pendopo: a reverb around the bank (the module's FDN reverb) |
 | Options | 1 pelog · 2 slendro |
 
 #### 29 · MIRROR — spectral warping
@@ -279,6 +288,9 @@ mirrored around an anchor note (highs become lows), or folded under it.
 | TEXTURE | tilt, dark ↔ bright |
 | FREEZE | hold the spectrum (still warpable) |
 | TRIG | grab a new spectrum while frozen |
+| BAL | frequency shift: noon none, left down, right up, up to ±1 kHz. Every partial moves by the same Hz, so harmonic sounds turn inharmonic; below 0 Hz they reflect back up |
+| FBK | warp feedback: the warped spectrum is warped again and again. Partials spiral (stretch glides them away from the anchor, BAL slides them, fold piles them under it); with no warp it's a spectral sustain |
+| RVB | reverb (the module's FDN reverb; MIRROR's output is mono, the space comes from here) |
 
 #### 30 · POLISH — mastering chain
 *Forecast: clear, bright and finished.*
@@ -295,3 +307,6 @@ limiter follows). Zero latency, flat when everything is off.
 | PITCH | output trim ±12 dB |
 | FREEZE | bypass, for A/B |
 | TRIG | auto-gain: match output loudness to input |
+| BAL | where the compressor leans: noon = as before. Left: the lows get squeezed harder (tight, dense bass). Right: the highs do (tames harshness) |
+| FBK | parallel ("New York") compression: a smashed copy under the mix. Quiet detail comes up, peaks stay |
+| RVB | air: new harmonics above 6 kHz, made from the highs (sparkle, not EQ) |

@@ -66,7 +66,7 @@ of the "build_4" Monsoon firmwares.
 3. **Hold FREEZE** and switch the rack on. The FREEZE LED blinks: the module
    is listening for weather data.
 4. Computer volume about ¾, **GAIN** about noon.
-5. Play `cirrostratus.wav` from the beginning (about 53 s). It sounds like a
+5. Play `cirrostratus.wav` from the beginning (about 6¼ minutes; put the kettle on). It sounds like a
    modem singing. That's correct.
    - While it receives, the LEDs dance with the level.
    - **All four light green** each time a chunk is written to flash.
@@ -264,9 +264,12 @@ IN ─┬───────────────────────�
 a mode can borrow for one of its knobs when that's truly the best control
 for it. GRAINS borrows both (FBK = the classic Clouds feedback, still with
 its built-in howl tamer: two adaptive notches that talk down a whistling
-loop; RVB = the 8-line FDN reverb, 0.5 → 16 s). A few others borrow one of
-them (their tables say so). Every other mode gets three controls of its
-own, and pays no CPU for a reverb it doesn't use.
+loop; RVB = the 8-line FDN reverb, 0.5 → 16 s). CONVOLVE and BLOOM borrow
+the feedback loop for FBK. The dry voices and mono modes that have no space
+of their own borrow the reverb for RVB: DIFFERENCE, CROSS, CAPTURE, GENDY,
+PLATES, FALTUNG, LEITNER, TANTRI, ENSEMBLE, CHOIR, FOLDER, GAMELAN and
+MIRROR. Everything else (73 of the 90 knob jobs) is the mode's own, and a
+mode pays no CPU for a reverb it doesn't use.
 
 ---
 
@@ -295,7 +298,7 @@ for that mode.
 | Save slots | 4 × 128 KB of flash |
 | Settings | calibration, mode, per-mode option + envelope routing, mono bass |
 
-The source, the @@TESTS@@ tests and the CPU benchmark live in the repository:
+The source, the 218 tests and the CPU benchmark live in the repository:
 `make -C host test`, `tools/bench/run.sh`. Cirrostratus has so far been
 tested on the host and an emulated STM32F405, not yet on a physical
 module.
