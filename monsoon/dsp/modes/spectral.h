@@ -1,19 +1,20 @@
 // Mode 2 — SPECTRAL: spectral freeze / resynthesis.
 //
-// STFT 2048 / hop 512, stereo, phase-vocoder resynthesis. See DESIGN.md.
+// STFT 2048 / hop 1024 (sine windows), stereo, peak-locked phase vocoder.
+// See DESIGN.md.
 
 #ifndef MONSOON_DSP_MODES_SPECTRAL_H_
 #define MONSOON_DSP_MODES_SPECTRAL_H_
 
 #include "monsoon/dsp/mode.h"
-#include "monsoon/dsp/stft.h"
+#include "monsoon/dsp/modes/lean_stft.h"
 
 namespace monsoon {
 
-class SpectralMode : public Mode, public StftClient {
+class SpectralMode : public Mode, public LeanStftClient {
  public:
-  static const size_t kFftSize = 2048;
-  static const size_t kHop = 512;
+  static const size_t kFftSize = LeanStft::kSize;
+  static const size_t kHop = LeanStft::kHop;
   static const size_t kBins = kFftSize / 2;  // index 1 .. kBins-1 used
 
   const char* name() const { return "spectral"; }
@@ -28,27 +29,33 @@ class SpectralMode : public Mode, public StftClient {
   bool supports_morph() const { return true; }
   bool frozen() const { return frozen_; }
 
-  // StftClient.
-  void Transform(float* spectrum[2], size_t fft_size);
-
- private:
+  // LeanStftClient.
   void TransformChannel(int ch, float* spectrum);
 
-  Stft stft_;
+ private:
+  void UpdateTilt(float slope);
+
+  LeanStft stft_;
   float* mag_[2];        // smoothed / frozen magnitudes
-  float* freq_[2];       // instantaneous frequency, in bins
-  float* an_phase_[2];   // last analysis phase (cycles)
+  float* freq_[2];       // instantaneous frequency in bins (peaks; k elsewhere)
+  float* prev_[2];       // previous analysis spectrum (CMSIS order)
   float* syn_phase_[2];  // running synthesis phase (cycles)
+  float* raw_;           // scratch: this frame's magnitudes
   float* out_mag_;       // scratch
   float* out_freq_;      // scratch (magnitude-weighted frequency)
+  float* tilt_;          // per-bin tilt gain, rebuilt when TEXTURE moves
+  float tilt_slope_;
   const float* morph_mag_[2];
   const float* morph_freq_[2];
 
   Controls ctl_;
+  Controls frame_ctl_;   // controls latched for the current frame
   bool prev_freeze_;
   bool hold_loaded_;     // a loaded spectrum is held until FREEZE changes
   volatile bool frozen_;
   volatile bool grab_;
+  bool frame_hold_;
+  bool frame_grab_;
   Random rng_;
   uint32_t keep_[kBins / 32];  // bins kept by partial thinning
 };

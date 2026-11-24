@@ -3,7 +3,7 @@
 #include "monsoon/dsp/modes/convolve.h"
 
 #include "monsoon/dsp/modes/spectral_util.h"
-#include "monsoon/dsp/stft.h"
+#include "monsoon/dsp/cmsis/cmsis_fft.h"
 
 namespace monsoon {
 
@@ -12,10 +12,45 @@ using namespace spectral_util;
 static const size_t B = ConvolveMode::kBlock;
 static const size_t kFixedFloats =
     4 * B /* in */ + 4 * B /* out */ + 2 * B /* prev */ +
-    3 * ConvolveMode::kFft /* work, spec, acc */;
+    2 * ConvolveMode::kFft /* work, spec */;
 static const size_t kPerPartitionBytes =
     3 * ConvolveMode::kFft * sizeof(int16_t) + B * sizeof(int16_t);
 static const uint32_t kSaveMagic = 0x564E4F43;  // "CONV"
+// Minimum spacing between IR rebuild starts, in 512-sample blocks (~150 ms):
+// while knobs or CVs move, rebuilds stay a bounded share of the CPU.
+static const uint32_t kRebuildInterval = 14;
+
+// Packed 16-bit complex helpers. lo half = re, hi half = im.
+#if defined(__arm__) && defined(__ARM_ARCH_7EM__)
+inline int32_t Smusd(uint32_t a, uint32_t b) {   // a.re*b.re - a.im*b.im
+  int32_t r;
+  __asm__("smusd %0, %1, %2" : "=r"(r) : "r"(a), "r"(b));
+  return r;
+}
+inline int32_t Smuadx(uint32_t a, uint32_t b) {  // a.re*b.im + a.im*b.re
+  int32_t r;
+  __asm__("smuadx %0, %1, %2" : "=r"(r) : "r"(a), "r"(b));
+  return r;
+}
+#else
+inline int32_t Smusd(uint32_t a, uint32_t b) {
+  return int32_t(int16_t(a)) * int16_t(b) -
+      int32_t(int16_t(a >> 16)) * int16_t(b >> 16);
+}
+inline int32_t Smuadx(uint32_t a, uint32_t b) {
+  return int32_t(int16_t(a)) * int16_t(b >> 16) +
+      int32_t(int16_t(a >> 16)) * int16_t(b);
+}
+#endif
+inline float Lo(uint32_t w) { return static_cast<float>(int16_t(w)); }
+inline float Hi(uint32_t w) { return static_cast<float>(int16_t(w >> 16)); }
+
+inline void Fft(float* in, float* out) {
+  monsoon_cmsis_rfft(in, out, ConvolveMode::kFft, 0);
+}
+inline void Ifft(float* in, float* out) {  // includes 1/N
+  monsoon_cmsis_rfft(in, out, ConvolveMode::kFft, 1);
+}
 
 struct ConvolveSaveHeader {
   uint32_t magic;
@@ -27,23 +62,17 @@ bool ConvolveMode::Init(Arena* arena) {
   // Size the IR to the memory that is left.
   size_t avail = arena->free(0) + arena->free(1);
   size_t fixed = kFixedFloats * sizeof(float) +
-      (4 * kMaxPartitions) * sizeof(float) + 1024;
+      (5 * kMaxPartitions) * sizeof(float) + 1024;
   if (avail < fixed + 4 * kPerPartitionBytes) return false;
   partitions_ = (avail - fixed) / kPerPartitionBytes;
   if (partitions_ > kMaxPartitions) partitions_ = kMaxPartitions;
 
-  // Biggest first: the snapshot is one contiguous block.
+  // Biggest first: the snapshot (one contiguous block), then the fixed
+  // buffers, then as many partitions as still fit.
   snapshot_ = arena->Allocate<int16_t>(partitions_ * B);
   if (!snapshot_) return false;
-  for (size_t p = 0; p < partitions_; ++p) {
-    fdl_[0][p] = arena->Allocate<int16_t>(kFft);
-    fdl_[1][p] = arena->Allocate<int16_t>(kFft);
-    ir_[p] = arena->Allocate<int16_t>(kFft);
-    if (!fdl_[0][p] || !fdl_[1][p] || !ir_[p]) return false;
-  }
   work_ = arena->Allocate<float>(kFft);
   spec_ = arena->Allocate<float>(kFft);
-  acc_ = arena->Allocate<float>(kFft);
   for (int i = 0; i < 2; ++i) {
     for (int ch = 0; ch < 2; ++ch) {
       in_buf_[i][ch] = arena->Allocate<float>(B);
@@ -55,8 +84,21 @@ bool ConvolveMode::Init(Arena* arena) {
     if (!prev_[i] || !fdl_scale_[i]) return false;
   }
   ir_scale_ = arena->Allocate<float>(kMaxPartitions);
+  pending_scale_ = arena->Allocate<float>(kMaxPartitions);
   snap_scale_ = arena->Allocate<float>(kMaxPartitions);
-  if (!work_ || !spec_ || !acc_ || !ir_scale_ || !snap_scale_) return false;
+  if (!work_ || !spec_ || !ir_scale_ || !pending_scale_ || !snap_scale_) {
+    return false;
+  }
+  size_t fitted = 0;
+  for (size_t p = 0; p < partitions_; ++p) {
+    fdl_[0][p] = arena->Allocate<uint32_t>(kFft / 2);
+    fdl_[1][p] = arena->Allocate<uint32_t>(kFft / 2);
+    ir_[p] = arena->Allocate<uint32_t>(kFft / 2);
+    if (!fdl_[0][p] || !fdl_[1][p] || !ir_[p]) break;
+    fitted = p + 1;
+  }
+  if (fitted < 4) return false;
+  partitions_ = fitted;
 
   fill_ = 0;
   parity_ = 0;
@@ -104,73 +146,92 @@ void ConvolveMode::Process(const Controls& c, const FloatFrame* in,
   }
 }
 
-void ConvolveMode::Quantize(const float* spec, int16_t* dst, float* scale) {
+void ConvolveMode::Quantize(const float* spec, uint32_t* dst, float* scale) {
   float peak = 0.0f;
   for (size_t k = 0; k < kFft; ++k) {
     float a = fabsf(spec[k]);
     if (a > peak) peak = a;
   }
   if (peak < 1e-20f) {
-    memset(dst, 0, kFft * sizeof(int16_t));
+    memset(dst, 0, (kFft / 2) * sizeof(uint32_t));
     *scale = 0.0f;
     return;
   }
   const float q = 32767.0f / peak;
-  for (size_t k = 0; k < kFft; ++k) {
-    dst[k] = static_cast<int16_t>(RoundToInt(spec[k] * q));
+  for (size_t k = 0; k < kFft / 2; ++k) {
+    uint32_t re = static_cast<uint16_t>(RoundToInt(spec[2 * k] * q));
+    uint32_t im = static_cast<uint16_t>(RoundToInt(spec[2 * k + 1] * q));
+    dst[k] = re | (im << 16);
   }
   *scale = peak / 32767.0f;
 }
 
 void ConvolveMode::ProcessAudioBlock() {
   const int p = static_cast<int>(blocks_done_ & 1);
-  const float inv_n = 1.0f / static_cast<float>(kFft);
   for (int ch = 0; ch < 2; ++ch) {
     memcpy(work_, prev_[ch], B * sizeof(float));
     memcpy(work_ + B, in_buf_[p][ch], B * sizeof(float));
     memcpy(prev_[ch], in_buf_[p][ch], B * sizeof(float));
-    FftDirect(work_, spec_, kFft);
+    Fft(work_, spec_);
     Quantize(spec_, fdl_[ch][head_], &fdl_scale_[ch][head_]);
 
-    memset(acc_, 0, kFft * sizeof(float));
-    float* acc_re = acc_;
-    float* acc_im = acc_ + B;
-    for (size_t q = 0; q < active_partitions_; ++q) {
-      size_t slot = (head_ + partitions_ - q) % partitions_;
-      const float s = fdl_scale_[ch][slot] * ir_scale_[q];
-      if (s == 0.0f) continue;
-      const int16_t* x = fdl_[ch][slot];
-      const int16_t* h = ir_[q];
-      acc_re[0] += s * static_cast<float>(x[0]) * static_cast<float>(h[0]);
-      acc_im[0] += s * static_cast<float>(x[B]) * static_cast<float>(h[B]);
-      const int16_t* xi = x + B;
-      const int16_t* hi = h + B;
+    // spec_ becomes the accumulator (CMSIS order):
+    // sum over partitions q of X[head - q] * H[q], two partitions per pass.
+    float* a = spec_;
+    memset(a, 0, kFft * sizeof(float));
+    const size_t active = active_partitions_;
+    size_t q = 0;
+    for (; q + 1 < active; q += 2) {
+      size_t s0 = head_ >= q ? head_ - q : head_ + partitions_ - q;
+      size_t s1 = s0 == 0 ? partitions_ - 1 : s0 - 1;
+      const float g0 = fdl_scale_[ch][s0] * ir_scale_[q];
+      const float g1 = fdl_scale_[ch][s1] * ir_scale_[q + 1];
+      const uint32_t* x0 = fdl_[ch][s0];
+      const uint32_t* h0 = ir_[q];
+      const uint32_t* x1 = fdl_[ch][s1];
+      const uint32_t* h1 = ir_[q + 1];
+      a[0] += g0 * Lo(x0[0]) * Lo(h0[0]) + g1 * Lo(x1[0]) * Lo(h1[0]);
+      a[1] += g0 * Hi(x0[0]) * Hi(h0[0]) + g1 * Hi(x1[0]) * Hi(h1[0]);
       for (size_t k = 1; k < B; ++k) {
-        const float a = x[k], b = xi[k], c = h[k], d = hi[k];
-        acc_re[k] += s * (a * c - b * d);
-        acc_im[k] += s * (a * d + b * c);
+        const uint32_t xa = x0[k], ha = h0[k], xb = x1[k], hb = h1[k];
+        a[2 * k] += g0 * static_cast<float>(Smusd(xa, ha)) +
+            g1 * static_cast<float>(Smusd(xb, hb));
+        a[2 * k + 1] += g0 * static_cast<float>(Smuadx(xa, ha)) +
+            g1 * static_cast<float>(Smuadx(xb, hb));
       }
     }
-    FftInverse(acc_, work_, kFft);
-    float* o = out_buf_[p][ch];
-    for (size_t i = 0; i < B; ++i) o[i] = work_[B + i] * inv_n;
+    if (q < active) {
+      size_t s0 = head_ >= q ? head_ - q : head_ + partitions_ - q;
+      const float g0 = fdl_scale_[ch][s0] * ir_scale_[q];
+      const uint32_t* x0 = fdl_[ch][s0];
+      const uint32_t* h0 = ir_[q];
+      a[0] += g0 * Lo(x0[0]) * Lo(h0[0]);
+      a[1] += g0 * Hi(x0[0]) * Hi(h0[0]);
+      for (size_t k = 1; k < B; ++k) {
+        const uint32_t xa = x0[k], ha = h0[k];
+        a[2 * k] += g0 * static_cast<float>(Smusd(xa, ha));
+        a[2 * k + 1] += g0 * static_cast<float>(Smuadx(xa, ha));
+      }
+    }
+    Ifft(spec_, work_);
+    memcpy(out_buf_[p][ch], work_ + B, B * sizeof(float));
   }
   head_ = (head_ + 1) % partitions_;
 }
 
 void ConvolveMode::CaptureStep() {
-  const float inv_n = 1.0f / static_cast<float>(kFft);
   for (int k = 0; k < 8 && capture_left_ > 0; ++k) {
     size_t i = partitions_ - capture_left_;   // 0 = oldest
     size_t slot = (capture_head_ + i) % partitions_;
     const float sl = 0.5f * fdl_scale_[0][slot];
     const float sr = 0.5f * fdl_scale_[1][slot];
-    const int16_t* xl = fdl_[0][slot];
-    const int16_t* xr = fdl_[1][slot];
-    for (size_t j = 0; j < kFft; ++j) {
-      acc_[j] = static_cast<float>(xl[j]) * sl + static_cast<float>(xr[j]) * sr;
+    const uint32_t* xl = fdl_[0][slot];
+    const uint32_t* xr = fdl_[1][slot];
+    for (size_t j = 0; j < kFft / 2; ++j) {
+      spec_[2 * j] = Lo(xl[j]) * sl + Lo(xr[j]) * sr;
+      spec_[2 * j + 1] = Hi(xl[j]) * sl + Hi(xr[j]) * sr;
     }
-    FftInverse(acc_, work_, kFft);
+    Ifft(spec_, work_);
     float peak = 0.0f;
     for (size_t t = 0; t < B; ++t) {
       float a = fabsf(work_[B + t]);
@@ -185,7 +246,7 @@ void ConvolveMode::CaptureStep() {
       for (size_t t = 0; t < B; ++t) {
         dst[t] = static_cast<int16_t>(RoundToInt(work_[B + t] * q));
       }
-      snap_scale_[i] = peak / 32767.0f * inv_n;
+      snap_scale_[i] = peak / 32767.0f;
     }
     --capture_left_;
   }
@@ -304,41 +365,40 @@ void ConvolveMode::StartBuild(const IrParams& p) {
   gen_.lp = 0.0f;
   gen_.hp_lp = 0.0f;
   energy_ = 0.0f;
-  build_state_ = BUILD_ENERGY;
+  build_partition_ = 0;
+  const size_t parts = (ir_length_ + B - 1) / B;
+  if (parts > active_partitions_) active_partitions_ = parts;
+  build_state_ = BUILD_PARTITIONS;
 }
 
+// One pass: each partition is generated, transformed and quantised with its
+// own (unnormalised) scale kept in pending_scale_. While the build runs the
+// convolution keeps using the previous scales, which match the new data's
+// level closely; partitions that did not exist before stay silent. The
+// energy-normalised scales are committed when the last partition is done.
 void ConvolveMode::BuildStep(int max_partitions) {
-  if (build_state_ == BUILD_ENERGY) {
-    for (int k = 0; k < 4096 && gen_.n < ir_length_; ++k) {
-      float x = NextIrSample(&gen_);
-      energy_ += x * x;
-    }
-    if (gen_.n >= ir_length_) {
-      // Unit energy, then -6 dB: tonal input through a coloured IR builds up
-      // well above the level of white noise.
-      norm_ = energy_ > 1e-20f ? 0.5f / sqrtf(energy_) : 0.0f;
-      gen_.n = 0;
-      gen_.env = 1.0f;
-      gen_.lp = 0.0f;
-      gen_.hp_lp = 0.0f;
-      build_partition_ = 0;
-      size_t parts = (ir_length_ + B - 1) / B;
-      if (parts > active_partitions_) active_partitions_ = parts;
-      build_state_ = BUILD_PARTITIONS;
-    }
-    return;
-  }
   if (build_state_ != BUILD_PARTITIONS) return;
   const size_t parts = (ir_length_ + B - 1) / B;
   for (int k = 0; k < max_partitions && build_partition_ < parts; ++k) {
-    for (size_t t = 0; t < B; ++t) work_[t] = NextIrSample(&gen_) * norm_;
+    float e = 0.0f;
+    for (size_t t = 0; t < B; ++t) {
+      float x = NextIrSample(&gen_);
+      work_[t] = x;
+      e += x * x;
+    }
+    energy_ += e;
     memset(work_ + B, 0, B * sizeof(float));
-    FftDirect(work_, spec_, kFft);
-    Quantize(spec_, ir_[build_partition_], &ir_scale_[build_partition_]);
+    Fft(work_, spec_);
+    Quantize(spec_, ir_[build_partition_], &pending_scale_[build_partition_]);
     ++build_partition_;
   }
   if (build_partition_ >= parts) {
-    for (size_t q = parts; q < kMaxPartitions; ++q) ir_scale_[q] = 0.0f;
+    // Unit energy, then -6 dB: tonal input through a coloured IR builds up
+    // well above the level of white noise.
+    norm_ = energy_ > 1e-20f ? 0.5f / sqrtf(energy_) : 0.0f;
+    for (size_t q = 0; q < kMaxPartitions; ++q) {
+      ir_scale_[q] = q < parts ? pending_scale_[q] * norm_ : 0.0f;
+    }
     active_partitions_ = parts;
     built_params_ = pending_params_;
     build_state_ = BUILD_IDLE;
@@ -351,11 +411,11 @@ void ConvolveMode::BuildAll() {
 }
 
 bool ConvolveMode::ParamsChanged(const IrParams& a, const IrParams& b) const {
-  return fabsf(a.position - b.position) > 0.004f ||
-      fabsf(a.size - b.size) > 0.004f ||
-      fabsf(a.density - b.density) > 0.004f ||
-      fabsf(a.texture - b.texture) > 0.004f ||
-      fabsf(a.pitch - b.pitch) > 0.05f;
+  return fabsf(a.position - b.position) > 0.01f ||
+      fabsf(a.size - b.size) > 0.01f ||
+      fabsf(a.density - b.density) > 0.01f ||
+      fabsf(a.texture - b.texture) > 0.01f ||
+      fabsf(a.pitch - b.pitch) > 0.1f;
 }
 
 void ConvolveMode::Prepare() {
@@ -385,10 +445,10 @@ void ConvolveMode::Prepare() {
   cur.density = ctl_.density;
   cur.texture = ctl_.texture;
   cur.pitch = ctl_.pitch;
-  // Debounced: at most one rebuild start per ~21 ms (4 blocks).
+  // Debounced: at most one rebuild start per ~150 ms.
   if (force_build_ ||
       (ParamsChanged(cur, built_params_) &&
-       blocks_done_ - last_build_block_ >= 4)) {
+       blocks_done_ - last_build_block_ >= kRebuildInterval)) {
     force_build_ = false;
     last_build_block_ = blocks_done_;
     StartBuild(cur);

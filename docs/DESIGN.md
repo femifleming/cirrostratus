@@ -369,3 +369,14 @@ inversion around a mirror frequency, folding.
 - DENSITY: compression amount (macro). TEXTURE: saturation.
 - POSITION: tone tilt. SIZE: width. PITCH: output trim ±12 dB.
 - FREEZE: bypass (A/B). TRIG: auto-gain re-match.
+
+
+## Implementation notes (as built)
+
+- SPECTRAL / CROSS: own lean STFT (modes/lean_stft.h), FFT 2048 with hop
+  1024 and sine windows (2× overlap) to fit the CPU budget; 3072-sample
+  latency. CROSS synthesises mono.
+- STRETCH: hop 683 (3× overlap), complex-rotation resynthesis.
+- CONVOLVE: block 512, packed int16 SIMD multiply-accumulate (SMUSD/SMUADX),
+  IR up to 6656 samples (139 ms), rebuilds debounced to one per 150 ms.
+- All FFTs: CMSIS-DSP arm_rfft_fast_f32 (monsoon/dsp/cmsis).

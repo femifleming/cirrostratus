@@ -18,7 +18,7 @@ spots. Buffer: 0.62 s stereo or 1.24 s mono.
 | Save | the buffer |
 
 #### 2 · SPECTRAL — spectral freeze / resynthesis
-2048-point phase vocoder with peak-locked partials.
+2048-point phase vocoder with peak-locked partials (64 ms latency).
 
 | Control | |
 |---|---|
@@ -33,12 +33,12 @@ spots. Buffer: 0.62 s stereo or 1.24 s mono.
 
 #### 3 · CONVOLVE — freeze captures the impulse response
 Your own audio becomes the space the sound plays in. The impulse response
-(IR) can be up to 165 ms, and FEEDBACK makes it ring on much longer. The
+(IR) can be up to 139 ms, and FEEDBACK makes it ring on much longer. The
 mode starts with a small synthetic room so it sounds straight away.
 
 | Control | |
 |---|---|
-| FREEZE (on) / TRIG | capture a new IR from the last 165 ms of input |
+| FREEZE (on) / TRIG | capture a new IR from the last 139 ms of input |
 | POSITION | where in that capture the IR starts (bottom = newest) |
 | SIZE | IR length, with fade-out |
 | DENSITY | IR envelope: reverse swell ← as captured (noon) → faster decay |
@@ -73,7 +73,7 @@ ear makes the tone at Δ, a note that isn't in the signal.
 | FREEZE | drone of pure sine pairs at the held level |
 
 #### 6 · CROSS — left/right spectral morph
-Left input = modulator, right input = carrier. With only IN L patched,
+Left input = modulator, right input = carrier (64 ms latency). With only IN L patched,
 both sides are the same signal.
 
 | Control | |
@@ -87,8 +87,8 @@ both sides are the same signal.
 | TRIG | toggle holding the carrier |
 
 #### 7 · STRETCH — extreme time-stretch
-A phase vocoder with phase locking reads a recorded buffer slowly: 0.33 s
-stereo or 0.92 s mono.
+A phase vocoder with phase locking reads a recorded buffer slowly: 0.30 s
+stereo or 0.89 s mono.
 
 | Control | |
 |---|---|

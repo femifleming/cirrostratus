@@ -1,4 +1,10 @@
 // Mode 6 — CROSS: L/R spectral morph.
+//
+// Cost notes: three FFTs per hop (two analyses, one mono synthesis). With
+// the carrier live and untransposed, the output reuses the carrier's own
+// phases (a real gain per bin, no trig); otherwise the transposed / held
+// carrier is resynthesised with one sin/cos pair per partial (phase-locked
+// peak regions). atan2 runs only on the carrier's local maxima.
 
 #include "monsoon/dsp/modes/cross.h"
 
@@ -8,10 +14,17 @@ namespace monsoon {
 
 using namespace spectral_util;
 
+static const float kExpected =
+    static_cast<float>(CrossMode::kHop) / CrossMode::kFftSize;
+static const float kToBins =
+    static_cast<float>(CrossMode::kFftSize) / CrossMode::kHop;
+
 bool CrossMode::Init(Arena* arena) {
-  if (!stft_.Init(arena, kFftSize, kHop, this)) return false;
+  if (!stft_.Init(arena, LeanStft::JOINT_MONO_OUT, this)) return false;
+  car_prev_ = arena->Allocate<float>(kFftSize);
+  if (!car_prev_) return false;
   float** arrays[] = {
-    &env_l_, &env_r_, &car_mag_, &car_freq_, &car_phase_, &syn_phase_,
+    &env_l_, &env_r_, &car_mag_, &car_freq_, &syn_phase_,
     &out_mag_, &out_freq_, &smooth_l_, &smooth_r_
   };
   for (size_t i = 0; i < sizeof(arrays) / sizeof(arrays[0]); ++i) {
@@ -40,105 +53,107 @@ void CrossMode::SmoothBins(const float* in, float* out, float q) {
   prefix_[0] = 0.0f;
   prefix_[1] = 0.0f;
   for (size_t k = 1; k < kBins; ++k) prefix_[k + 1] = prefix_[k] + in[k];
-  for (size_t k = 1; k < kBins; ++k) {
-    int32_t w = 1 + static_cast<int32_t>(static_cast<float>(k) * q);
-    int32_t lo = static_cast<int32_t>(k) - w;
-    int32_t hi = static_cast<int32_t>(k) + w + 1;
+  // Half-width grows with k (constant Q); tracked incrementally.
+  const int32_t n = static_cast<int32_t>(kBins);
+  float wf = 1.0f + q;
+  for (int32_t k = 1; k < n; ++k, wf += q) {
+    const int32_t w = static_cast<int32_t>(wf);
+    int32_t lo = k - w;
+    int32_t hi = k + w + 1;
     if (lo < 1) lo = 1;
-    if (hi > static_cast<int32_t>(kBins)) hi = kBins;
+    if (hi > n) hi = n;
     out[k] = (prefix_[hi] - prefix_[lo]) / static_cast<float>(hi - lo);
   }
 }
 
-void CrossMode::Transform(float* spectrum[2], size_t fft_size) {
-  (void)fft_size;
+void CrossMode::TransformJoint(float* l, float* r) {
   const Controls c = ctl_;
   const bool freeze_mod = c.freeze;
   const bool hold_car = hold_carrier_;
-  float* lre = spectrum[0];
-  float* lim = spectrum[0] + kFftSize / 2;
-  float* rre = spectrum[1];
-  float* rim = spectrum[1] + kFftSize / 2;
 
-  // Envelope follower speeds (per 10.7 ms frame), from TEXTURE.
+  // Envelope follower speeds (per 21 ms frame), from TEXTURE.
   const float t = Clamp(c.texture, 0.0f, 1.0f);
-  const float a_up = 1.0f - t * 0.9f;
-  const float a_dn = 1.0f - (0.3f + 0.69f * t);
-  const float expected = static_cast<float>(kHop) / kFftSize;
-  const float to_bins = static_cast<float>(kFftSize) / kHop;
+  const float a_up = 1.0f - t * 0.85f;
+  const float a_dn = 1.0f - (0.45f + 0.53f * t);
 
   // ---- Analysis.
   for (size_t k = 1; k < kBins; ++k) {
     if (!freeze_mod) {
-      float m = sqrtf(lre[k] * lre[k] + lim[k] * lim[k]);
-      float e = env_l_[k];
+      const float lr = l[2 * k], li = l[2 * k + 1];
+      const float m = sqrtf(lr * lr + li * li);
+      const float e = env_l_[k];
       env_l_[k] = e + (m > e ? a_up : a_dn) * (m - e);
     }
-    float r = rre[k], i = rim[k];
-    float ph = FastAtan2Cycles(-i, r);
-    float dphi = WrapCycles(ph - car_phase_[k] - expected * k);
-    car_phase_[k] = ph;
     if (!hold_car) {
-      car_mag_[k] = sqrtf(r * r + i * i);
-      car_freq_[k] = static_cast<float>(k) + dphi * to_bins;
+      const float rr = r[2 * k], ri = r[2 * k + 1];
+      car_mag_[k] = sqrtf(rr * rr + ri * ri);
     }
+  }
+  if (!hold_car) {
+    const float* cm = car_mag_;
+    for (size_t k = 1; k + 1 < kBins; ++k) {
+      const float m = cm[k];
+      if (m > cm[k - 1] && m >= cm[k + 1]) {
+        const float re = r[2 * k], im = r[2 * k + 1];
+        const float pr = car_prev_[2 * k], pi = car_prev_[2 * k + 1];
+        float d = FastAtan2Cycles(im * pr - re * pi, re * pr + im * pi);
+        car_freq_[k] = static_cast<float>(k) +
+            WrapCycles(d - kExpected * static_cast<float>(k)) * kToBins;
+      } else {
+        car_freq_[k] = static_cast<float>(k);
+      }
+    }
+    memcpy(car_prev_, r, kFftSize * sizeof(float));
   }
 
   // ---- Carrier transposition (PITCH).
   const float ratio = SemitonesToRatio(Clamp(c.pitch, -48.0f, 48.0f));
   const bool direct_phase = !hold_car && fabsf(ratio - 1.0f) < 1e-3f;
-  memset(out_mag_, 0, kBins * sizeof(float));
-  memset(out_freq_, 0, kBins * sizeof(float));
   float* out_mag = out_mag_;
   float* out_freq = out_freq_;
-  const float* car_mag = car_mag_;
-  const float* car_freq = car_freq_;
-  // Peak regions move as blocks, so each carrier partial keeps its lobe.
-  ForEachPeakRegion(car_mag_, kBins, [&](size_t lo, size_t hi, size_t pk) {
-    const float f = car_freq[pk] * ratio;
-    const int32_t d = RoundToInt(static_cast<float>(pk) * ratio) -
-        static_cast<int32_t>(pk);
-    for (size_t k = lo; k <= hi; ++k) {
-      int32_t dst = static_cast<int32_t>(k) + d;
-      if (dst < 1 || dst >= static_cast<int32_t>(kBins) - 1) continue;
-      out_mag[dst] += car_mag[k];
-      out_freq[dst] += car_mag[k] * f;
-    }
-  });
-
-  // Output phases: the carrier's own (untransposed, live), or locked to the
-  // peaks of the transposed / held carrier.
   if (direct_phase) {
-    for (size_t k = 1; k < kBins; ++k) syn_phase_[k] = car_phase_[k];
+    memcpy(out_mag, car_mag_, kBins * sizeof(float));
   } else {
-    float* syn = syn_phase_;
-    ForEachPeakRegion(out_mag_, kBins, [&](size_t lo, size_t hi, size_t pk) {
-      float m = out_mag[pk];
-      float f = m > 1e-12f ? out_freq[pk] / m : static_cast<float>(pk);
-      LockPhases(lo, hi, pk, syn[pk] + f * expected, syn);
+    memset(out_mag, 0, kBins * sizeof(float));
+    memset(out_freq, 0, kBins * sizeof(float));
+    const float* car_mag = car_mag_;
+    const float* car_freq = car_freq_;
+    ForEachPeakRegion(car_mag_, kBins, [&](size_t lo, size_t hi, size_t pk) {
+      const float f = car_freq[pk] * ratio;
+      const int32_t d = RoundToInt(static_cast<float>(pk) * ratio) -
+          static_cast<int32_t>(pk);
+      for (size_t k = lo; k <= hi; ++k) {
+        int32_t dst = static_cast<int32_t>(k) + d;
+        if (dst < 1 || dst >= static_cast<int32_t>(kBins) - 1) continue;
+        out_mag[dst] += car_mag[k];
+        out_freq[dst] += car_mag[k] * f;
+      }
     });
   }
 
   // ---- Spectral envelopes (DENSITY = resolution).
   const float q = 0.01f + Clamp(c.density, 0.0f, 1.0f) * 0.25f;
   SmoothBins(env_l_, smooth_l_, q);
-  SmoothBins(out_mag_, smooth_r_, q);
+  SmoothBins(out_mag, smooth_r_, q);
   float mean_r = 0.0f;
   for (size_t k = 1; k < kBins; ++k) {
-    float e = env_r_[k];
-    float m = smooth_r_[k];
+    const float e = env_r_[k];
+    const float m = smooth_r_[k];
     env_r_[k] = e + (m > e ? a_up : a_dn) * (m - e);
     mean_r += env_r_[k];
   }
   const float eps = mean_r * (0.01f / kBins) + 1e-9f;
 
-  // ---- Combine. POSITION: vocoder -> geometric morph -> L mags.
+  // ---- Combine. POSITION: vocoder -> geometric morph -> L magnitudes.
   const float shift = FastExp2((Clamp(c.size, 0.0f, 1.0f) - 0.5f) * 2.0f);
   const float inv_shift = 1.0f / shift;
   const float p = Clamp(c.position, 0.0f, 1.0f);
-  for (size_t k = 1; k < kBins; ++k) {
-    // Formant-shifted modulator envelope.
-    float src = static_cast<float>(k) * inv_shift;
+  const bool first_half = p < 0.5f;
+  const float tm = first_half ? p * 2.0f : (p - 0.5f) * 2.0f;
+  float* m_out = prefix_;  // free again after the smoothing
+  m_out[0] = 0.0f;
+  float src = inv_shift;
+  for (size_t k = 1; k < kBins; ++k, src += inv_shift) {
     float w_l = 0.0f;
     if (src < static_cast<float>(kBins - 1)) {
       int32_t i0 = static_cast<int32_t>(src);
@@ -146,25 +161,48 @@ void CrossMode::Transform(float* spectrum[2], size_t fft_size) {
       if (i0 < 1) { i0 = 1; fr = 0.0f; }
       w_l = smooth_l_[i0] + fr * (smooth_l_[i0 + 1] - smooth_l_[i0]);
     }
-    float car = out_mag_[k];
-    float voc = w_l * car / (env_r_[k] + eps);
-    float l = env_l_[k];
-    float geo = sqrtf(l * car);
+    const float car = out_mag[k];
+    const float l_mag = env_l_[k];
+    const float geo = sqrtf(l_mag * car);
     float m;
-    if (p < 0.5f) {
-      m = voc + (p * 2.0f) * (geo - voc);
+    if (first_half) {
+      const float voc = w_l * car / (env_r_[k] + eps);
+      m = voc + tm * (geo - voc);
     } else {
-      m = geo + (p - 0.5f) * 2.0f * (l - geo);
+      m = geo + tm * (l_mag - geo);
     }
-
-    const float u = SafeCycles(syn_phase_[k]);
-    float re = m * FastCos(u);
-    float im = -m * FastSin(u);
-    lre[k] = re;
-    lim[k] = im;
+    m_out[k] = m;
   }
-  // Mono out: same spectrum on both sides.
-  memcpy(spectrum[1], spectrum[0], kFftSize * sizeof(float));
+
+  // ---- Output phases.
+  if (direct_phase) {
+    // The live carrier's own phases: a real gain per bin.
+    for (size_t k = 1; k < kBins; ++k) {
+      const float cm = car_mag_[k];
+      const float g = cm > 1e-20f ? m_out[k] / cm : 0.0f;
+      l[2 * k] = r[2 * k] * g;
+      l[2 * k + 1] = r[2 * k + 1] * g;
+    }
+    return;
+  }
+  memset(l, 0, kFftSize * sizeof(float));
+  float* syn = syn_phase_;
+  ForEachPeakRegion(out_mag, kBins, [&](size_t lo, size_t hi, size_t pk) {
+    const float mp = out_mag[pk];
+    const float f = mp > 1e-12f ? out_freq[pk] / mp : static_cast<float>(pk);
+    const float ph = WrapCycles(syn[pk] + f * kExpected);
+    const float opposite = WrapCycles(ph + 0.5f);
+    const float u = SafeCycles(ph);
+    const float cs = FastCos(u);
+    const float sn = FastSin(u);
+    for (size_t k = lo; k <= hi; ++k) {
+      const bool odd = ((k - pk) & 1) != 0;
+      const float mk = odd ? -m_out[k] : m_out[k];
+      l[2 * k] = mk * cs;
+      l[2 * k + 1] = mk * sn;
+      syn[k] = odd ? opposite : ph;
+    }
+  });
 }
 
 }  // namespace monsoon

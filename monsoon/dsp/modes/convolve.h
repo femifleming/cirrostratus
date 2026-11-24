@@ -1,13 +1,15 @@
 // Mode 3 — CONVOLVE: convolution; FREEZE / TRIG capture the impulse response.
 //
-// Uniform partitioned convolution (overlap-save), block 256, FFT 512.
-// The input's frequency-domain delay line (int16 spectra, one scale per
-// partition) doubles as the capture memory: capturing an IR runs the
-// inverse FFT of the last ~0.17 s of stored input spectra into a 16-bit
+// Uniform partitioned convolution (overlap-save), block 512, FFT 1024.
+// Spectra are stored as packed int16 (re, im) pairs in CMSIS order, one
+// float scale per partition, so the complex multiply-accumulate uses the
+// Cortex-M4's dual 16-bit multiplies (SMUSD / SMUADX).
+// The input's frequency-domain delay line doubles as the capture memory: capturing an IR runs the
+// inverse FFT of the last ~0.15 s of stored input spectra into a 16-bit
 // snapshot, so no separate live buffer is needed. Knob changes rebuild the
 // IR spectra from that snapshot, a few partitions per Prepare() call.
 //
-// Latency: 2 x 256 samples (10.7 ms). All FFT work happens in Prepare().
+// Latency: 2 x 512 samples (21 ms). All FFT work happens in Prepare().
 
 #ifndef MONSOON_DSP_MODES_CONVOLVE_H_
 #define MONSOON_DSP_MODES_CONVOLVE_H_
@@ -18,9 +20,9 @@ namespace monsoon {
 
 class ConvolveMode : public Mode {
  public:
-  static const size_t kBlock = 256;
+  static const size_t kBlock = 512;
   static const size_t kFft = 2 * kBlock;
-  static const size_t kMaxPartitions = 32;   // 8192-sample IR (0.17 s)
+  static const size_t kMaxPartitions = 16;   // up to 8192 samples (0.17 s)
 
   const char* name() const { return "convolve"; }
   bool Init(Arena* arena);
@@ -42,7 +44,7 @@ class ConvolveMode : public Mode {
   };
 
  private:
-  enum BuildState { BUILD_IDLE, BUILD_ENERGY, BUILD_PARTITIONS };
+  enum BuildState { BUILD_IDLE, BUILD_PARTITIONS };
 
   struct Generator {
     size_t n;
@@ -59,22 +61,22 @@ class ConvolveMode : public Mode {
   float Raw(float pos) const;
   float NextIrSample(Generator* g) const;
   void MakeSyntheticRoom();
-  void Quantize(const float* spec, int16_t* dst, float* scale);
+  void Quantize(const float* spec, uint32_t* dst, float* scale);
   bool ParamsChanged(const IrParams& a, const IrParams& b) const;
 
   size_t partitions_;
-  int16_t* fdl_[2][kMaxPartitions];
-  int16_t* ir_[kMaxPartitions];
+  uint32_t* fdl_[2][kMaxPartitions];  // kFft / 2 packed (re, im) words
+  uint32_t* ir_[kMaxPartitions];
   float* fdl_scale_[2];
   float* ir_scale_;
+  float* pending_scale_;      // unnormalised scales of the IR being built
   int16_t* snapshot_;
   float* snap_scale_;          // one scale per kBlock of snapshot
   float* in_buf_[2][2];        // [parity][channel] kBlock each
   float* out_buf_[2][2];
   float* prev_[2];
   float* work_;
-  float* spec_;
-  float* acc_;
+  float* spec_;               // forward spectrum, then the accumulator
 
   // ISR side.
   size_t fill_;
