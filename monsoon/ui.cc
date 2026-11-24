@@ -86,6 +86,7 @@ void Ui::OnPress(uint8_t id) {
   switch (id) {
     case SWITCH_FREEZE:
       if (page_ == UI_PAGE_MODE_MENU) {
+        if (menu_mode_ >= MODE_LAST) menu_mode_ = ModeFromPosition();
         uint8_t n = engine_->num_options(static_cast<ModeId>(menu_mode_));
         menu_option_ = (menu_option_ + 1) % n;
         option_flash_until_ = system_clock.milliseconds() + 1500;
@@ -141,6 +142,8 @@ void Ui::OnLongPress(uint8_t id) {
     menu_mode_ = engine_->mode();
     menu_bank_ = menu_mode_ / kModesPerBank;
     menu_option_ = engine_->option();
+    menu_follow_ = false;
+    menu_pos0_ = cv_scaler_->raw_position();
     cv_scaler_->set_hold_position(true);
     page_ = UI_PAGE_MODE_MENU;
   } else if (id == SWITCH_WRITE) {
@@ -192,6 +195,7 @@ void Ui::OnRelease(uint8_t id, uint32_t duration) {
         // Tap WRITE in the menu: other bank. DoEvents re-reads POSITION.
         menu_bank_ = menu_bank_ ? 0 : 1;
         if (menu_bank_ * kModesPerBank >= MODE_LAST) menu_bank_ = 0;
+        menu_follow_ = true;
         menu_mode_ = 0xff;
       } else if (page_ == UI_PAGE_VU_METER || page_ == UI_PAGE_KNOBS) {
         previous_page_ = page_;
@@ -266,6 +270,13 @@ void Ui::SaveSlot() {
 
 void Ui::DoEvents() {
   if (page_ == UI_PAGE_MODE_MENU) {
+    // Only follow POSITION once it has really moved (or the bank changed),
+    // so opening the menu just to look never changes the mode.
+    if (!menu_follow_ && fabsf(cv_scaler_->raw_position() - menu_pos0_) > 0.03f) {
+      menu_follow_ = true;
+    }
+  }
+  if (page_ == UI_PAGE_MODE_MENU && menu_follow_) {
     uint8_t m = ModeFromPosition();
     if (m != menu_mode_) {
       menu_mode_ = m;
