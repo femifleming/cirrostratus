@@ -6,6 +6,18 @@
 // phases (Paulstretch smear). Uses its own lean STFT (it never analyses
 // the live input, so it needs no input ring), which frees memory for the
 // buffer.
+//
+// Per-mode knobs:
+//   BAL  noon = v1.0. Left: the read slows, stands still at 9 o'clock and
+//        runs backwards at full left (at the SIZE stretch). Right: scatter,
+//        the read window jumps to random spots up to half the buffer away,
+//        up to ~10 jumps per second.
+//   FBK  re-record: the output is mixed back into the recording (x 0.85
+//        at full, input trimmed to keep the level, soft-clipped), so
+//        stretches get stretched again and smear into drones. Nothing is
+//        recorded while FREEZE is on.
+//   RVB  octave halo: every bin also sounds an octave up (phase-doubled, so
+//        it stays coherent), up to -3 dB: a shimmer over the stretch.
 
 #ifndef MONSOON_DSP_MODES_STRETCH_H_
 #define MONSOON_DSP_MODES_STRETCH_H_

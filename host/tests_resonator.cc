@@ -175,3 +175,71 @@ MONSOON_TEST(resonator_frozen_jawari_does_not_creep) {
   CHECK(b > a * 0.1f, "but it should still sustain");
   return true;
 }
+
+MONSOON_TEST(resonator_bal_fbk_rvb_do_what_they_say) {
+  // BAL: tuning offsets, read back from the strings.
+  {
+    Module m;
+    CHECK(m.SetMode(MODE_RESONATOR), "init");
+    auto* r = static_cast<ResonatorMode*>(m.engine().mode_instance(MODE_RESONATOR));
+    auto tune = [&](float bal, int i) {
+      Controls c = Base();
+      c.size = 0.75f;  // harmonic series 1..8
+      c.bal = bal;
+      m.Render(Silence(0.02f), [&](size_t) { return c; });
+      return r->string_frequency(i);
+    };
+    float f1 = tune(0.5f, 1), f1l = tune(0.0f, 1);
+    float f7 = tune(0.5f, 7), f7r = tune(1.0f, 7);
+    float det = 1200.0f * std::log2(f1l / f1);
+    float str = 1200.0f * std::log2(f7r / f7);
+    std::printf("    BAL: left detunes string 2 by %+.1f cents; right stretches the "
+                "3-octave string by %+.1f cents\n", det, str);
+    CHECK(std::fabs(det - 25.0f) < 0.5f, "detune %.1f", det);
+    CHECK(std::fabs(str - 360.0f) < 2.0f, "stretch %.1f", str);
+  }
+
+  // FBK: energy sloshes between neighbouring strings. Even strings lean
+  // left, odd ones right, so the L/R balance starts to swing.
+  float swing[2];
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Base();
+    c.size = 0.0f;       // unison / octave pairs
+    c.density = 0.8f;
+    c.fbk = k == 0 ? 0.0f : 1.0f;
+    auto out = Pluck(c, 3.0f);
+    double sum = 0, sum2 = 0;
+    int n = 0;
+    for (size_t i = 9600; i + 960 <= out.size(); i += 960) {
+      double el = 0, er = 0;
+      for (size_t j = i; j < i + 960; ++j) {
+        el += out[j].l * out[j].l;
+        er += out[j].r * out[j].r;
+      }
+      double x = 10.0 * std::log10((el + 1e-20) / (er + 1e-20));
+      sum += x;
+      sum2 += x * x;
+      ++n;
+    }
+    swing[k] = float(std::sqrt(sum2 / n - (sum / n) * (sum / n)));
+  }
+  std::printf("    FBK: L/R balance swings by %.2f dB (sd) uncoupled, %.2f dB coupled\n",
+              swing[0], swing[1]);
+  CHECK(swing[1] > 2.0f * swing[0] && swing[1] > 1.0f, "no energy exchange");
+
+  // RVB: the body keeps sounding after short strings have died away.
+  float tail[2], level[2];
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Base();
+    c.density = 0.0f;    // 0.2 s strings
+    c.rvb = k == 0 ? 0.0f : 1.0f;
+    auto out = Pluck(c, 1.0f);
+    level[k] = Measure(out, 0, 9600).rms;
+    tail[k] = Measure(out, 19200, 28800).rms;  // 0.4-0.6 s
+  }
+  std::printf("    RVB: pluck %.1f -> %.1f dB, 0.4-0.6 s tail %.1f -> %.1f dB\n",
+              Db(level[0]), Db(level[1]), Db(tail[0]), Db(tail[1]));
+  CHECK(tail[1] > 4.0f * tail[0], "no body tail");
+  CHECK(level[1] < 2.0f * level[0], "body much louder");
+  return true;
+}

@@ -7,6 +7,15 @@
 
 namespace monsoon {
 
+// Arena::Allocate out of line: Init() calls it many times and flash is
+// tight (same allocations, same order).
+static __attribute__((noinline)) void* Grab(Arena* arena, size_t bytes) {
+  return arena->Allocate(bytes);
+}
+template<typename T> static inline T* Grab(Arena* arena, size_t n) {
+  return static_cast<T*>(Grab(arena, n * sizeof(T)));
+}
+
 using namespace spectral_util;
 
 static const size_t B = ConvolveMode::kBlock;
@@ -69,31 +78,31 @@ bool ConvolveMode::Init(Arena* arena) {
 
   // Biggest first: the snapshot (one contiguous block), then the fixed
   // buffers, then as many partitions as still fit.
-  snapshot_ = arena->Allocate<int16_t>(partitions_ * B);
+  snapshot_ = Grab<int16_t>(arena, partitions_ * B);
   if (!snapshot_) return false;
-  work_ = arena->Allocate<float>(kFft);
-  spec_ = arena->Allocate<float>(kFft);
+  work_ = Grab<float>(arena, kFft);
+  spec_ = Grab<float>(arena, kFft);
   for (int i = 0; i < 2; ++i) {
     for (int ch = 0; ch < 2; ++ch) {
-      in_buf_[i][ch] = arena->Allocate<float>(B);
-      out_buf_[i][ch] = arena->Allocate<float>(B);
+      in_buf_[i][ch] = Grab<float>(arena, B);
+      out_buf_[i][ch] = Grab<float>(arena, B);
       if (!in_buf_[i][ch] || !out_buf_[i][ch]) return false;
     }
-    prev_[i] = arena->Allocate<float>(B);
-    fdl_scale_[i] = arena->Allocate<float>(kMaxPartitions);
+    prev_[i] = Grab<float>(arena, B);
+    fdl_scale_[i] = Grab<float>(arena, kMaxPartitions);
     if (!prev_[i] || !fdl_scale_[i]) return false;
   }
-  ir_scale_ = arena->Allocate<float>(kMaxPartitions);
-  pending_scale_ = arena->Allocate<float>(kMaxPartitions);
-  snap_scale_ = arena->Allocate<float>(kMaxPartitions);
+  ir_scale_ = Grab<float>(arena, kMaxPartitions);
+  pending_scale_ = Grab<float>(arena, kMaxPartitions);
+  snap_scale_ = Grab<float>(arena, kMaxPartitions);
   if (!work_ || !spec_ || !ir_scale_ || !pending_scale_ || !snap_scale_) {
     return false;
   }
   size_t fitted = 0;
   for (size_t p = 0; p < partitions_; ++p) {
-    fdl_[0][p] = arena->Allocate<uint32_t>(kFft / 2);
-    fdl_[1][p] = arena->Allocate<uint32_t>(kFft / 2);
-    ir_[p] = arena->Allocate<uint32_t>(kFft / 2);
+    fdl_[0][p] = Grab<uint32_t>(arena, kFft / 2);
+    fdl_[1][p] = Grab<uint32_t>(arena, kFft / 2);
+    ir_[p] = Grab<uint32_t>(arena, kFft / 2);
     if (!fdl_[0][p] || !fdl_[1][p] || !ir_[p]) break;
     fitted = p + 1;
   }
@@ -116,6 +125,8 @@ bool ConvolveMode::Init(Arena* arena) {
   build_state_ = BUILD_IDLE;
   force_build_ = false;
   last_build_block_ = 0;
+  smear_ = built_smear_ = 0.0f;
+  env_fast_ = env_slow_ = 0.0f;
 
   MakeSyntheticRoom();
   built_params_.position = 0.5f;
@@ -133,9 +144,29 @@ void ConvolveMode::Process(const Controls& c, const FloatFrame* in,
   ctl_ = c;
   if ((c.freeze && !prev_freeze_) || c.trigger) capture_request_ = true;
   prev_freeze_ = c.freeze;
+  // BAL: a transient detector (fast vs slow envelope of the mid signal)
+  // splits the input into attack and body; one side of the knob fades
+  // the other part out of what reaches the convolution.
+  const float bal = KnobBipolar(c.bal);
+  const float keep_body = bal < 0.0f ? 1.0f + bal : 1.0f;
+  const float keep_attack = bal > 0.0f ? 1.0f - bal : 1.0f;
+  float ef = env_fast_, es = env_slow_;
   for (size_t i = 0; i < n; ++i) {
-    in_buf_[parity_][0][fill_] = in[i].l;
-    in_buf_[parity_][1][fill_] = in[i].r;
+    float l = in[i].l, r = in[i].r;
+    if (bal != 0.0f) {
+      const float a = fabsf(l + r);
+      // Two peak followers, same 50 ms release; attack 0.1 ms vs 14 ms.
+      ef += (a > ef ? 0.3f : 0.0004f) * (a - ef);
+      es += (a > es ? 0.0015f : 0.0004f) * (a - es);
+      // 1 at an onset, 0 once the slow follower is within 20 % (~25 ms).
+      float t = 2.0f * (ef - 1.2f * es) / (ef + 1e-6f);
+      t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+      const float g = keep_body + t * (keep_attack - keep_body);
+      l *= g;
+      r *= g;
+    }
+    in_buf_[parity_][0][fill_] = l;
+    in_buf_[parity_][1][fill_] = r;
     out[i].l = out_buf_[parity_][0][fill_];
     out[i].r = out_buf_[parity_][1][fill_];
     if (++fill_ >= B) {
@@ -144,6 +175,8 @@ void ConvolveMode::Process(const Controls& c, const FloatFrame* in,
       ++blocks_ready_;
     }
   }
+  env_fast_ = ef;
+  env_slow_ = es;
 }
 
 void ConvolveMode::Quantize(const float* spec, uint32_t* dst, float* scale) {
@@ -330,12 +363,37 @@ void ConvolveMode::SetupGenerator() {
   }
 }
 
+// RVB: the IR plus decaying, sign-alternating echoes of itself (delays in
+// IR samples, 3 -> 97 ms; mutually prime-ish so they don't comb).
+static const int kSmearTaps = 8;
+static const uint16_t kSmearDelay[kSmearTaps] = {
+  139, 254, 427, 686, 1109, 1790, 2875, 4642
+};
+
+float ConvolveMode::SmearedRaw(size_t n) const {
+  float x = Raw(start_ + static_cast<float>(n) * rate_);
+  if (smear_ > 0.0f) {
+    // The echoes read the nearest sample (no interpolation): they are a
+    // diffuse wash, and this keeps a smeared rebuild cheap.
+    const int32_t last = static_cast<int32_t>(partitions_ * B) - 1;
+    float g = smear_;
+    for (int t = 0; t < kSmearTaps && n >= kSmearDelay[t]; ++t) {
+      int32_t j = static_cast<int32_t>(
+          start_ + static_cast<float>(n - kSmearDelay[t]) * rate_ + 0.5f);
+      if (j > last) j = last;
+      x += g * snapshot_[j] * snap_scale_[j / B];
+      g *= -0.85f;
+    }
+  }
+  return x;
+}
+
 float ConvolveMode::NextIrSample(Generator* g) const {
   const size_t n = g->n++;
   if (n >= ir_length_) return 0.0f;
-  float x = Raw(start_ + static_cast<float>(n) * rate_);
+  float x = SmearedRaw(n);
   if (reverse_ > 0.0f) {
-    float y = Raw(start_ + static_cast<float>(ir_length_ - 1 - n) * rate_);
+    float y = SmearedRaw(ir_length_ - 1 - n);
     x += reverse_ * (y - x);
   }
   x *= g->env;
@@ -401,6 +459,7 @@ void ConvolveMode::BuildStep(int max_partitions) {
     }
     active_partitions_ = parts;
     built_params_ = pending_params_;
+    built_smear_ = smear_;
     build_state_ = BUILD_IDLE;
   }
 }
@@ -436,7 +495,9 @@ void ConvolveMode::Prepare() {
     return;
   }
   if (build_state_ != BUILD_IDLE) {
-    BuildStep(4);
+    // A smeared IR costs nine reads per sample: build it in smaller steps
+    // so a Prepare() call stays well inside one 512-sample block.
+    BuildStep(smear_ > 0.0f ? 1 : 4);
     return;
   }
   IrParams cur;
@@ -445,12 +506,16 @@ void ConvolveMode::Prepare() {
   cur.density = ctl_.density;
   cur.texture = ctl_.texture;
   cur.pitch = ctl_.pitch;
+  float smear = Clamp(ctl_.rvb, 0.0f, 1.0f);
+  if (smear < 0.01f) smear = 0.0f;
   // Debounced: at most one rebuild start per ~150 ms.
   if (force_build_ ||
-      (ParamsChanged(cur, built_params_) &&
+      ((ParamsChanged(cur, built_params_) ||
+        fabsf(smear - built_smear_) > 0.01f) &&
        blocks_done_ - last_build_block_ >= kRebuildInterval)) {
     force_build_ = false;
     last_build_block_ = blocks_done_;
+    smear_ = smear;
     StartBuild(cur);
   }
 }

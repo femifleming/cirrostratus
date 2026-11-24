@@ -6,6 +6,15 @@
 
 namespace monsoon {
 
+// Arena::Allocate out of line: Init() calls it many times and flash is
+// tight (same allocations, same order).
+static __attribute__((noinline)) void* Grab(Arena* arena, size_t bytes) {
+  return arena->Allocate(bytes);
+}
+template<typename T> static inline T* Grab(Arena* arena, size_t n) {
+  return static_cast<T*>(Grab(arena, n * sizeof(T)));
+}
+
 static const size_t kMaxBufferBytes = 118 * 1024;
 
 float StretchMode::AdvancePerHop(float size) {
@@ -31,17 +40,17 @@ bool StretchMode::Init(Arena* arena) {
     inst_[ch] = smear_[ch] = NULL;
   }
   for (int ch = 0; ch < channels_; ++ch) {
-    ring_[ch] = arena->Allocate<float>(ring_size_);
+    ring_[ch] = Grab<float>(arena, ring_size_);
     if (!ring_[ch]) return false;
   }
-  frame_ = arena->Allocate<float>(kFftSize);
-  spectrum_ = arena->Allocate<float>(kFftSize);
+  frame_ = Grab<float>(arena, kFftSize);
+  spectrum_ = Grab<float>(arena, kFftSize);
   if (!frame_ || !spectrum_) return false;
   for (int ch = 0; ch < channels_; ++ch) {
-    inst_[ch] = arena->Allocate<float>(kBins);
-    smear_[ch] = arena->Allocate<float>(kBins);
-    ref_[ch] = arena->Allocate<int16_t>(2 * kBins);
-    synth_phase_[ch] = arena->Allocate<uint16_t>(kBins);
+    inst_[ch] = Grab<float>(arena, kBins);
+    smear_[ch] = Grab<float>(arena, kBins);
+    ref_[ch] = Grab<int16_t>(arena, 2 * kBins);
+    synth_phase_[ch] = Grab<uint16_t>(arena, kBins);
     if (!inst_[ch] || !smear_[ch] || !ref_[ch] || !synth_phase_[ch]) {
       return false;
     }
@@ -76,12 +85,6 @@ void StretchMode::Process(const Controls& c, const FloatFrame* in,
   controls_ = c;
   if (c.trigger && !previous_trigger_) jump_pending_ = true;
   previous_trigger_ = c.trigger;
-  if (!c.freeze) {
-    for (size_t i = 0; i + kBlockSize <= n; i += kBlockSize) {
-      buffer_.WriteBlock(in + i);
-    }
-    written_ += static_cast<uint32_t>(n);
-  }
   const bool stereo = channels_ == 2;
   for (size_t i = 0; i < n; ++i) {
     float l = ring_[0][pos_];
@@ -99,6 +102,25 @@ void StretchMode::Process(const Controls& c, const FloatFrame* in,
       ++hops_ready_;
     }
   }
+  if (!c.freeze) {
+    // FBK: the output goes back into the recording with the input. The
+    // input is trimmed so the (incoherent) sum keeps the input's power.
+    const float fb = Clamp(c.fbk, 0.0f, 1.0f) * 0.85f;
+    const float trim = fb > 0.0f ? sqrtf(1.0f - fb * fb) : 1.0f;
+    FloatFrame mix[kBlockSize];
+    for (size_t i = 0; i + kBlockSize <= n; i += kBlockSize) {
+      const FloatFrame* src = in + i;
+      if (fb > 0.0f) {
+        for (size_t j = 0; j < kBlockSize; ++j) {
+          mix[j].l = SoftClip(in[i + j].l * trim + fb * out[i + j].l);
+          mix[j].r = SoftClip(in[i + j].r * trim + fb * out[i + j].r);
+        }
+        src = mix;
+      }
+      buffer_.WriteBlock(src);
+    }
+    written_ += static_cast<uint32_t>(n);
+  }
 }
 
 void StretchMode::Prepare() {
@@ -110,7 +132,10 @@ void StretchMode::Prepare() {
   const Controls c = controls_;
   const float n = static_cast<float>(kFftSize);
   const float hop = static_cast<float>(kHop);
-  const float advance = AdvancePerHop(c.size);
+  // BAL left scales the read speed from 1 through 0 (9 o'clock) to -1.
+  const float bal = KnobBipolar(c.bal);
+  const float advance = bal < 0.0f ? AdvancePerHop(c.size) * (1.0f + 2.0f * bal)
+                                   : AdvancePerHop(c.size);
 
   // Read window placement, as a delay (frame end behind the write head).
   const float filled = static_cast<float>(buffer_.filled());
@@ -135,6 +160,12 @@ void StretchMode::Prepare() {
     drift_ = -c.position * span + back;
     have_ref_ = false;
   }
+  // BAL right: scatter, now and then jump somewhere else (no random
+  // numbers are drawn at noon or left of it).
+  if (bal > 0.0f && rng_.Float() < bal * 0.15f) {
+    drift_ += rng_.Bipolar() * bal * 0.5f * span;
+    have_ref_ = false;
+  }
   float d = d_lo + c.position * span + drift_;
   while (d > d_hi) { drift_ -= span; d -= span; }
   while (d < d_lo) { drift_ += span; d += span; }
@@ -146,7 +177,10 @@ void StretchMode::Prepare() {
   // Distance the analysis window moved since the phase reference, in
   // samples of recorded content.
   float dist = static_cast<float>(written - ref_written_) - (d - ref_delay_);
-  bool reset = !have_ref_ || dist < 0.0f || dist > 1536.0f;
+  // Reading backwards (BAL left) the content distance runs negative: the
+  // checks below use its size, the frequency estimate its sign.
+  const float adist = advance < 0.0f ? -dist : dist;
+  bool reset = !have_ref_ || adist < 0.0f || adist > 1536.0f;
   // Standing still (infinite stretch): no motion to measure frequencies
   // from, so take an extra reference frame 16 samples earlier now and then.
   if (have_ref_ && dist < 4.0f && dist > -4.0f && hops_since_ref_ >= 96) {
@@ -164,7 +198,7 @@ void StretchMode::Prepare() {
   // the reference has aged.
   ++hops_since_ref_;
   bool update = !reset &&
-      (dist >= 96.0f || (dist >= 4.0f && hops_since_ref_ >= 24));
+      (adist >= 96.0f || (adist >= 4.0f && hops_since_ref_ >= 24));
   if (reset || update) {
     hops_since_ref_ = 0;
     ref_written_ = written;
@@ -280,6 +314,8 @@ void StretchMode::Synthesize(int ch, float dist, bool update_ref,
   const float ratio = SemitonesToRatio(c.pitch);
   const float blur = c.density > 0.5f ? (c.density - 0.5f) * 2.0f : 0.0f;
   const float randomness = Clamp(c.texture, 0.0f, 1.0f);
+  const float halo = Clamp(c.rvb, 0.0f, 1.0f) * 0.7f;
+  const int half_top = static_cast<int>(kTopBin) / 2;
   const float hop = static_cast<float>(kHop);
   const float inv_dist = update_ref ? 1.0f / dist : 0.0f;
   const bool store_ref = update_ref || reset_ref;
@@ -356,8 +392,15 @@ void StretchMode::Synthesize(int ch, float dist, bool update_ref,
         gs = gc * sr + gs * cr;
         gc = t;
       }
-      ore[j] += xr * gc - xi * gs;
-      oim[j] -= xr * gs + xi * gc;  // back to ShyFFT's sign
+      const float a = xr * gc - xi * gs, b = xr * gs + xi * gc;
+      ore[j] += a;
+      oim[j] -= b;  // back to ShyFFT's sign
+      if (halo > 0.0f && j < half_top) {
+        // RVB: the octave, Y^2 / |Y| (doubled phase, same magnitude).
+        const float h = halo / (m + 1e-20f);
+        ore[2 * j] += (a * a - b * b) * h;
+        oim[2 * j] -= 2.0f * a * b * h;
+      }
     }
     region = end;
   }

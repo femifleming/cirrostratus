@@ -172,3 +172,60 @@ MONSOON_TEST(spectral_save_load_and_morph) {
   CHECK(ratio[0] < 0.1f && ratio[1] > 10.0f, "morph did not move to the slot");
   return true;
 }
+
+MONSOON_TEST(spectral_bal_fbk_rvb_do_what_they_say) {
+  auto run = [](const std::vector<FloatFrame>& in, float bal, float fbk,
+                float rvb) {
+    Module m;
+    m.SetMode(MODE_SPECTRAL);
+    return m.Render(in, [&](size_t) {
+      Controls c = SpectralNeutral();
+      c.bal = bal; c.fbk = fbk; c.rvb = rvb;
+      return c;
+    });
+  };
+  auto tone = Sine(1000.0f, 2.0f, 0.3f);
+  // BAL: a linear shift, the same number of Hz whatever the frequency.
+  // Knob 0.8 -> x = 0.588 -> 1000 * (2^(8x) - 1) / 255 ~ 98 Hz.
+  const float x = (0.6f - 0.03f) / 0.97f;
+  const float hz = 1000.0f * (std::exp2(8.0f * x) - 1.0f) / 255.0f;
+  auto up = run(tone, 0.8f, 0.0f, 0.0f);
+  auto down = run(tone, 0.2f, 0.0f, 0.0f);
+  float up_new = ToneAmplitude(up, 1000.0f + hz, 48000, 96000);
+  float up_old = ToneAmplitude(up, 1000.0f, 48000, 96000);
+  float dn_new = ToneAmplitude(down, 1000.0f - hz, 48000, 96000);
+  float dn_old = ToneAmplitude(down, 1000.0f, 48000, 96000);
+  std::printf("    BAL +/-%.0f Hz: up %.3f (1 kHz %.4f), down %.3f (1 kHz %.4f)\n",
+              hz, up_new, up_old, dn_new, dn_old);
+  CHECK(up_new > 0.1f && up_new > 10.0f * up_old, "no upward shift");
+  CHECK(dn_new > 0.1f && dn_new > 10.0f * dn_old, "no downward shift");
+
+  // FBK: the tone stops at 1 s; 0.5 s later it is still there.
+  auto burst = Sine(1000.0f, 2.0f, 0.3f);
+  for (size_t i = 48000; i < burst.size(); ++i) burst[i].l = burst[i].r = 0.0f;
+  auto dry = run(burst, 0.5f, 0.0f, 0.0f);
+  auto held = run(burst, 0.5f, 1.0f, 0.0f);
+  float tail_dry = ToneAmplitude(dry, 1000.0f, 72000, 96000);
+  float tail_fb = ToneAmplitude(held, 1000.0f, 72000, 96000);
+  float body_fb = ToneAmplitude(held, 1000.0f, 24000, 48000);
+  std::printf("    FBK: 0.5-1 s after the tone: neutral %.4f, full %.3f (body %.3f)\n",
+              tail_dry, tail_fb, body_fb);
+  CHECK(tail_fb > 0.1f && tail_fb > 50.0f * tail_dry, "FBK does not sustain");
+  CHECK(body_fb < 0.4f, "FBK made the steady tone louder");
+
+  // RVB: the sine's energy no longer sits in one coherent line.
+  auto flat = run(tone, 0.5f, 0.0f, 0.0f);
+  auto wash = run(tone, 0.5f, 0.0f, 1.0f);
+  auto purity = [](const std::vector<FloatFrame>& v) {
+    Stats s = Measure(v, 48000, 96000);
+    return ToneAmplitude(v, 1000.0f, 48000, 96000) / (s.rms * 1.41421f + 1e-9f);
+  };
+  float p_flat = purity(flat), p_wash = purity(wash);
+  float lvl_flat = Measure(flat, 48000, 96000).rms;
+  float lvl_wash = Measure(wash, 48000, 96000).rms;
+  std::printf("    RVB: tonal share neutral %.2f, full %.2f; rms %.3f -> %.3f\n",
+              p_flat, p_wash, lvl_flat, lvl_wash);
+  CHECK(p_flat > 0.9f && p_wash < 0.7f * p_flat, "RVB does not diffuse");
+  CHECK(lvl_wash < 1.5f * lvl_flat, "RVB louder");
+  return true;
+}

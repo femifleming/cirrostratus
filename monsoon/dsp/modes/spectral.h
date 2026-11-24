@@ -2,6 +2,17 @@
 //
 // STFT 2048 / hop 1024 (sine windows), stereo, peak-locked phase vocoder.
 // See DESIGN.md.
+//
+// Per-mode knobs:
+//   BAL  noon = v1.0. Linear frequency shift (Hz, not a ratio: harmonic
+//        sounds turn inharmonic): left down, right up, exponential up to
+//        1 kHz (a few Hz near noon).
+//   FBK  regeneration: the last output spectrum (before tilt) comes back as
+//        a floor under the next frame (per-bin max), held 0.1 -> 8 s. Alone
+//        it sustains partials; with BAL or PITCH every pass moves them
+//        again, so they spiral up or down.
+//   RVB  phase diffusion: random phases blended in per bin (coherent ->
+//        whispered wash with the same colours).
 
 #ifndef MONSOON_DSP_MODES_SPECTRAL_H_
 #define MONSOON_DSP_MODES_SPECTRAL_H_
@@ -18,7 +29,7 @@ class SpectralMode : public Mode, public LeanStftClient {
   static const size_t kBins = kFftSize / 2;  // index 1 .. kBins-1 used
 
   const char* name() const { return "spectral"; }
-  bool Init(Arena* arena);
+  bool Init(Arena* arena) __attribute__((cold));  // runs once: small
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
   void Prepare() { stft_.Prepare(); }
@@ -34,6 +45,11 @@ class SpectralMode : public Mode, public LeanStftClient {
 
  private:
   void UpdateTilt(float slope);
+  // Per-mode knobs (kept out of line: flash is tight).
+  float Regenerate(int ch, const float* src, float fbk)
+      __attribute__((noinline));
+  void Remember(int ch, bool tilt, float energy) __attribute__((noinline));
+  void Diffuse(float* spectrum, float amount) __attribute__((noinline));
 
   LeanStft stft_;
   float* mag_[2];        // smoothed / frozen magnitudes
@@ -44,6 +60,8 @@ class SpectralMode : public Mode, public LeanStftClient {
   float* out_mag_;       // scratch
   float* out_freq_;      // scratch (magnitude-weighted frequency)
   float* tilt_;          // per-bin tilt gain, rebuilt when TEXTURE moves
+  uint16_t* fb_[2];      // FBK: last output magnitudes (before tilt) ...
+  float fb_scale_[2];    // ... as fractions of this scale
   float tilt_slope_;
   const float* morph_mag_[2];
   const float* morph_freq_[2];

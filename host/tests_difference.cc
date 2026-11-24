@@ -107,3 +107,59 @@ MONSOON_TEST(difference_freeze_holds_a_drone) {
   CHECK(fa > 0.03f && fb > 0.03f, "drone missing");
   return true;
 }
+
+MONSOON_TEST(difference_bal_fbk_rvb_do_what_they_say) {
+  auto in = Sine(300.0f, 1.0f, 0.4f);
+  // BAL left: glide. PITCH jumps an octave at 0.5 s; 50-250 ms later the
+  // upper tone has reached 2300 + 261.6 Hz without glide, not with it.
+  auto jump = [](float bal) {
+    return [bal](size_t b, Controls* c) {
+      c->bal = bal;
+      c->pitch = b * kBlockSize >= 24000 ? 12.0f : 0.0f;
+    };
+  };
+  auto snap = RenderDifference(in, Base(), jump(0.5f));
+  auto glide = RenderDifference(in, Base(), jump(0.0f));
+  float at_snap = ToneAmplitude(snap, 2561.6f, 26400, 36000);
+  float at_glide = ToneAmplitude(glide, 2561.6f, 26400, 36000);
+  std::printf("    BAL left: new note 50-250 ms after the jump: %.1f dB, gliding %.1f dB\n",
+              Db(at_snap), Db(at_glide));
+  CHECK(at_snap > 0.05f && at_glide < 0.2f * at_snap, "no glide");
+
+  // BAL right: dichotic, f_a on the left ear, f_a + delta on the right.
+  Controls d = Base();
+  d.bal = 1.0f;
+  auto dich = RenderDifference(in, d);
+  size_t a = 24000, b = dich.size();
+  float ll = ToneAmplitude(dich, 2300.0f, a, b, true);
+  float lu = ToneAmplitude(dich, 2430.81f, a, b, true);
+  float rl = ToneAmplitude(dich, 2300.0f, a, b, false);
+  float ru = ToneAmplitude(dich, 2430.81f, a, b, false);
+  std::printf("    BAL right: left ear 2300 %.1f / 2430.8 %.1f dB, right ear %.1f / %.1f dB\n",
+              Db(ll), Db(lu), Db(rl), Db(ru));
+  CHECK(ll > 0.05f && ru > 0.05f, "tones missing");
+  CHECK(Db(ll) - Db(lu) > 30.0f && Db(ru) - Db(rl) > 30.0f, "not dichotic");
+
+  // FBK: the spiral adds rungs a delta above: 2300 + 2 x 130.81 Hz.
+  Controls f = Base();
+  f.fbk = 1.0f;
+  auto dry = RenderDifference(in, Base());
+  auto spiral = RenderDifference(in, f);
+  float rung_dry = ToneAmplitude(dry, 2561.6f, a, b);
+  float rung = ToneAmplitude(spiral, 2561.6f, a, b);
+  float base_dry = ToneAmplitude(dry, 2300.0f, a, b);
+  float base = ToneAmplitude(spiral, 2300.0f, a, b);
+  std::printf("    FBK: 2561.6 Hz rung %.1f -> %.1f dB; 2300 Hz %.1f -> %.1f dB\n",
+              Db(rung_dry), Db(rung), Db(base_dry), Db(base));
+  CHECK(rung > 0.03f && Db(rung) - Db(rung_dry) > 30.0f, "no spiral rung");
+  CHECK(Measure(spiral, a, b).rms < 1.6f * Measure(dry, a, b).rms, "louder");
+
+  // RVB: the engine's FDN.
+  Module m;
+  CHECK(m.SetMode(MODE_DIFFERENCE), "init");
+  Controls r = Base();
+  r.rvb = 0.7f;
+  CHECK(m.engine().mode_instance(MODE_DIFFERENCE)->reverb_amount(r) == 0.7f,
+        "RVB not mapped to the reverb");
+  return true;
+}

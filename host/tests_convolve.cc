@@ -151,3 +151,72 @@ MONSOON_TEST(convolve_save_load_restores_the_ir) {
   auto out = Ping(b, ConvNeutral());
   return CheckEcho(out, "after reload");
 }
+
+MONSOON_TEST(convolve_bal_fbk_rvb_do_what_they_say) {
+  // BAL: a tone that starts at 0.5 s through the starting room. Left keeps
+  // only its attack, right only its body.
+  auto tone = Silence(2.0f);
+  for (size_t i = 24000; i < tone.size(); ++i) {
+    tone[i].l = tone[i].r = 0.3f * std::sin(2.0 * M_PI * 300.0 * i / 48000.0);
+  }
+  float onset[3], body[3];
+  const float bals[3] = { 0.0f, 0.5f, 1.0f };
+  for (int k = 0; k < 3; ++k) {
+    Module m;
+    CHECK(m.SetMode(MODE_CONVOLVE), "init");
+    auto out = m.Render(tone, [&](size_t) {
+      Controls c = ConvNeutral();
+      c.bal = bals[k];
+      return c;
+    });
+    // Latency 1024 samples; the first 10 ms of the response vs 1-1.5 s.
+    onset[k] = Measure(out, 24000 + 1024, 24000 + 1024 + 480).rms;
+    body[k] = Measure(out, 48000, 72000).rms;
+  }
+  std::printf("    BAL onset/body rms: left %.4f/%.4f  noon %.4f/%.4f  right %.4f/%.4f\n",
+              onset[0], body[0], onset[1], body[1], onset[2], body[2]);
+  CHECK(body[0] < 0.1f * body[1], "left still passes the body");
+  CHECK(onset[0] > 0.3f * onset[1], "left lost the attack");
+  CHECK(onset[2] < 0.5f * onset[1], "right still passes the attack");
+  CHECK(body[2] > 0.7f * body[1], "right lost the body");
+
+  // FBK: the engine's feedback loop, so a ping rings on.
+  float tail[2];
+  for (int k = 0; k < 2; ++k) {
+    Module m;
+    CHECK(m.SetMode(MODE_CONVOLVE), "init");
+    Controls c = ConvNeutral();
+    c.fbk = k == 0 ? 0.0f : 0.7f;
+    CHECK(m.engine().mode_instance(MODE_CONVOLVE)->feedback_amount(c) == c.fbk,
+          "FBK not mapped to the feedback loop");
+    auto out = Ping(m, c);
+    tail[k] = Measure(out, 24000, 48000).rms;  // 0.5-1 s after the ping
+  }
+  std::printf("    FBK: tail 0.5-1 s after a ping: %.1f dB -> %.1f dB\n",
+              Db(tail[0]), Db(tail[1]));
+  CHECK(tail[1] > 30.0f * tail[0], "FBK does not extend the ring");
+
+  // RVB: the captured click + echo IR gets echoes of itself in between.
+  float floor_ratio[2];
+  for (int k = 0; k < 2; ++k) {
+    Module m;
+    CHECK(m.SetMode(MODE_CONVOLVE), "init");
+    CaptureEcho(m);
+    Controls c = ConvNeutral();
+    c.rvb = k == 0 ? 0.0f : 1.0f;
+    m.Render(Silence(0.5f), [&](size_t) { return c; });  // rebuild
+    CHECK(!Conv(m)->busy(), "still building");
+    auto out = Ping(m, c);
+    size_t first = 0;
+    float peak = 0.0f;
+    for (size_t i = 0; i < out.size(); ++i) {
+      if (std::fabs(out[i].l) > peak) { peak = std::fabs(out[i].l); first = i; }
+    }
+    floor_ratio[k] = Measure(out, first + 200, first + 2300).rms / peak;
+  }
+  std::printf("    RVB: energy between click and echo (rms / peak): %.4f -> %.4f\n",
+              floor_ratio[0], floor_ratio[1]);
+  CHECK(floor_ratio[0] < 0.005f, "neutral IR smeared");
+  CHECK(floor_ratio[1] > 0.02f, "RVB does not smear the IR");
+  return true;
+}

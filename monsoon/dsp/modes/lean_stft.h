@@ -121,6 +121,8 @@ class LeanStft {
   size_t latency() const { return kSize + kHop; }
 
  private:
+  // Out of line (one copy shared by SPECTRAL and CROSS): flash is tight.
+  __attribute__((noinline))
   void Analyze(const float* ring, size_t start, float* spectrum) {
     const size_t half = kSize / 2;
     for (size_t i = 0; i < half; ++i) {
@@ -136,6 +138,7 @@ class LeanStft {
     spectrum[1] = 0.0f;
   }
 
+  __attribute__((noinline))
   void Synthesize(float* spectrum, float* ring, size_t start) {
     spectrum[0] = 0.0f;
     spectrum[1] = 0.0f;
