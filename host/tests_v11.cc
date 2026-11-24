@@ -180,7 +180,7 @@ MONSOON_TEST(mono_bass_off_is_bit_transparent_and_toggles_without_clicks) {
   return true;
 }
 
-MONSOON_TEST(output_is_hard_stereo_with_mono_bass_on_the_wet_bus) {
+MONSOON_TEST(output_is_hard_stereo_with_mono_bass_on_the_main_out) {
   // Through the engine: left-only 1 kHz + left-only 20 Hz.
   auto in = TwoSines(1000.0f, 0.4f, 0, 0, 2.0f);
   auto bass = TwoSines(20.0f, 0.3f, 0, 0, 2.0f);
@@ -201,15 +201,28 @@ MONSOON_TEST(output_is_hard_stereo_with_mono_bass_on_the_wet_bus) {
       CHECK(Db(br) - Db(bl) < -80.0f, "mono bass off: 20 Hz stays left");
     }
   }
-  // Fully dry stays bit-transparent with mono bass on.
+  // Mono bass is on the whole main out: fully dry, a left-only 20 Hz still
+  // reaches both sides, and 1 kHz stays left.
+  {
+    auto out = RunWire(in, true, 0.0f);
+    float bl = ToneAmplitude(out, 20.0f, kFrom, kTo, true);
+    float br = ToneAmplitude(out, 20.0f, kFrom, kTo, false);
+    float hl = ToneAmplitude(out, 1000.0f, kFrom, kTo, true);
+    float hr = ToneAmplitude(out, 1000.0f, kFrom, kTo, false);
+    std::printf("    fully dry, mono bass on: 20 Hz L %.1f / R %.1f dB, 1 kHz L %.1f / R %.1f dB\n",
+                Db(bl), Db(br), Db(hl), Db(hr));
+    CHECK(std::fabs(Db(bl) - Db(br)) < 0.3f, "dry 20 Hz should be mono too");
+    CHECK(Db(hr) - Db(hl) < -80.0f, "dry 1 kHz must stay left");
+  }
+  // With mono bass off, fully dry is bit-transparent.
   auto music = Music(1.0f, 9);
   for (auto& f : music) { f.l *= 0.5f; f.r *= 0.5f; }  // below the limiter's knee
-  auto dry = RunWire(music, true, 0.0f);
+  auto dry = RunWire(music, false, 0.0f);
   bool same = true;
   for (size_t i = 4800; i < music.size(); ++i) {  // after WET's first ramp
     if (dry[i].l != music[i].l || dry[i].r != music[i].r) { same = false; break; }
   }
-  CHECK(same, "fully dry must be bit-transparent");
+  CHECK(same, "fully dry (mono bass off) must be bit-transparent");
   return true;
 }
 

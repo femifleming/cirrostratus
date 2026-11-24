@@ -55,15 +55,16 @@ red for i ≥ 4. For buffer modes with a mono choice: options 0–3 stereo,
 ## Shared output section (engine, all modes)
 
 1. Input (+ the feedback service's signal, if the mode uses it) → mode.
-2. Wet → DC blocker → equal-power blend. The dry part goes straight to the
-   output bus (fully dry is bit-transparent); the wet part goes to a wet bus.
+2. Wet → DC blocker → equal-power blend. The dry part goes to the output
+   bus; the wet part goes to a wet bus.
 3. FDN reverb service (if the mode maps a knob to it): hears dry + wet, its
    tail joins the wet bus.
-4. Mono bass on the wet bus: LR4 crossover at 60 Hz done in mid/side
+4. Dry + wet summed, then mono bass on the whole main out: LR4 crossover at 60 Hz done in mid/side
    (mid → LR4 allpass, side → LR4 high-pass), i.e. HP4(L) + LP4((L+R)/2).
    On by default; FREEZE hold + WRITE toggles it (settings byte
-   `mono_bass_off`), 20 ms crossfade, free when off.
-5. Dry + wet → limiter (−1 dBFS, transparent below −2 dBFS) → TPDF dither →
+   `mono_bass_off`), 20 ms crossfade, free when off (then fully dry is
+   bit-transparent).
+5. → limiter (−1 dBFS, transparent below −2 dBFS) → TPDF dither →
    codec. The output is hard stereo: no widener.
 
 Engine services a mode may map a knob to (`Mode::feedback_amount(c)`,

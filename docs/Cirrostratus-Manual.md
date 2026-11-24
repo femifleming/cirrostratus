@@ -239,20 +239,20 @@ freeze when you use it for this.
 ## 4. The output section, on every mode
 
 ```
-IN ─┬───────────────────────────────────────────────────────┐ dry
-    │                                                        │
-    └─► MODE ─► DC block ─► WET ─┬─(+ reverb tail)─► MONO BASS ─(+)─► LIMITER ─► OUT
-         ▲                       │   if the mode       < 60 Hz      ▲
-         └── feedback loop ◄─────┘   uses it                        └── dry
+IN ─┬──────────────────────────────────────────┐ dry
+    │                                          │
+    └─► MODE ─► DC block ─► WET ─┬─(+ reverb)─(+)─► MONO BASS ─► LIMITER ─► OUT
+         ▲                       │   if the mode     < 60 Hz
+         └── feedback loop ◄─────┘   uses it
              if the mode uses it
 ```
 
-- **WET**: equal power, dry ↔ wet. The dry path never goes through anything
-  else, so fully dry is bit-transparent.
+- **WET**: equal power, dry ↔ wet. With mono bass switched off, fully dry
+  is bit-transparent.
 - **Hard stereo.** No widener any more: left is left, right is right,
   exactly what the mode makes. Modes that are naturally wide (LEITNER,
   ENSEMBLE, HALL…) are wide on their own.
-- **MONO BASS** (on by default): below 60 Hz everything the module adds is
+- **MONO BASS** (on by default): below 60 Hz the whole main out (dry and wet) is
   summed to mono, L+R halved to both sides; above it nothing changes. It's
   a 4th-order Linkwitz-Riley crossover, so the two halves add back up to a
   flat response. Your sub stays in the middle of the club, your vinyl cut

@@ -391,13 +391,13 @@ void Engine::ProcessFloat(const Controls& raw, const FloatFrame* in,
     reverb_.Process(rvb, false, mode_in_, wet_, n);
   }
 
-  // Mono bass below 60 Hz on everything the module adds (unless switched
-  // off), then the dry and wet buses meet.
-  mono_bass_.Process(wet_, n);
+  // The dry and wet buses meet, then the whole main out gets mono bass
+  // below 60 Hz (unless switched off: then fully dry is bit-transparent).
   for (size_t i = 0; i < n; ++i) {
     out[i].l += wet_[i].l;
     out[i].r += wet_[i].r;
   }
+  mono_bass_.Process(out, n);
 
   for (size_t i = 0; i < n; ++i) {
     float l = out[i].l;

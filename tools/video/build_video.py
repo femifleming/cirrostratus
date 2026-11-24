@@ -86,6 +86,7 @@ def clean_md(s):
 
 def speakable(s):
     s = clean_md(s)
+    s = s.replace("1970s", "nineteen-seventies").replace("°", " degrees").replace("…", ".")
     s = re.sub(r"(\d)\s*ms\b", r"\1 milliseconds", s)
     s = re.sub(r"(\d)\s*kHz\b", r"\1 kilohertz", s)
     s = re.sub(r"(\d)\s*Hz\b", r"\1 hertz", s)
@@ -106,8 +107,8 @@ def speakable(s):
                  ("V/OCT", "V per octave"), ("V/oct", "V per octave"), ("½", "half"),
                  ("¼", "a quarter"), ("¾", "three quarters"), ("e.g.", "for example"),
                  ("—", ","), ("–", " to "), ("/", " or "), ("dBFS", "dB"), ("IR", "I.R."),
-                 ("LEDs", "lights"), ("LED", "light"), ("CV", "C.V."), ("FBK", "feedback"),
-                 ("FDB", "feedback"), ("RVB", "reverb"), ("BAL", "bal"), ("DISP", "display"),
+                 ("LEDs", "lights"), ("LED", "light"), ("CV", "C.V."), ("FBK", "F.B.K."),
+                 ("FDB", "feedback"), ("RVB", "R.V.B."), ("FDN", "F.D.N."), ("BAL", "B.A.L."), ("DISP", "display"),
                  ("TRIG", "trig"), ("FFT", "F.F.T."), ("SWD", "S.W.D."), ("DSP", "D.S.P."),
                  ("(", ", "), (")", ", "), ("+", " and ")]:
         s = s.replace(a, b)
@@ -195,10 +196,11 @@ def general_chapters():
     return [
         dict(code="cs00", title="cirrostratus", sub="a thin, high sheet of cloud for the monsoon",
              desc="Alternative firmware for Jak Plugg's Monsoon, the twelve HP Clouds. Thirty modes in two "
-                  "banks, a forty-eight kilohertz floating-point engine, and a new output section on every mode.",
+                  "banks, a forty-eight kilohertz floating-point engine, and eight hands-on controls in every mode.",
              say="Cirrostratus. A thin, high sheet of cloud for the Monsoon. It's alternative firmware for "
                  "Jak Plugg's Monsoon: thirty modes in two banks, a forty-eight kilohertz floating-point engine, "
-                 "and a new output section on every mode. Same panel, same jacks. Only the weather changes.",
+                 "and eight controls in every mode: the four sliders, and now the BAL, FBK and RVB knobs too. "
+                 "Same panel, same jacks. Only the weather changes.",
              rows=[row("modes", "30 · two banks", hl=[]), row("engine", "48 kHz · 32-bit float", hl=[]),
                    row("slots", "4 jars of sky", hl=[]), row("look up", "always", hl=[])], kind="intro"),
         dict(code="in01", title="installing", sub="getting the cloud up there",
@@ -244,17 +246,16 @@ def general_chapters():
                        "job, and each has a C.V. jack in the row below.",
                        hl=["sl0", "sl1", "sl2", "sl3", "cv0", "cv1", "cv2", "cv3"]),
                    row("wet", "dry ↔ wet, equal power",
-                       "Then the output section, the same on every mode. WET blends dry and wet at equal power.",
+                       "WET blends dry and wet at equal power, in every mode.",
                        hl=["k0", "kj0"]),
-                   row("bal", "spread · mono ↔ wide",
-                       "BAL is the stereo spread: mono, untouched at noon, wide at the top, and still "
-                       "safe in mono.", hl=["k1", "kj1"]),
-                   row("fbk", "feedback, tamed",
-                       "FBK sends the mode back into itself, with a resonance tamer inside the loop.",
+                   row("bal", "a control of its own, per mode",
+                       "BAL, FBK and RVB are three more controls for each mode. BAL is two-sided: noon "
+                       "is the plain sound, and each side does something different.", hl=["k1", "kj1"]),
+                   row("fbk", "a control of its own, per mode",
+                       "FBK and RVB start at zero. Each mode's chapter says what they do there.",
                        hl=["k2", "kj2"]),
-                   row("rvb", "reverb · size and send",
-                       "RVB is the reverb, one knob for size and send. Each of the four has a C.V. jack "
-                       "under its label.", hl=["k3", "kj3"]),
+                   row("rvb", "a control of its own, per mode",
+                       "Each of the four small knobs has a C.V. jack under its label.", hl=["k3", "kj3"]),
                    row("v/oct · trig", "pitch cv · a job per mode",
                        "Bottom rows. V per octave adds to TUNE. TRIG does something different in every mode.",
                        hl=["voct", "trig"]),
@@ -293,14 +294,14 @@ def general_chapters():
                        "Spectral and Capture can blend toward.", hl=["freeze"])], kind="slots"),
         dict(code="ev05", title="weather that follows you", sub="the envelope page",
              desc="Hold FREEZE and tap DISP. Your input's loudness can push WET, BAL, FBK or RVB "
-                  "up or down: off, plus a half, plus one, minus a half, minus one.",
+                  "up or down: off, plus a half, plus one, minus a half, minus one. In every mode.",
              say="Weather that follows you. Hold FREEZE and tap DISP to open the envelope page. Your input's "
-                 "loudness can push any of the four small knobs up or down. DISP moves along, FREEZE sets "
-                 "the amount, WRITE saves.",
+                 "loudness can push any of the four small knobs up or down, whatever they do in the mode. "
+                 "DISP moves along, FREEZE sets the amount, WRITE saves.",
              rows=[row("wet", "+1", "A wet that opens on loud notes."),
-                   row("bal", "off", "Spread left alone."),
-                   row("fbk", "+½", "Feedback that swells a little."),
-                   row("rvb", "−1", "And a reverb that ducks while you play.")], kind="env"),
+                   row("bal", "off", "BAL left alone."),
+                   row("fbk", "+½", "FBK that swells a little."),
+                   row("rvb", "−1", "And RVB that backs off while you play.")], kind="env"),
         dict(code="su06", title="sunrise", sub="what the lights do when it starts",
              desc="Ice crystals twinkle. Two amber halos pulse outward. The sun breaks through, amber to green. "
                   "Then the forecast: your current mode, in binary, fading out.",
@@ -310,18 +311,21 @@ def general_chapters():
              rows=[row("0.0 s", "ice crystals", hl=["leds"]), row("0.8 s", "halo", hl=["leds", "freeze"]),
                    row("1.9 s", "the sun breaks through", hl=["leds"]),
                    row("2.5 s", "the forecast", hl=["leds"])], kind="sunrise"),
-        dict(code="os07", title="the output section", sub="on every mode",
-             desc="Feedback with manners: a resonance tamer hunts the loudest narrow peaks inside the loop. "
-                  "A mono-safe widener, an equal-power blend, an eight-line reverb, and a limiter that stays "
-                  "out of the way.",
-             say="The output section, on every mode.",
-             rows=[row("fbk", "tamed",
-                       "Feedback with manners: inside the loop, two adaptive notches hunt the loudest narrow "
-                       "peaks, so a howl blooms instead of shrieking."),
-                   row("bal", "mono-safe width", "A widener that survives mono."),
-                   row("wet", "equal power", "An equal-power blend."),
-                   row("rvb", "8-line fdn · 0.5–16 s",
-                       "An eight-line reverb, one knob for size and send."),
+        dict(code="os07", title="the output section", sub="hard stereo, mono bass",
+             desc="Hard stereo: left is left, right is right, exactly what the mode makes. Below sixty "
+                  "hertz the main out is summed to mono, on by default. An equal-power blend, and a "
+                  "limiter that stays out of the way.",
+             say="The output section.",
+             rows=[row("wet", "equal-power blend", "WET blends dry and wet at equal power."),
+                   row("hard stereo", "exactly what the mode makes",
+                       "The output is hard stereo. There's no widener any more: modes that are wide, "
+                       "are wide on their own.", hl=["out_l", "out_r"]),
+                   row("mono bass", "< 60 Hz mono · on by default",
+                       "Below sixty hertz the whole main out is summed to mono, so your sub stays in the "
+                       "middle of the room.", hl=["out_l", "out_r"]),
+                   row("freeze + write", "mono bass on / off",
+                       "Hold FREEZE and tap WRITE to switch it. Two green lights in the middle mean on, "
+                       "two amber lights at the sides mean off.", hl=["freeze", "write", "leds"]),
                    row("limiter", "−1 dBFS", "And a limiter that stays out of the way.")], kind="output"),
     ]
 
@@ -343,7 +347,7 @@ def build_chapters():
                    desc="Thirty kinds of sky. Thanks to Mutable Instruments, Tom Burns and Jak Plugg.",
                    say="That's Cirrostratus. Thirty kinds of sky, in one small cloud. Thanks to Mutable Instruments, "
                        "Tom Burns and Jak Plugg. Now go and look up.",
-                   rows=[row("modes", "30", hl=[]), row("tests", "181 passing", hl=[]),
+                   rows=[row("modes", "30", hl=[]), row("tests", "218 passing", hl=[]),
                          row("licence", "mit", hl=[])], kind="outro"))
     for i, c in enumerate(ch):
         c["index"] = i

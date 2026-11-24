@@ -141,6 +141,7 @@ MONSOON_TEST(every_mode_makes_sound_from_music) {
 
 MONSOON_TEST(blend_fully_dry_passes_input_through) {
   Module m;
+  m.engine().set_mono_bass(false, true);  // the mono-bass crossover is an allpass on the highs
   auto in = Sine(997.0f, 1.0f, 0.4f);
   auto out = m.Render(in, [](size_t) {
     Controls c = DefaultControls();
