@@ -417,6 +417,8 @@ def draw_rows(d, c, t, dur):
 
 def render_chapter(args):
     c, chapters, dur, path = args
+    if os.path.exists(path) and os.path.getsize(path) > 0 and os.path.exists(path + ".done"):
+        return path  # already rendered (re-runs only redo what's missing)
     base = static_layer(c, chapters)
     nframes = int(round(dur * FPS))
     ff = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
@@ -461,6 +463,7 @@ def render_chapter(args):
         ff.stdin.write(im.tobytes())
     ff.stdin.close()
     ff.wait()
+    open(path + ".done", "w").write("%.3f" % dur)
     return path
 
 
@@ -496,7 +499,7 @@ def main():
     if a.only:
         lo, hi = (int(x) for x in a.only.split("-"))
         sel = chapters[lo:hi + 1]
-    work = a.work or tempfile.mkdtemp(prefix="cirro_video_")
+    work = os.path.abspath(a.work or tempfile.mkdtemp(prefix="cirro_video_"))
     os.makedirs(work, exist_ok=True)
     print("work dir", work, "-", len(sel), "chapters")
 
