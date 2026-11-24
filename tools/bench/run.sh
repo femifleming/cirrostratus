@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 OUT=${BENCH_OUT:-build/bench}
 mkdir -p $OUT
 FLAGS="-O2 -g -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 \
-  -fno-math-errno -fno-use-cxa-atexit -fdata-sections -ffunction-sections -fshort-enums -I."
+  -fno-math-errno -fno-use-cxa-atexit -fdata-sections -ffunction-sections -fshort-enums -I. $BENCH_DEFS"
 arm-none-eabi-gcc $FLAGS -c tools/bench/startup.c -o $OUT/startup.o
 arm-none-eabi-gcc $FLAGS -w -Istmlib/third_party/STM/CMSIS/CM3_f4xx -c monsoon/dsp/cmsis/cmsis_fft.c -o $OUT/cmsis_fft.o
 for f in tools/bench/bench_main.cc monsoon/runtime.cc monsoon/dsp/*.cc monsoon/dsp/modes/*.cc; do

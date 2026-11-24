@@ -32,7 +32,7 @@ struct SettingsData {
   // keeps its size and v1.0 settings load unchanged.
   uint8_t mono_bass_off;  // 0 = bass below 60 Hz summed to mono (default)
   uint8_t version;        // 0 = written by v1.0, 1 = v1.1
-  uint8_t padding[1];
+  uint8_t buffer_quality; // v1.2, was padding: 0 = 48 kHz 16-bit (mode.h)
 };
 
 const uint8_t kSettingsVersion = 1;
@@ -52,6 +52,7 @@ inline bool UpgradeSettingsData(SettingsData* d) {
       if (e < -2 || e > 2) d->env[m][i] = 0;
     }
   }
+  if (d->buffer_quality >= kNumBufferQualities) d->buffer_quality = 0;
   if (d->version < kSettingsVersion) {
     // v1.0 settings: these bytes were padding. Mono bass starts on; the
     // envelope routings keep their knobs (BAL/FBK/RVB are now per-mode).

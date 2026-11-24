@@ -4,7 +4,8 @@
 *Forecast: scattered showers, falling in shapes.*
 
 Grains are read from a recorded buffer along a moving path, not at random
-spots. Buffer: 0.62 s stereo or 1.24 s mono.
+spots. Buffer: 0.62 s stereo or 1.24 s mono, up to 3.66 s / 7.32 s at a
+lower buffer quality (3.7).
 
 | Control | |
 |---|---|
@@ -119,7 +120,7 @@ both sides are the same signal.
 *Forecast: one second, smeared across an afternoon.*
 
 A phase vocoder with phase locking reads a recorded buffer slowly: 0.30 s
-stereo or 0.89 s mono.
+stereo or 0.89 s mono, up to 1.76 s / 5.23 s at a lower buffer quality (3.7).
 
 | Control | |
 |---|---|
@@ -159,7 +160,8 @@ and RVB shape the internal carrier, so they need DENSITY above zero.
 #### 9 · CAPTURE — captured wavetable voice
 *Forecast: catch a sound, play it like a synth.*
 
-FREEZE turns the last half second of input into a 16-frame wavetable. The
+FREEZE turns the last half second of input (up to 3 s at a lower buffer
+quality, 3.7) into a 16-frame wavetable. The
 table is band-limited per octave, so it stays alias-free up high. Until the
 first capture it plays a sine → saw table.
 
@@ -221,7 +223,8 @@ climbs (or falls) again.
 
 Variable-speed tape with an anti-aliased record path: slower tape gives
 longer, darker echoes. Heads at 1×, 2× and 3× spacing (0.2 / 0.4 / 0.6 s at
-1× in stereo, about twice that in mono).
+1× in stereo, about twice that in mono; up to 6× longer at a lower buffer
+quality, 3.7).
 
 | Control | |
 |---|---|

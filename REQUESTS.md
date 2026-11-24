@@ -22,3 +22,10 @@ What was asked for, in order (2026-11-23 → 24).
 
 ## 2026-11-24 — 90-second version
 > make a poetic condendes but in depth 1 minute 30 second version of the manual for cirrostratus for me to post.
+
+## 2026-11-24 — 1.2: buffer quality (longer buffers)
+> why is the grain freeze for grains on monsoon only max 1 second thats so short
+> add an option for me to choose 48kz, 24khz or 16hz, and then all of those plus 8bit, in a setting menu that lets me free up space for longer grains. i want to have the option.
+> have this setting effect all buffer effects, so i can choose it in a master setting and get loinger buffers on the effects that use buffers if i want.
+> give a list of the new timings per buffer for each resoultion setting as well.
+> make a new video manual when your done, and make the msuic sliglty quaiter in this new one.

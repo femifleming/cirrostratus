@@ -147,7 +147,7 @@ echoes spiral up or down forever.
 | Control | |
 |---|---|
 | POSITION | shift, bipolar: noon = none, up ↑ / down ↓, up to 2 kHz |
-| SIZE | loop delay 1.5 ms → 0.5 s |
+| SIZE | loop delay 1.5 ms → 0.5 s (up to 3 s at a lower buffer quality, 3.7) |
 | DENSITY | feedback |
 | TEXTURE | both sides the same way → left up, right down |
 | PITCH | multiplies the shift, V/OCT |
@@ -243,7 +243,7 @@ arrives with its attack smoothed into a swell.
 | Control | |
 |---|---|
 | POSITION | swell time: attacks untouched → ~2 s swell on every note |
-| SIZE | reverse window 50 → 280 ms (the delay is twice this) |
+| SIZE | reverse window 50 → 280 ms (the delay is twice this; up to 1.68 s at a lower buffer quality, 3.7) |
 | DENSITY | reverse-bloom level |
 | TEXTURE | diffusion: clean reverse → hazy reverse reverb |
 | PITCH | transposition of the reverse bloom (±12 st) |

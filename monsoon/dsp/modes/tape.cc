@@ -31,7 +31,13 @@ static const HeadZone kZones[kNumZones] = {
 
 bool TapeMode::Init(Arena* arena) {
   channels_ = init_option_ == 1 ? 1 : 2;
-  if (!tape_.Init(arena, kTapeBytes, channels_)) return false;
+  // Buffer quality: 8-bit doubles the tape; the lower rates run the tape
+  // 2x / 3x slower (TAPE resamples onto the tape itself, so the buffer
+  // doesn't decimate). Either way the echoes get that much longer.
+  if (!tape_.Init(arena, kTapeBytes, channels_, 0, buffer_quality_, false)) {
+    return false;
+  }
+  tape_rate_ = 1.0f / static_cast<float>(QualityDecimation(buffer_quality_));
   for (int ch = 0; ch < 2; ++ch) {
     diffuser_[ch] = arena->Allocate<float>(kApTotal);
     if (!diffuser_[ch]) return false;
@@ -58,7 +64,7 @@ bool TapeMode::Init(Arena* arena) {
     head_gain_[k] = kZones[0].out[k];
     fb_gain_[k] = kZones[0].fb[k];
   }
-  speed_ = 1.0f;
+  speed_ = tape_rate_;
   speed_target_ = 1.0f;
   stop_mult_ = 1.0f;
   stopped_ = false;
@@ -81,15 +87,28 @@ MONSOON_COLD void TapeMode::WriteTapeSample(float l, float r) {
   }
 }
 
+template<bool kLofi>
 inline float TapeMode::ReadHead(int channel, float distance) const {
   // Newest tape sample is at write_head + staged - 1; acc_ is how far the
   // tape has moved towards the next one.
   float now = static_cast<float>(tape_.write_head() + staged_) - 1.0f + acc_;
-  return tape_.Read(channel, now - distance);
+  return tape_.ReadT<kLofi>(channel, now - distance);
 }
 
 void TapeMode::Process(const Controls& c, const FloatFrame* in,
                        FloatFrame* out, size_t n) {
+  // 8-bit tape: a separate copy of the loop, so the 16-bit one keeps its
+  // v1.0 reads with no per-sample check.
+  if (tape_.lofi()) {
+    ProcessT<true>(c, in, out, n);
+  } else {
+    ProcessT<false>(c, in, out, n);
+  }
+}
+
+template<bool kLofi>
+void TapeMode::ProcessT(const Controls& c, const FloatFrame* in,
+                        FloatFrame* out, size_t n) {
   // --- Block-rate parameters.
   if (c.trigger) stopped_ = !stopped_;
   frozen_ = c.freeze;
@@ -155,7 +174,7 @@ void TapeMode::Process(const Controls& c, const FloatFrame* in,
       stop_mult_ += 0.0003f * (1.0f - stop_mult_) + (stop_mult_ < 0.01f ? 0.0002f : 0.0f);
       if (stop_mult_ > 1.0f) stop_mult_ = 1.0f;
     }
-    speed_ = spd * stop_mult_;
+    speed_ = spd * stop_mult_ * tape_rate_;
     input_gain_ += 0.002f * (in_target - input_gain_);
     for (int k = 0; k < kHeads; ++k) {
       head_gain_[k] += 0.002f * (z.out[k] - head_gain_[k]);
@@ -176,8 +195,8 @@ void TapeMode::Process(const Controls& c, const FloatFrame* in,
     float head[2][kHeads];
     for (int k = 0; k < kHeads; ++k) {
       float d = spacing_ * (k + 1) * mod;
-      head[0][k] = ReadHead(0, d);
-      head[1][k] = channels_ == 2 ? ReadHead(1, d) : head[0][k];
+      head[0][k] = ReadHead<kLofi>(0, d);
+      head[1][k] = channels_ == 2 ? ReadHead<kLofi>(1, d) : head[0][k];
     }
     float o[2], fbs[2];
     for (int ch = 0; ch < 2; ++ch) {

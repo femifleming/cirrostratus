@@ -6,6 +6,21 @@ Bench knob settings: typical = sliders 0.4–0.6, PITCH +7, WET 0.7, BAL 0.6, FB
 
 1.1.0 vs 1.0.0. In 1.0 every mode paid for the whole output section (FDN reverb ~430, widener ~65, feedback loop + tamer ~110). In 1.1 the widener is gone, the mono bass costs ~52, and the feedback loop and FDN only run for modes that map a knob to them, so most of that budget went into the new per-mode BAL/FBK/RVB controls. No mode got slower.
 
+1.2.0: at the default buffer quality (48 kHz 16-bit) every mode measures the same as 1.1 (within a few instructions): the buffer modes check the quality once per block and run a separate copy of their read loop for the lower qualities. The buffer modes at the lower qualities, `BENCH_DEFS="-DBENCH_QUALITY=q" tools/bench/run.sh`, typical / heavy:
+
+| Mode | 24k 16-bit | 16k 16-bit | 48k 8-bit | 24k 8-bit | 16k 8-bit |
+|---|---|---|---|---|---|
+| grains | 1187 / 1188 | 1171 / 1172 | 1030 / 1031 | 1189 / 1190 | 1172 / 1173 |
+| stretch | 2059 / 2142 | 2014 / 2098 | 1881 / 1964 | 2058 / 2141 | 2014 / 2097 |
+| capture | 1804 / 2163 | 1795 / 2155 | 1723 / 2083 | 1805 / 2164 | 1796 / 2155 |
+| tape | 1918 / 1905 | 1920 / 1893 | 2166 / 2120 | 2120 / 2080 | 2095 / 2067 |
+| barberpole | 1668 / 1707 | 1652 / 1691 | 1517 / 1556 | 1675 / 1715 | 1666 / 1698 |
+| bloom | 1809 / 1802 | 1794 / 1787 | 1670 / 1661 | 1829 / 1823 | 1814 / 1806 |
+
+The lower rates add the anti-alias decimator (~80 per channel per frame) on the record side; STRETCH reads its analysis window in one pass. Worst single interrupt block: TAPE at 48k 8-bit, 2338 (1.1: 2105).
+
+**GRAINS with a full buffer.** The table below warms up for 250 blocks (0.17 s), which leaves GRAINS' buffer mostly empty, so few grains can spawn. With `-DBENCH_WARMUP=4500` (3 s) GRAINS measures 2755 typical / 2254 heavy at 48 kHz 16-bit (worst block 3060), the same in 1.1; the lower qualities measure 2325–2604. This is above the ~2400 guide and needs checking on a real module (the cap would be fewer simultaneous grains). The other buffer modes don't change with the longer warm-up.
+
 | Mode | 1.0 typical | 1.1 typical | 1.0 heavy | 1.1 heavy | 1.1 worst ISR block (typ/heavy) |
 |---|---|---|---|---|---|
 | grains | 1643.9 | 1618.2 | 1050.8 | 1029.8 | 1616/1027 |

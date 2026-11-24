@@ -34,6 +34,11 @@ class TapeMode : public Mode {
   // 0 = stereo tape, 1 = mono tape (twice as long).
   uint8_t num_options() const { return 2; }
   bool option_requires_init() const { return true; }
+  bool uses_buffer_quality() const { return true; }
+  // Longest echo (head 3) at normal tape speed, seconds (tests).
+  float head3_seconds() const {
+    return 3.0f * spacing_ / (kSampleRate * tape_rate_);
+  }
   size_t GetPersistentData(PersistentChunk* chunks) {
     return tape_.GetChunks(chunks);
   }
@@ -53,9 +58,12 @@ class TapeMode : public Mode {
 
  private:
   void WriteTapeSample(float l, float r);
-  inline float ReadHead(int channel, float distance) const;
+  template<bool kLofi> inline float ReadHead(int channel, float distance) const;
+  template<bool kLofi> void ProcessT(const Controls& c, const FloatFrame* in,
+                                     FloatFrame* out, size_t n);
 
   SampleBuffer tape_;
+  float tape_rate_;  // 1, 1/2, 1/3: tape speed scale from the buffer quality
   FloatFrame stage_[kBlockSize];
   size_t staged_;
   int channels_;

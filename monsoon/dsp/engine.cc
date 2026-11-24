@@ -135,6 +135,7 @@ bool Engine::Init(void* main_mem, size_t main_size,
   blend_.Init(0.5f);
   feedback_.Init(0.0f);
   silence_ = false;
+  buffer_quality_ = 0;
   pending_load_data_ = NULL;
   pending_load_size_ = 0;
 
@@ -146,6 +147,7 @@ bool Engine::Init(void* main_mem, size_t main_size,
   arena_.Reset();
   current_ = kModes[active_mode_];
   current_->set_init_option(0);
+  current_->set_buffer_quality(0);
   init_failed_ = !current_->Init(&arena_);
   state_ = STATE_FADING_IN;
   fade_ = 0.0f;
@@ -170,6 +172,22 @@ void Engine::RequestMode(ModeId mode, uint8_t option) {
   }
 }
 
+void Engine::set_buffer_quality(uint8_t q) {
+  if (q >= kNumBufferQualities) q = 0;
+  buffer_quality_ = q;
+  if (current_->uses_buffer_quality() && current_->buffer_quality() != q &&
+      (state_ == STATE_RUNNING || state_ == STATE_FADING_IN)) {
+    state_ = STATE_FADING_OUT;
+  }
+}
+
+// The slot header's version field carries the buffer quality the slot was
+// recorded with in its high byte (0 = 48 kHz 16-bit, as v1.0/v1.1 wrote).
+static uint8_t SlotQuality(const SlotHeader* h) {
+  uint8_t q = static_cast<uint8_t>(h->version >> 8);
+  return q < kNumBufferQualities ? q : 0;
+}
+
 void Engine::RequestLoad(const uint8_t* data, size_t size) {
   if (!data || size < sizeof(SlotHeader)) return;
   const SlotHeader* h = reinterpret_cast<const SlotHeader*>(data);
@@ -189,7 +207,9 @@ size_t Engine::GetPersistentData(PersistentChunk* chunks) {
   size_t payload = 0;
   for (size_t i = 0; i < n; ++i) payload += (mode_chunks[i].size + 3) & ~3u;
   slot_header.magic = kSlotMagic;
-  slot_header.version = 1;
+  slot_header.version = static_cast<uint16_t>(
+      1 | (current_->uses_buffer_quality() ? current_->buffer_quality() << 8
+                                            : 0));
   slot_header.mode = static_cast<uint8_t>(active_mode_);
   slot_header.option = active_option_;
   slot_header.payload_size = static_cast<uint32_t>(payload);
@@ -219,6 +239,13 @@ void Engine::Prepare() {
     arena_.Reset();
     current_ = kModes[active_mode_];
     current_->set_init_option(active_option_);
+    uint8_t quality = buffer_quality_;
+    if (pending_load_data_) {
+      const SlotHeader* h =
+          reinterpret_cast<const SlotHeader*>(pending_load_data_);
+      if (h->mode == active_mode_) quality = SlotQuality(h);
+    }
+    current_->set_buffer_quality(quality);
     init_failed_ = !current_->Init(&arena_);
     if (pending_load_data_) {
       const SlotHeader* h =

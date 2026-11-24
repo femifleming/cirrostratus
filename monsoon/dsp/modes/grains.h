@@ -42,6 +42,7 @@ class GrainsMode : public Mode {
   // 4-7 the same with a mono buffer of twice the length.
   uint8_t num_options() const { return 8; }
   bool option_requires_init() const { return true; }
+  bool uses_buffer_quality() const { return true; }
 
   size_t GetPersistentData(PersistentChunk* chunks) {
     return buffer_.GetChunks(chunks);
@@ -77,6 +78,7 @@ class GrainsMode : public Mode {
   void Spawn(const Controls& c, float rate, float length);
   void TrajectoryPoint(float* x, float* y);
   inline float Window(float u, float texture) const;
+  template<bool kLofi> void Render(FloatFrame* out, size_t n);
 
   SampleBuffer buffer_;
   Grain* grains_;

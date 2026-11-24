@@ -37,6 +37,7 @@ void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
   slot_ = 0;
   morph_slot_ = -1;
   env_cursor_ = 0;
+  buffer_cursor_ = 0;
   save_requested_ = false;
   settings_dirty_ = false;
   panic_until_ = 0;
@@ -50,6 +51,7 @@ void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
   engine_->RequestMode(static_cast<ModeId>(d.mode), d.option[d.mode]);
   engine_->set_env_routing(settings_->env_routing(d.mode));
   engine_->set_mono_bass(settings_->mono_bass(), true);
+  engine_->set_buffer_quality(d.buffer_quality);
 }
 
 void Ui::Poll() {
@@ -76,7 +78,8 @@ void Ui::Poll() {
     page_ = previous_page_;
   }
   if ((page_ == UI_PAGE_LOAD || page_ == UI_PAGE_SAVE ||
-       page_ == UI_PAGE_ENV) && now > page_timeout_) {
+       page_ == UI_PAGE_ENV || page_ == UI_PAGE_BUFFER) &&
+      now > page_timeout_) {
     if (page_ == UI_PAGE_ENV) settings_dirty_ = true;
     page_ = previous_page_;
   }
@@ -119,6 +122,9 @@ void Ui::OnPress(uint8_t id) {
         *e = next[index];
         engine_->set_env_routing(settings_->env_routing(menu_mode_));
         used_as_modifier_[SWITCH_FREEZE] = true;
+      } else if (page_ == UI_PAGE_BUFFER) {
+        buffer_cursor_ = (buffer_cursor_ + 1) % kNumBufferQualities;
+        used_as_modifier_[SWITCH_FREEZE] = true;
       }
       break;
 
@@ -131,6 +137,14 @@ void Ui::OnPress(uint8_t id) {
         env_cursor_ = 0;
         previous_page_ = page_;
         page_ = UI_PAGE_ENV;
+      } else if (switches_.pressed(SWITCH_WRITE) &&
+                 (page_ == UI_PAGE_VU_METER || page_ == UI_PAGE_KNOBS)) {
+        // WRITE held + DISP: buffer page.
+        used_as_modifier_[SWITCH_WRITE] = true;
+        used_as_modifier_[SWITCH_DISP] = true;
+        buffer_cursor_ = settings_->data().buffer_quality;
+        previous_page_ = page_;
+        page_ = UI_PAGE_BUFFER;
       } else if (page_ == UI_PAGE_LOAD || page_ == UI_PAGE_SAVE) {
         slot_ = (slot_ + 1) % kNumSlots;
         used_as_modifier_[SWITCH_DISP] = true;
@@ -195,7 +209,7 @@ void Ui::OnRelease(uint8_t id, uint32_t duration) {
   switch (id) {
     case SWITCH_FREEZE:
       if (!modifier && page_ != UI_PAGE_MODE_MENU && page_ != UI_PAGE_LOAD &&
-          page_ != UI_PAGE_ENV) {
+          page_ != UI_PAGE_ENV && page_ != UI_PAGE_BUFFER) {
         cv_scaler_->ToggleFreezeButton();
       }
       break;
@@ -205,6 +219,8 @@ void Ui::OnRelease(uint8_t id, uint32_t duration) {
         ApplyModeMenu();
         cv_scaler_->set_hold_position(false);
         page_ = previous_page_;
+      } else if (page_ == UI_PAGE_BUFFER) {
+        if (!modifier) page_ = previous_page_;  // cancel
       } else if (!modifier) {
         if (page_ == UI_PAGE_VU_METER) {
           page_ = UI_PAGE_KNOBS;
@@ -235,6 +251,14 @@ void Ui::OnRelease(uint8_t id, uint32_t duration) {
         save_requested_ = true;
       } else if (page_ == UI_PAGE_ENV) {
         settings_dirty_ = true;
+        page_ = previous_page_;
+      } else if (page_ == UI_PAGE_BUFFER) {
+        SettingsData* d = settings_->mutable_data();
+        if (d->buffer_quality != buffer_cursor_) {
+          d->buffer_quality = buffer_cursor_;
+          settings_dirty_ = true;
+        }
+        engine_->set_buffer_quality(buffer_cursor_);
         page_ = previous_page_;
       } else if (page_ == UI_PAGE_CALIBRATION_1) {
         cv_scaler_->CalibrateC1();
@@ -484,6 +508,22 @@ void Ui::PaintLeds() {
         // Bass out at the sides.
         leds_.set_status(0, 255, 160);
         leds_.set_status(3, 255, 160);
+      }
+      break;
+
+    case UI_PAGE_BUFFER:
+      {
+        // LEDs 1-3: 48 / 24 / 16 kHz as a bar (longer bar = longer
+        // buffer), green 16-bit, red 8-bit. LED 4 blinks amber while
+        // WRITE would change something.
+        const bool eight = QualityEightBit(buffer_cursor_);
+        const int lit = QualityDecimation(buffer_cursor_);
+        for (int i = 0; i < lit; ++i) {
+          leds_.set_status(i, eight ? 255 : 0, eight ? 0 : 255);
+        }
+        if (buffer_cursor_ != settings_->data().buffer_quality && blink) {
+          leds_.set_status(3, 255, 160);
+        }
       }
       break;
 

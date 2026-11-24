@@ -80,6 +80,8 @@ class BarberpoleMode : public Mode {
  public:
   const char* name() const { return "barberpole"; }
   bool Init(Arena* arena);
+  bool uses_buffer_quality() const { return true; }
+  float max_delay_seconds() const { return max_delay_ / kSampleRate; }  // tests
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
   bool frozen() const { return frozen_; }
@@ -97,6 +99,7 @@ class BarberpoleMode : public Mode {
   float phase_[2];
   float shift_[2];
   float delay_;
+  float min_delay_, max_delay_;
   float feedback_;
   float input_gain_;
   float direction_;

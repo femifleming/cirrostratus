@@ -97,6 +97,12 @@ class Engine {
   }
   bool mono_bass() const { return mono_bass_.on(); }
 
+  // Master buffer quality (mode.h): every mode that records into a
+  // SampleBuffer uses it. Changing it re-inits such a mode (its buffer is
+  // cleared). A loaded slot plays at the quality it was saved with.
+  void set_buffer_quality(uint8_t q);
+  uint8_t buffer_quality() const { return buffer_quality_; }
+
   // Mute the wet path (used while flash is being written).
   void set_silence(bool s) { silence_ = s; }
 
@@ -133,6 +139,7 @@ class Engine {
   float fade_;
   bool silence_;
   bool init_failed_;
+  volatile uint8_t buffer_quality_;
 
   const uint8_t* pending_load_data_;
   size_t pending_load_size_;

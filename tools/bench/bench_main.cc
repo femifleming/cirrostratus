@@ -148,8 +148,16 @@ int main() {
   Controls c;
   memset(&c, 0, sizeof(c));
   const int kBlocks = 300;  // 1 s of audio
+#ifdef BENCH_QUALITY
+  // BENCH_DEFS="-DBENCH_QUALITY=5" tools/bench/run.sh: the buffer modes at
+  // one buffer quality.
+  engine.set_buffer_quality(BENCH_QUALITY);
+#endif
   for (int scenario = 0; scenario < 2; ++scenario) {
     for (int m = 0; m < MODE_LAST; ++m) {
+#ifdef BENCH_QUALITY
+      if (!engine.mode_instance((ModeId)m)->uses_buffer_quality()) continue;
+#endif
       engine.RequestMode((ModeId)m, 0);
       memset(&c, 0, sizeof(c));
       for (int k = 0; k < 400 && engine.switching(); ++k) {
@@ -163,8 +171,11 @@ int main() {
         c.density = 1.0f; c.size = 0.95f; c.texture = 0.9f; c.fbk = 0.9f;
         c.rvb = 0.9f; c.pitch = -12.0f;
       }
-      // Warm up 0.5 s so buffers fill.
-      for (int b = 0; b < 250; ++b) {
+      // Warm up so buffers fill (BENCH_WARMUP blocks; 250 = the table).
+#ifndef BENCH_WARMUP
+#define BENCH_WARMUP 250
+#endif
+      for (int b = 0; b < BENCH_WARMUP; ++b) {
         for (size_t i = 0; i < kBlockSize; ++i) { in[i].l = Noise(); in[i].r = Noise(); }
         engine.Process(c, in, out, kBlockSize);
         for (int k = 0; k < 4; ++k) engine.Prepare();

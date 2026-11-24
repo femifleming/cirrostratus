@@ -17,7 +17,15 @@ static const float kMinDelay = 72.0f;      // > one block + interpolator
 static const float kMaxDelay = 24000.0f;   // 500 ms
 
 bool BarberpoleMode::Init(Arena* arena) {
-  if (!loop_.Init(arena, 98 * 1024, 2)) return false;
+  if (!loop_.Init(arena, 98 * 1024, 2, 0, buffer_quality_)) return false;
+  // A longer buffer (lower buffer quality) gives a longer loop; at 48 kHz
+  // 16-bit this is the v1.0 500 ms. Live reads stay behind the newest
+  // stored block (guard, 0 at 48 kHz).
+  min_delay_ = kMinDelay + static_cast<float>(loop_.guard());
+  max_delay_ = kMaxDelay * QualityLengthFactor(buffer_quality_);
+  const float room = static_cast<float>(loop_.size()) - 600.0f -
+      static_cast<float>(loop_.guard());
+  if (max_delay_ > room) max_delay_ = room;
   memset(&k_, 0, sizeof(k_));
   for (int ch = 0; ch < 2; ++ch) {
     splitter_[ch].Init();
@@ -58,11 +66,11 @@ void BarberpoleMode::Process(const Controls& c, const FloatFrame* in,
   const float inc[2] = { shift_[0] / kSampleRate, shift_[1] / kSampleRate };
 
   // Loop delay (smoothed: changing it glides like tape).
-  float target = kMinDelay * powf(kMaxDelay / kMinDelay, Clamp(c.size, 0.0f, 1.0f));
+  float target = min_delay_ * powf(max_delay_ / min_delay_, Clamp(c.size, 0.0f, 1.0f));
   float d_start = delay_;
   delay_ += 0.1f * (target - delay_);
-  if (delay_ > kMaxDelay) delay_ = kMaxDelay;
-  if (delay_ < kMinDelay) delay_ = kMinDelay;
+  if (delay_ > max_delay_) delay_ = max_delay_;
+  if (delay_ < min_delay_) delay_ = min_delay_;
   float d_inc = (delay_ - d_start) / static_cast<float>(n);
 
   float fb_start = feedback_;
@@ -76,7 +84,7 @@ void BarberpoleMode::Process(const Controls& c, const FloatFrame* in,
   d_inc += k_.wow_inc;
 
   FloatFrame stage[kBlockSize];
-  const float head = static_cast<float>(loop_.write_head());
+  const float head = static_cast<float>(loop_.head());
   float d = d_start, fb = fb_start;
   for (size_t i = 0; i < n; ++i) {
     d += d_inc;

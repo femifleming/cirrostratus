@@ -2,7 +2,7 @@
 
 ### *a thin, high sheet of cloud for the Monsoon*
 
-**Version 1.1.0**
+**Version 1.2.0**
 
 > **cir·ro·stra·tus** /ˌsɪroʊˈstreɪtəs/ *n.* — a pale veil of ice crystals
 > spread so high and thin across the sky that the sun shines straight
@@ -18,7 +18,9 @@ This firmware goes one layer higher, thinner and brighter:
   different (and specific) in each mode. That's 90 extra controls, all with
   CV
 - **48 kHz**, 32-bit float inside, 16-bit block-float buffers that keep quiet
-  sounds clean (a −60 dB whisper is stored with 93 dB SNR)
+  sounds clean (a −60 dB whisper is stored with 93 dB SNR), and a
+  **buffer quality** setting that trades fidelity for up to **6× longer
+  buffers** in every mode that records
 - a clean **output section**: equal-power blend, hard stereo (whatever the
   mode makes), **bass kept mono below 60 Hz**, a transparent limiter and
   dithered output
@@ -91,10 +93,10 @@ of the "build_4" Monsoon firmwares.
 ### After landing
 
 - Your **V/OCT calibration comes along** from the stock firmware
-  automatically. Never calibrated? See 3.7.
-- **Coming from Cirrostratus 1.0?** Settings, per-mode options, envelope
-  routings and all four save slots carry over untouched. Mono bass starts
-  on.
+  automatically. Never calibrated? See 3.8.
+- **Coming from Cirrostratus 1.0 or 1.1?** Settings, per-mode options,
+  envelope routings and all four save slots carry over untouched. Mono bass
+  starts on; buffer quality starts at 48 kHz 16-bit (exactly as before).
 - Old Clouds save slots aren't compatible. Cirrostratus recognises and
   ignores them; it never plays garbage.
 - **Back to stock:** flash the stock Monsoon firmware the same way. Clouds
@@ -227,7 +229,50 @@ Whatever BAL, FBK and RVB mean in the current mode, that's what moves.
 The setting is remembered through power cycles. FREEZE doesn't toggle
 freeze when you use it for this.
 
-### 3.7 Teaching it volts (V/OCT calibration)
+### 3.7 Buffer quality (longer buffers)
+One master setting for every mode that records into a buffer: **GRAINS,
+STRETCH, CAPTURE, TAPE, BARBERPOLE** and **BLOOM**. Store the audio at a
+lower sample rate and/or 8-bit and the same memory holds up to six times
+as much sound.
+
+**Hold WRITE, tap DISP** (within a second, before the save page opens).
+**FREEZE** steps through the six settings, the LEDs show the one you're on:
+
+| LEDs | Setting | Length | Sound |
+|---|---|---|---|
+| ● green | 48 kHz 16-bit | 1× | full quality (the default, exactly 1.0/1.1) |
+| ●● green | 24 kHz 16-bit | 2× | top end stops at ~9.6 kHz |
+| ●●● green | 16 kHz 16-bit | 3× | top end stops at ~6.4 kHz: warm, dusty |
+| ● red | 48 kHz 8-bit | 2× | full range, a fine grain of noise under loud parts |
+| ●● red | 24 kHz 8-bit | 4× | both |
+| ●●● red | 16 kHz 8-bit | 6× | both: lo-fi, longest |
+
+LED 4 blinks amber while the choice differs from the current one. **WRITE**
+applies it and leaves; **DISP** (or 6 s) leaves without changing anything.
+Applying restarts the running mode's buffer empty, so do it before you
+record. Modes without a buffer don't notice.
+
+How long that makes each buffer (seconds):
+
+| Mode | 48k 16 | 24k 16 | 16k 16 | 48k 8 | 24k 8 | 16k 8 |
+|---|---|---|---|---|---|---|
+| GRAINS stereo | 0.62 | 1.24 | 1.86 | 1.22 | 2.44 | 3.66 |
+| GRAINS mono | 1.24 | 2.48 | 3.72 | 2.44 | 4.88 | 7.32 |
+| STRETCH stereo | 0.30 | 0.60 | 0.90 | 0.59 | 1.18 | 1.76 |
+| STRETCH mono | 0.89 | 1.77 | 2.66 | 1.75 | 3.49 | 5.23 |
+| CAPTURE (capture length) | 0.50 | 1.01 | 1.51 | 0.99 | 1.99 | 2.98 |
+| TAPE stereo (head 3 at 1× speed) | 0.60 | 1.19 | 1.79 | 1.19 | 2.37 | 3.56 |
+| TAPE mono (head 3 at 1× speed) | 1.20 | 2.41 | 3.61 | 2.38 | 4.76 | 7.15 |
+| BARBERPOLE (longest loop) | 0.50 | 1.00 | 1.50 | 1.00 | 2.00 | 3.00 |
+| BLOOM (longest window; delay is 2×) | 0.28 | 0.56 | 0.84 | 0.56 | 1.12 | 1.68 |
+
+The lower rates use a steep anti-alias filter (8th-order elliptic, 80 dB
+down), so nothing folds back. TAPE's rate setting simply runs the tape 2× or
+3× slower, which is what a real one would do. A **save slot remembers the
+quality it was recorded with** and plays back at it, whatever the setting;
+the next time the mode restarts it follows the setting again.
+
+### 3.8 Teaching it volts (V/OCT calibration)
 1. **Hold DISP** (the menu opens), then also **hold WRITE** for a second.
    Two LEDs blink.
 2. Send **1 V** into V/OCT, tap **WRITE**. Four LEDs blink.
@@ -289,16 +334,16 @@ for that mode.
 | | |
 |---|---|
 | Sample rate | 48 kHz (Clouds: 32 kHz) |
-| Processing | 32-bit float; buffers 16-bit mantissa + exponent per 32 samples |
+| Processing | 32-bit float; buffers 16-bit (or 8-bit) mantissa + exponent per 32 samples, stored at 48, 24 or 16 kHz (buffer quality, 3.7) |
 | Interpolation | Hermite everywhere it reads between samples |
 | FFT | ARM CMSIS-DSP real FFT, heavy work between interrupts |
 | RAM per mode | about 130 KB (only the running mode holds memory) |
 | CPU | every mode measured on an emulated STM32F405 at ≤ ~2400 instructions per stereo frame including the output section |
 | Output | hard stereo, mono bass below 60 Hz (LR4, switchable), limiter, TPDF dither |
 | Save slots | 4 × 128 KB of flash |
-| Settings | calibration, mode, per-mode option + envelope routing, mono bass |
+| Settings | calibration, mode, per-mode option + envelope routing, mono bass, buffer quality |
 
-The source, the 218 tests and the CPU benchmark live in the repository:
+The source, the 224 tests and the CPU benchmark live in the repository:
 `make -C host test`, `tools/bench/run.sh`. Cirrostratus has so far been
 tested on the host and an emulated STM32F405, not yet on a physical
 module.

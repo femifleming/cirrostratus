@@ -43,6 +43,8 @@ class CaptureMode : public Mode {
   bool LoadPersistentData(const uint8_t* data, size_t size);
   void SetMorphSource(const uint8_t* data, size_t size);
   bool supports_morph() const { return true; }
+  bool uses_buffer_quality() const { return true; }
+  float buffer_seconds() const { return capture_.seconds(); }  // tests
   float reverb_amount(const Controls& c) const { return c.rvb; }
   bool frozen() const { return frozen_; }
 

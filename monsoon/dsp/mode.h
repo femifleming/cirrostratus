@@ -15,6 +15,18 @@ struct PersistentChunk {
 
 const size_t kMaxPersistentChunks = 6;
 
+// Buffer quality (the master setting on the buffer page). The modes that
+// record into a SampleBuffer can trade fidelity for length:
+//   0 48 kHz 16-bit (v1.0/v1.1)  1 24 kHz 16-bit  2 16 kHz 16-bit
+//   3 48 kHz  8-bit              4 24 kHz  8-bit  5 16 kHz  8-bit
+const uint8_t kNumBufferQualities = 6;
+inline int QualityDecimation(uint8_t q) { return 1 + (q % 3); }
+inline bool QualityEightBit(uint8_t q) { return q >= 3 && q < 6; }
+// How many times longer the buffer gets.
+inline int QualityLengthFactor(uint8_t q) {
+  return QualityDecimation(q) * (QualityEightBit(q) ? 2 : 1);
+}
+
 class Mode {
  public:
   virtual ~Mode() { }
@@ -80,8 +92,18 @@ class Mode {
   // for the engine's meter; blending still uses the BLEND slider).
   virtual bool frozen() const { return false; }
 
+  // Buffer quality (see above). Set by the engine before Init; a mode
+  // that records into a SampleBuffer reads it in Init and says so here,
+  // so the engine re-inits it when the setting changes.
+  virtual bool uses_buffer_quality() const { return false; }
+  void set_buffer_quality(uint8_t q) {
+    buffer_quality_ = q < kNumBufferQualities ? q : 0;
+  }
+  uint8_t buffer_quality() const { return buffer_quality_; }
+
  protected:
   uint8_t init_option_ = 0;
+  uint8_t buffer_quality_ = 0;
 };
 
 }  // namespace monsoon

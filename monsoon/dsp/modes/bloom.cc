@@ -16,7 +16,11 @@ const float kMaxWindow = 0.28f * kSampleRate;
 }  // namespace
 
 float BloomMode::WindowSamples(float size) {
-  return kMinWindow + Clamp(size, 0.0f, 1.0f) * (kMaxWindow - kMinWindow);
+  return WindowSamples(size, kMaxWindow);
+}
+
+float BloomMode::WindowSamples(float size, float max_window) {
+  return kMinWindow + Clamp(size, 0.0f, 1.0f) * (max_window - kMinWindow);
 }
 
 bool BloomMode::Init(Arena* arena) {
@@ -27,10 +31,17 @@ bool BloomMode::Init(Arena* arena) {
   const size_t reserve = ap_floats * sizeof(float) + 256;
   // Room for 2 W of delay plus a margin for the Hermite reads.
   if (!buffer_.Init(arena, 2 * static_cast<size_t>(kMaxWindow + 2048) * 4,
-                    2, reserve)) {
+                    2, reserve, buffer_quality_)) {
     return false;
   }
   if (buffer_.size() < 2 * kMaxWindow + 1024) return false;
+  // A longer buffer (lower buffer quality) gives longer swells; at 48 kHz
+  // 16-bit this is the v1.0 280 ms.
+  guard_ = static_cast<float>(buffer_.guard());
+  max_window_ = kMaxWindow * QualityLengthFactor(buffer_quality_);
+  const float room = 0.5f * (static_cast<float>(buffer_.size()) - 1024.0f -
+                             guard_);
+  if (max_window_ > room) max_window_ = room;
   for (int ch = 0; ch < 2; ++ch) {
     for (int s = 0; s < kStages; ++s) {
       Diffuser& d = ap_[ch][s];
@@ -69,10 +80,24 @@ void BloomMode::PickChunk(int h, float bal) {
 
 void BloomMode::Process(const Controls& c, const FloatFrame* in,
                         FloatFrame* out, size_t n) {
+  // Lower buffer quality: a separate copy of the loop, so the 48 kHz
+  // 16-bit one keeps its v1.0 reads with no per-sample check.
+  if (buffer_.lofi()) {
+    ProcessT<true>(c, in, out, n);
+  } else {
+    ProcessT<false>(c, in, out, n);
+  }
+}
+
+template<bool kLofi>
+void BloomMode::ProcessT(const Controls& c, const FloatFrame* in,
+                         FloatFrame* out, size_t n) {
   frozen_ = c.freeze;
   if (!frozen_) buffer_.WriteBlock(in);
   const float size_f = static_cast<float>(buffer_.size());
-  const float head = static_cast<float>(buffer_.write_head());
+  // Newest frame we may read (the guard keeps lower-rate reads behind the
+  // newest stored block; 0 at 48 kHz).
+  const float head = static_cast<float>(buffer_.head()) - guard_;
 
   if (c.trigger && !was_trigger_) {
     phase_[0] = 1.0f;  // both restart below
@@ -84,7 +109,7 @@ void BloomMode::Process(const Controls& c, const FloatFrame* in,
   const float bal = BalKnob(c.bal);
 
   // Block-rate parameters.
-  const float w_target = WindowSamples(c.size);
+  const float w_target = WindowSamples(c.size, max_window_);
   const float ratio = SemitonesToRatio(Clamp(c.pitch, -12.0f, 12.0f));
   const float bloom = c.density * 1.2f;
   // RVB: the diffusion chain becomes a loop (gain up to 0.85, damped),
@@ -110,8 +135,8 @@ void BloomMode::Process(const Controls& c, const FloatFrame* in,
     // ---- Delayed dry, with the transient softener.
     float pos = now - 2.0f * window_;
     if (pos < 0.0f) pos += size_f;
-    float dl = buffer_.Read(0, pos);
-    float dr = buffer_.Read(1, pos);
+    float dl = buffer_.ReadT<kLofi>(0, pos);
+    float dr = buffer_.ReadT<kLofi>(1, pos);
     const float a = 0.5f * (fabsf(dl) + fabsf(dr));
     env_fast_ += (a > env_fast_ ? fast_a : release) * (a - env_fast_);
     env_slow_ += (a > env_slow_ ? slow_a : release) * (a - env_slow_);
@@ -144,8 +169,8 @@ void BloomMode::Process(const Controls& c, const FloatFrame* in,
       // BAL's falling chunks, the mirror image).
       float w = ph < rise_[h] ? (ph / rise_[h]) : (1.0f - ph) / fade_[h];
       w = w * w;
-      rev[0] += buffer_.Read(0, p) * w;
-      rev[1] += buffer_.Read(1, p) * w;
+      rev[0] += buffer_.ReadT<kLofi>(0, p) * w;
+      rev[1] += buffer_.ReadT<kLofi>(1, p) * w;
     }
 
     // ---- Diffusion (allpass chain per side). RVB closes it into a loop.

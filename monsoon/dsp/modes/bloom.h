@@ -63,9 +63,14 @@ class BloomMode : public Mode {
 
   // Delay of the dry path in samples for a SIZE value (for tests).
   static float WindowSamples(float size);
+  static float WindowSamples(float size, float max_window);
+  bool uses_buffer_quality() const { return true; }
+  float max_window_seconds() const { return max_window_ / kSampleRate; }  // tests
 
  private:
   __attribute__((noinline, cold)) void PickChunk(int h, float bal);
+  template<bool kLofi> void ProcessT(const Controls& c, const FloatFrame* in,
+                                     FloatFrame* out, size_t n);
 
   struct Diffuser {
     float* line;
@@ -76,6 +81,8 @@ class BloomMode : public Mode {
   SampleBuffer buffer_;
   Diffuser ap_[2][kStages];
   float window_;        // smoothed W (samples)
+  float max_window_;    // W at SIZE fully up
+  float guard_;         // SampleBuffer::guard()
   float phase_[2];      // head phases 0..1
   float start_[2];      // buffer position each head started from
   float env_fast_, env_slow_;

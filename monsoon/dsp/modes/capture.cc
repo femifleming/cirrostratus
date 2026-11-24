@@ -23,7 +23,8 @@ MONSOON_COLD bool CaptureMode::Init(Arena* arena) {
   spectrum_ = arena->Allocate<float>(kCycle);
   temp_ = arena->Allocate<float>(kCycle);
   if (!table_ || !work_ || !spectrum_ || !temp_) return false;
-  if (!capture_.Init(arena, kCaptureBytes, 1)) return false;
+  // Buffer quality: a longer capture to cut the 16 frames from.
+  if (!capture_.Init(arena, kCaptureBytes, 1, 0, buffer_quality_)) return false;
   morph_table_ = NULL;
   for (int f = 0; f < kFrames; ++f) {
     BuildDefaultFrame(f);

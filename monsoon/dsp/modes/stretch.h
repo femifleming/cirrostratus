@@ -52,6 +52,7 @@ class StretchMode : public Mode {
   bool frozen() const { return controls_.freeze; }
 
   // For tests.
+  bool uses_buffer_quality() const { return true; }
   float buffer_seconds() const { return buffer_.seconds(); }
   const float* inst(int ch) const { return inst_[ch]; }
   // Bins above this (20.0 kHz) are not processed.

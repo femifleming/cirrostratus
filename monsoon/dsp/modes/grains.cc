@@ -10,7 +10,9 @@ bool GrainsMode::Init(Arena* arena) {
   grains_ = arena->Allocate<Grain>(kMaxGrains);
   if (!grains_) return false;
   const int channels = init_option_ >= 4 ? 1 : 2;
-  if (!buffer_.Init(arena, kMaxBufferBytes, channels)) return false;
+  if (!buffer_.Init(arena, kMaxBufferBytes, channels, 0, buffer_quality_)) {
+    return false;
+  }
   for (int i = 0; i < kMaxGrains; ++i) grains_[i].active = false;
   rng_.Seed(0x6a09e667u);
   shape_ = SHAPE_CIRCLE;
@@ -115,15 +117,20 @@ void GrainsMode::Spawn(const Controls& c, float rate, float length) {
   // Range of delays (behind the write head) the whole grain can be read
   // from. A reversed grain starts at the delay and reads away from the
   // write head, so it only needs room behind it.
+  // At a lower stored rate the margins grow with the stored sample
+  // spacing, and live reads stay behind the newest stored block (guard).
+  // Both are exactly the v1.0 values at 48 kHz.
+  const float m = static_cast<float>(buffer_.decimation());
+  const float guard = static_cast<float>(buffer_.guard());
   float d_lo, d_hi;
   if (frozen_) {
-    d_lo = reverse ? 4.0f : travel + 4.0f;
-    d_hi = filled - 8.0f - (reverse ? travel : 0.0f);
+    d_lo = reverse ? 4.0f * m : travel + 4.0f * m;
+    d_hi = filled - 8.0f * m - (reverse ? travel : 0.0f);
   } else if (reverse) {
-    d_lo = 96.0f;
+    d_lo = 96.0f + guard;
     d_hi = filled - 96.0f - travel - len;
   } else {
-    d_lo = (ratio > 1.0f ? len * (ratio - 1.0f) : 0.0f) + 96.0f;
+    d_lo = (ratio > 1.0f ? len * (ratio - 1.0f) : 0.0f) + 96.0f + guard;
     d_hi = filled - 96.0f - (ratio < 1.0f ? len * (1.0f - ratio) : 0.0f);
   }
   if (d_hi <= d_lo + 1.0f) return;
@@ -217,6 +224,15 @@ void GrainsMode::Process(const Controls& c, const FloatFrame* in,
     out[i].l = 0.0f;
     out[i].r = 0.0f;
   }
+  if (buffer_.lofi()) {
+    Render<true>(out, n);
+  } else {
+    Render<false>(out, n);
+  }
+}
+
+template<bool kLofi>
+void GrainsMode::Render(FloatFrame* out, size_t n) {
   const bool mono = buffer_.channels() == 1;
   for (int k = 0; k < kMaxGrains; ++k) {
     Grain& g = grains_[k];
@@ -225,8 +241,8 @@ void GrainsMode::Process(const Controls& c, const FloatFrame* in,
     float phase = g.phase;
     for (size_t i = 0; i < n; ++i) {
       float w = Window(phase, g.texture);
-      float l = buffer_.Read(0, pos);
-      float r = mono ? l : buffer_.Read(1, pos);
+      float l = buffer_.ReadT<kLofi>(0, pos);
+      float r = mono ? l : buffer_.ReadT<kLofi>(1, pos);
       out[i].l += l * w * g.gain_l;
       out[i].r += r * w * g.gain_r;
       pos += g.increment;

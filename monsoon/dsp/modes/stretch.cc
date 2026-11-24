@@ -58,7 +58,9 @@ bool StretchMode::Init(Arena* arena) {
       inst_[ch][k] = static_cast<float>(k) / kFftSize;
     }
   }
-  if (!buffer_.Init(arena, kMaxBufferBytes, channels_)) return false;
+  if (!buffer_.Init(arena, kMaxBufferBytes, channels_, 0, buffer_quality_)) {
+    return false;
+  }
 
   memset(&controls_, 0, sizeof(controls_));
   controls_.blend = 1.0f;
@@ -139,7 +141,11 @@ void StretchMode::Prepare() {
 
   // Read window placement, as a delay (frame end behind the write head).
   const float filled = static_cast<float>(buffer_.filled());
-  const float d_lo = c.freeze ? 4.0f : 2.0f * hop + 64.0f;
+  // Lower stored rates: wider margins, and live reads stay behind the
+  // newest stored block (both 0 extra at 48 kHz).
+  const float m = static_cast<float>(buffer_.decimation());
+  const float d_lo = (c.freeze ? 4.0f * m : 2.0f * hop + 64.0f) +
+      static_cast<float>(buffer_.guard());
   const float d_hi = filled - n - 64.0f;
   const float span = d_hi - d_lo;
   const size_t out_start = (end + kHop) % ring_size_;
@@ -171,7 +177,7 @@ void StretchMode::Prepare() {
   while (d < d_lo) { drift_ += span; d += span; }
 
   const uint32_t written = written_;
-  const int32_t start = static_cast<int32_t>(buffer_.write_head()) -
+  const int32_t start = static_cast<int32_t>(buffer_.head()) -
       static_cast<int32_t>(d + 0.5f) - static_cast<int32_t>(kFftSize);
 
   // Distance the analysis window moved since the phase reference, in
@@ -222,18 +228,33 @@ void StretchMode::Analyse(int ch, int32_t start) {
   if (a < 0) a += size;
   int32_t b = a + static_cast<int32_t>(kFftSize / 2);
   if (b >= size) b -= size;
-  // i = 0 (window 0) and i = N/2 (window 1).
-  frame_[0] = 0.0f;
-  frame_[kFftSize / 2] = buffer_.Sample(ch, static_cast<size_t>(b));
   float ws = window_sin_, wc = window_cos_;
   const float rc = window_cos_, rs = window_sin_;
+  if (buffer_.lofi()) {
+    // Lower buffer quality: read the window in one pass, then shape it
+    // with the same phasor (w[0] = 0, w[N/2] = 1).
+    buffer_.ReadSpan(ch, a, kFftSize, frame_);
+    frame_[0] = 0.0f;
+    for (size_t i = 1; i < kFftSize / 2; ++i) {
+      frame_[i] *= ws;
+      frame_[kFftSize - i] *= ws;
+      float ns = ws * rc + wc * rs;
+      wc = wc * rc - ws * rs;
+      ws = ns;
+    }
+    FftDirect(frame_, spectrum_, kFftSize);
+    return;
+  }
+  // i = 0 (window 0) and i = N/2 (window 1).
+  frame_[0] = 0.0f;
+  frame_[kFftSize / 2] = buffer_.SampleFast(ch, static_cast<size_t>(b));
   int32_t fwd = a + 1;
   if (fwd >= size) fwd -= size;
   int32_t back = a + static_cast<int32_t>(kFftSize) - 1;
   if (back >= size) back -= size;
   for (size_t i = 1; i < kFftSize / 2; ++i) {
-    frame_[i] = buffer_.Sample(ch, static_cast<size_t>(fwd)) * ws;
-    frame_[kFftSize - i] = buffer_.Sample(ch, static_cast<size_t>(back)) * ws;
+    frame_[i] = buffer_.SampleFast(ch, static_cast<size_t>(fwd)) * ws;
+    frame_[kFftSize - i] = buffer_.SampleFast(ch, static_cast<size_t>(back)) * ws;
     if (++fwd == size) fwd = 0;
     if (--back < 0) back = size - 1;
     float ns = ws * rc + wc * rs;

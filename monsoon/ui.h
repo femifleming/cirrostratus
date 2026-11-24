@@ -16,6 +16,15 @@
 //   FREEZE hold + WRITE  mono bass on/off (main out, below 60 Hz); the LEDs
 //                     show it for 1.5 s: middle two green = on, outer two
 //                     amber = off. Stored in the settings.
+//   WRITE hold + DISP    buffer page (tap DISP within a second of pressing
+//                     WRITE): the master buffer quality for every mode
+//                     that records (GRAINS, STRETCH, CAPTURE, TAPE,
+//                     BARBERPOLE, BLOOM). FREEZE steps through
+//                     48k/24k/16k 16-bit, then 48k/24k/16k 8-bit. LEDs:
+//                     1-3 lit = 48/24/16 kHz, green = 16-bit, red = 8-bit;
+//                     LED 4 blinks amber while the choice differs from
+//                     the current one. WRITE applies (the running mode's
+//                     buffer restarts empty), DISP or 6 s cancels.
 
 #ifndef MONSOON_UI_H_
 #define MONSOON_UI_H_
@@ -38,6 +47,7 @@ enum UiPage {
   UI_PAGE_SAVING,
   UI_PAGE_ENV,
   UI_PAGE_MONO_BASS,
+  UI_PAGE_BUFFER,
   UI_PAGE_CALIBRATION_1,
   UI_PAGE_CALIBRATION_2,
   UI_PAGE_PANIC,
@@ -101,6 +111,7 @@ class Ui {
   uint8_t slot_;
   int8_t morph_slot_;
   uint8_t env_cursor_;
+  uint8_t buffer_cursor_;
 
   volatile bool save_requested_;
   volatile bool settings_dirty_;
