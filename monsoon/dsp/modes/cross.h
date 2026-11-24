@@ -1,6 +1,19 @@
 // Mode 6 — CROSS: L/R spectral morph (left = modulator, right = carrier).
 //
 // STFT 2048 / hop 1024 (sine windows), mono synthesis. See DESIGN.md.
+//
+// Per-mode knobs:
+//   BAL  noon = v1.0 (carrier = right input). Left: the carrier fades to
+//        white noise (whispered / unvoiced, consonants come through).
+//        Right: it fades to an internal buzz (band-limited saw, C3 at noon
+//        of PITCH, V/OCT): a classic vocoder from one input. Right of noon
+//        PITCH plays the buzz instead of transposing R (that fades out
+//        over the first quarter).
+//   FBK  formant emphasis: the modulator's spectral envelope is sharpened
+//        (x -> x^3 / peak^2 at full; peak and energy kept), so formants
+//        stand out: more talkative, then resonant, wah-like peaks.
+//   RVB  the engine's FDN reverb (CROSS is mono: this gives it a stereo
+//        room).
 
 #ifndef MONSOON_DSP_MODES_CROSS_H_
 #define MONSOON_DSP_MODES_CROSS_H_
@@ -17,11 +30,12 @@ class CrossMode : public Mode, public LeanStftClient {
   static const size_t kBins = kFftSize / 2;
 
   const char* name() const { return "cross"; }
-  bool Init(Arena* arena);
+  bool Init(Arena* arena) __attribute__((cold));  // runs once: small
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
   void Prepare() { stft_.Prepare(); }
   bool frozen() const { return ctl_.freeze; }
+  float reverb_amount(const Controls& c) const { return c.rvb; }
 
   // LeanStftClient.
   void TransformJoint(float* left, float* right);
@@ -45,8 +59,16 @@ class CrossMode : public Mode, public LeanStftClient {
   float* smooth_r_;
   float* prefix_;      // kBins + 1; reused for the output magnitudes
 
+  // Per-mode knobs (kept out of line: flash is tight).
+  void MixCarrier(float bal, float pitch, const FloatFrame* in,
+                  FloatFrame* mixed, size_t n) __attribute__((noinline));
+  void Emphasize(const float* env, float* out, float amount)
+      __attribute__((noinline));
+
   Controls ctl_;
   volatile bool hold_carrier_;
+  float buzz_phase_;   // BAL right: internal saw
+  Random noise_;       // BAL left: noise carrier
 };
 
 }  // namespace monsoon

@@ -10,6 +10,15 @@
 // IR spectra from that snapshot, a few partitions per Prepare() call.
 //
 // Latency: 2 x 512 samples (21 ms). All FFT work happens in Prepare().
+//
+// Per-mode knobs:
+//   BAL  noon = v1.0. What excites the IR: left = only the attacks of the
+//        input (a transient detector gates out the sustain), right = only
+//        the body (attacks ducked, so hits swell instead of crack). It
+//        shapes the input before everything, so captures hear it too.
+//   FBK  the engine's feedback loop (the v1.0 FEEDBACK: the IR rings on).
+//   RVB  IR smear: the IR is built from itself plus eight decaying echoes
+//        of itself (3 -> 97 ms), so captures melt into a dense wash.
 
 #ifndef MONSOON_DSP_MODES_CONVOLVE_H_
 #define MONSOON_DSP_MODES_CONVOLVE_H_
@@ -25,7 +34,7 @@ class ConvolveMode : public Mode {
   static const size_t kMaxPartitions = 16;   // up to 8192 samples (0.17 s)
 
   const char* name() const { return "convolve"; }
-  bool Init(Arena* arena);
+  bool Init(Arena* arena) __attribute__((cold));  // runs once: small
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
   void Prepare();
@@ -37,6 +46,9 @@ class ConvolveMode : public Mode {
   size_t partitions() const { return partitions_; }
   size_t ir_length() const { return ir_length_; }
   bool busy() const { return build_state_ != BUILD_IDLE || capture_left_ > 0; }
+
+  // FBK drives the engine's feedback loop (as FEEDBACK did in v1.0).
+  float feedback_amount(const Controls& c) const { return c.fbk; }
   uint32_t captures() const { return captures_; }
 
   struct IrParams {
@@ -59,6 +71,7 @@ class ConvolveMode : public Mode {
   void StartBuild(const IrParams& p);
   void SetupGenerator();
   float Raw(float pos) const;
+  float SmearedRaw(size_t n) const;
   float NextIrSample(Generator* g) const;
   void MakeSyntheticRoom();
   void Quantize(const float* spec, uint32_t* dst, float* scale);
@@ -107,6 +120,10 @@ class ConvolveMode : public Mode {
   size_t ir_length_;
   float rate_, start_, reverse_, decay_, lp_coef_, hp_coef_, treble_;
   bool lowpass_;
+  float smear_;          // RVB the IR is being built with
+  float built_smear_;
+  float env_fast_;       // BAL transient detector (ISR)
+  float env_slow_;
 };
 
 }  // namespace monsoon

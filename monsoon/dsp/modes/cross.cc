@@ -12,6 +12,15 @@
 
 namespace monsoon {
 
+// Arena::Allocate out of line: Init() calls it many times and flash is
+// tight (same allocations, same order).
+static __attribute__((noinline)) void* Grab(Arena* arena, size_t bytes) {
+  return arena->Allocate(bytes);
+}
+template<typename T> static inline T* Grab(Arena* arena, size_t n) {
+  return static_cast<T*>(Grab(arena, n * sizeof(T)));
+}
+
 using namespace spectral_util;
 
 static const float kExpected =
@@ -21,17 +30,17 @@ static const float kToBins =
 
 bool CrossMode::Init(Arena* arena) {
   if (!stft_.Init(arena, LeanStft::JOINT_MONO_OUT, this)) return false;
-  car_prev_ = arena->Allocate<float>(kFftSize);
+  car_prev_ = Grab<float>(arena, kFftSize);
   if (!car_prev_) return false;
   float** arrays[] = {
     &env_l_, &env_r_, &car_mag_, &car_freq_, &syn_phase_,
     &out_mag_, &out_freq_, &smooth_l_, &smooth_r_
   };
   for (size_t i = 0; i < sizeof(arrays) / sizeof(arrays[0]); ++i) {
-    *arrays[i] = arena->Allocate<float>(kBins);
+    *arrays[i] = Grab<float>(arena, kBins);
     if (!*arrays[i]) return false;
   }
-  prefix_ = arena->Allocate<float>(kBins + 1);
+  prefix_ = Grab<float>(arena, kBins + 1);
   if (!prefix_) return false;
   for (size_t k = 0; k < kBins; ++k) car_freq_[k] = static_cast<float>(k);
   memset(&ctl_, 0, sizeof(ctl_));
@@ -39,6 +48,8 @@ bool CrossMode::Init(Arena* arena) {
   ctl_.density = 0.5f;
   ctl_.size = 0.5f;
   hold_carrier_ = false;
+  buzz_phase_ = 0.0f;
+  noise_.Seed(0xC2055);
   return true;
 }
 
@@ -46,7 +57,70 @@ void CrossMode::Process(const Controls& c, const FloatFrame* in,
                         FloatFrame* out, size_t n) {
   ctl_ = c;
   if (c.trigger) hold_carrier_ = !hold_carrier_;
+  const float bal = KnobBipolar(c.bal);
+  FloatFrame mixed[kBlockSize];
+  if (bal != 0.0f && n <= kBlockSize) {
+    MixCarrier(bal, c.pitch, in, mixed, n);
+    in = mixed;
+  }
   stft_.Process(in, out, n);
+}
+
+// BAL: the carrier (right input) fades to white noise (left of noon) or
+// to a band-limited (PolyBLEP) saw at the PITCH note (right of noon).
+void CrossMode::MixCarrier(float bal, float pitch, const FloatFrame* in,
+                           FloatFrame* mixed, size_t n) {
+  const float amount = fabsf(bal);
+  const float keep = 1.0f - amount;
+  const bool buzz = bal > 0.0f;
+  const float f = Clamp(130.81f * SemitonesToRatio(pitch), 16.0f, 4000.0f);
+  const float dt = f / kSampleRate;
+  const float g = amount * (buzz ? 0.3f : 0.2f);
+  float ph = buzz_phase_;
+  for (size_t i = 0; i < n; ++i) {
+    float x;
+    if (buzz) {
+      ph += dt;
+      if (ph >= 1.0f) ph -= 1.0f;
+      x = 2.0f * ph - 1.0f;
+      if (ph < dt) {
+        const float t = ph / dt;
+        x -= t + t - t * t - 1.0f;
+      } else if (ph > 1.0f - dt) {
+        const float t = (ph - 1.0f) / dt;
+        x -= t * t + t + t + 1.0f;
+      }
+    } else {
+      x = noise_.Bipolar();
+    }
+    mixed[i].l = in[i].l;
+    mixed[i].r = in[i].r * keep + x * g;
+  }
+  buzz_phase_ = ph;
+}
+
+// FBK: each envelope value x becomes x * ((1 - e) + e * (x / peak)^2):
+// the peak bin stays put, everything below it drops (at full, x^3 /
+// peak^2). Then the envelope's energy is restored (at most +12 dB).
+void CrossMode::Emphasize(const float* env, float* out, float e) {
+  float peak = 0.0f, e_in = 0.0f;
+  for (size_t k = 1; k < kBins; ++k) {
+    const float v = env[k];
+    if (v > peak) peak = v;
+    e_in += v * v;
+  }
+  const float w = peak > 1e-20f ? e / (peak * peak) : 0.0f;
+  float e_out = 0.0f;
+  out[0] = 0.0f;
+  for (size_t k = 1; k < kBins; ++k) {
+    const float v = env[k];
+    const float y = v * ((1.0f - e) + w * v * v);
+    out[k] = y;
+    e_out += y * y;
+  }
+  float g = e_out > 1e-30f ? sqrtf(e_in / e_out) : 1.0f;
+  if (g > 4.0f) g = 4.0f;
+  for (size_t k = 1; k < kBins; ++k) out[k] *= g;
 }
 
 void CrossMode::SmoothBins(const float* in, float* out, float q) {
@@ -106,8 +180,12 @@ void CrossMode::TransformJoint(float* l, float* r) {
     memcpy(car_prev_, r, kFftSize * sizeof(float));
   }
 
-  // ---- Carrier transposition (PITCH).
-  const float ratio = SemitonesToRatio(Clamp(c.pitch, -48.0f, 48.0f));
+  // ---- Carrier transposition (PITCH). Right of noon on BAL, PITCH plays
+  // the internal buzz instead; R's transposition fades out.
+  const float bal = KnobBipolar(c.bal);
+  float pitch = Clamp(c.pitch, -48.0f, 48.0f);
+  if (bal > 0.0f) pitch *= bal < 0.25f ? 1.0f - 4.0f * bal : 0.0f;
+  const float ratio = SemitonesToRatio(pitch);
   const bool direct_phase = !hold_car && fabsf(ratio - 1.0f) < 1e-3f;
   float* out_mag = out_mag_;
   float* out_freq = out_freq_;
@@ -144,6 +222,15 @@ void CrossMode::TransformJoint(float* l, float* r) {
   }
   const float eps = mean_r * (0.01f / kBins) + 1e-9f;
 
+  // ---- FBK: formant emphasis of the modulator (smooth_r_ is free now).
+  const float* env_l = env_l_;
+  const float fbk = Clamp(c.fbk, 0.0f, 1.0f);
+  if (fbk > 0.001f) {
+    Emphasize(smooth_l_, smooth_l_, fbk);
+    Emphasize(env_l_, smooth_r_, fbk);
+    env_l = smooth_r_;
+  }
+
   // ---- Combine. POSITION: vocoder -> geometric morph -> L magnitudes.
   const float shift = FastExp2((Clamp(c.size, 0.0f, 1.0f) - 0.5f) * 2.0f);
   const float inv_shift = 1.0f / shift;
@@ -162,7 +249,7 @@ void CrossMode::TransformJoint(float* l, float* r) {
       w_l = smooth_l_[i0] + fr * (smooth_l_[i0 + 1] - smooth_l_[i0]);
     }
     const float car = out_mag[k];
-    const float l_mag = env_l_[k];
+    const float l_mag = env_l[k];
     const float geo = sqrtf(l_mag * car);
     float m;
     if (first_half) {

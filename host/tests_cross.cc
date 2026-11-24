@@ -122,3 +122,70 @@ MONSOON_TEST(cross_trigger_holds_the_carrier) {
   CHECK(held > live * 0.3f, "carrier hold failed");
   return true;
 }
+
+MONSOON_TEST(cross_bal_fbk_rvb_do_what_they_say) {
+  auto render = [](const std::vector<FloatFrame>& in, float bal, float fbk,
+                   float pitch) {
+    Module m;
+    m.SetMode(MODE_CROSS);
+    return m.Render(in, [&](size_t) {
+      Controls c = Vocoder();
+      c.bal = bal;
+      c.fbk = fbk;
+      c.pitch = pitch;
+      return c;
+    });
+  };
+  // BAL left: the saw carrier turns into noise; its harmonics disappear
+  // from the output while the level stays.
+  auto voice = Stereo(Noise(2.0f, 0.2f), Saw(110.0f, 2.0f, 0.3f));
+  auto tonal = render(voice, 0.5f, 0.0f, 0.0f);
+  auto whisper = render(voice, 0.0f, 0.0f, 0.0f);
+  auto share = [](const std::vector<FloatFrame>& v) {
+    float h = 0.0f;
+    for (int k = 2; k <= 8; ++k) h += ToneAmplitude(v, 110.0f * k, 48000, 96000);
+    return h / (Measure(v, 48000, 96000).rms + 1e-9f);
+  };
+  float s_tonal = share(tonal), s_whisper = share(whisper);
+  float l_tonal = Measure(tonal, 48000, 96000).rms;
+  float l_whisper = Measure(whisper, 48000, 96000).rms;
+  std::printf("    BAL left: harmonic share %.2f -> %.2f, level %.1f -> %.1f dB\n",
+              s_tonal, s_whisper, Db(l_tonal), Db(l_whisper));
+  CHECK(s_whisper < 0.2f * s_tonal, "carrier not turned to noise");
+  CHECK(l_whisper > 0.25f * l_tonal, "noise carrier too quiet");
+
+  // BAL right: with no carrier at all, the buzz carries the modulator, and
+  // PITCH plays it (+12 st -> 261.6 Hz fundamental).
+  auto lonely = Stereo(Noise(2.0f, 0.2f), Silence(2.0f));
+  auto none = render(lonely, 0.5f, 0.0f, 12.0f);
+  auto buzz = render(lonely, 1.0f, 0.0f, 12.0f);
+  float f0 = ToneAmplitude(buzz, 261.63f, 48000, 96000);
+  float sub = ToneAmplitude(buzz, 130.81f, 48000, 96000);
+  float silent = Measure(none, 48000, 96000).rms;
+  std::printf("    BAL right: no carrier %.1f dB; buzz 261.6 Hz %.4f, 130.8 Hz %.4f\n",
+              Db(silent), f0, sub);
+  CHECK(Db(silent) < -60.0f, "carrier from nowhere at noon");
+  CHECK(f0 > 0.002f && f0 > 10.0f * sub, "buzz not at the PITCH note");
+
+  // FBK: formants sharpen: the modulator's 1540 Hz peak stands out further
+  // from the neighbouring carrier harmonics.
+  auto in = Stereo(Sine(1540.0f, 2.0f, 0.3f), Saw(110.0f, 2.0f, 0.3f));
+  float contrast[2];
+  for (int k = 0; k < 2; ++k) {
+    auto out = render(in, 0.5f, k == 0 ? 0.0f : 1.0f, 0.0f);
+    contrast[k] = ToneAmplitude(out, 1540.0f, 48000, 96000) /
+        (ToneAmplitude(out, 1320.0f, 48000, 96000) + 1e-9f);
+  }
+  std::printf("    FBK: harmonic 14 over harmonic 12: %.1f dB -> %.1f dB\n",
+              Db(contrast[0]), Db(contrast[1]));
+  CHECK(Db(contrast[1]) - Db(contrast[0]) > 6.0f, "no formant emphasis");
+
+  // RVB: the engine's FDN.
+  Module m;
+  CHECK(m.SetMode(MODE_CROSS), "init");
+  Controls r = Vocoder();
+  r.rvb = 0.6f;
+  CHECK(m.engine().mode_instance(MODE_CROSS)->reverb_amount(r) == 0.6f,
+        "RVB not mapped to the reverb");
+  return true;
+}
