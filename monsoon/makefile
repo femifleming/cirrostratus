@@ -39,3 +39,17 @@ wav: $(TARGET_BIN)
 # Link libm after the objects (stmlib's rule puts libraries first).
 $(TARGET_ELF): $(OBJS)
 	$(CC) $(LDFLAGS) -o $(TARGET_ELF) $(OBJS) -lm
+
+# ---- Flashing over SWD (ST-Link + OpenOCD: brew install open-ocd) --------
+OPENOCD_CMD = openocd -f interface/stlink.cfg -f target/stm32f4x.cfg
+
+# Just the application (keeps the bootloader, settings and save slots).
+flash: $(TARGET_BIN)
+	$(OPENOCD_CMD) -c "program $(TARGET_BIN) 0x08008000 verify reset exit"
+
+# Bootloader + application, for a blank chip (also wipes the settings).
+combo: $(COMBO_BIN)
+flash_all: $(COMBO_BIN)
+	$(OPENOCD_CMD) -c "program $(COMBO_BIN) 0x08000000 verify reset exit"
+
+.PHONY: flash flash_all combo
