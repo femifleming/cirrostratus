@@ -17,6 +17,15 @@
 // | option 0 | input + internal sine                                        |
 // | option 1 | input only (the folder as an effect)                         |
 //
+// Per-mode knobs:
+//   BAL  cross-modulation of the input and the sine, noon = v1.0. Left:
+//        the input phase-modulates the sine (up to +/-0.75 cycles at full
+//        scale; option 0 only). Right: the sine ring-modulates the input
+//        (all ring at full; in option 1 too, a ring mod at PITCH).
+//   FBK  the folder's output fed back into its input (up to 1.5x, ~0.5
+//        ms round trip): self-modulation, growl, then chaos.
+//   RVB  the engine's FDN reverb.
+//
 // The folder is a sine folder y = sin(pi/2 (g x + bias)), run at 96 kHz:
 // half-band interpolation in, half-band decimation out (47-tap Blackman,
 // ~74 dB stopband), so the folds do not alias back into the audio band.
@@ -25,6 +34,7 @@
 #define MONSOON_DSP_MODES_FOLDER_H_
 
 #include "monsoon/dsp/mode.h"
+#include "monsoon/dsp/modes/knob_fx.h"
 
 namespace monsoon {
 
@@ -38,12 +48,19 @@ class FolderMode : public Mode {
                size_t n);
   uint8_t num_options() const { return 2; }
   bool frozen() const { return frozen_; }
+  // RVB: the engine's FDN reverb (a west-coast voice has no space of its
+  // own).
+  float reverb_amount(const Controls& c) const { return c.rvb; }
 
   // Test hook: vactrol state 0 (closed) .. 1 (open).
   float vactrol() const { return vactrol_; }
 
  private:
   float Fold(float x) const;
+  void SetLpg(float f) KNOB_FX;
+  bool Knobs(const Controls& c, size_t n) KNOB_FX;
+  void PreFold(float* x, const FloatFrame& in, float carrier, float level)
+      KNOB_FX;
 
   float* up_[2];     // 1x input history (interpolator)
   float* down_[2];   // 2x folded history (decimator)
@@ -54,6 +71,10 @@ class FolderMode : public Mode {
   float gain_, bias_;
   float vactrol_;
   float lpg_gain_;
+  struct {
+    float value[2], target[2], inc[2];   // BAL, FBK ramps
+    float fold_y[2];   // last folder output per side (FBK)
+  } k_;
   bool frozen_;
   Envelope env_;
   DcBlocker dc_[2];

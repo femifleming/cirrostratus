@@ -177,3 +177,57 @@ MONSOON_TEST(folder_input_only_option_folds_input) {
   CHECK(Db(q.rms) < -80.0f, "no internal sine in option 1");
   return true;
 }
+
+MONSOON_TEST(folder_bal_fbk_rvb_do_what_they_say) {
+  // BAL: cross-modulation. A quiet 1 kHz input and the 130.81 Hz sine,
+  // gate held open, folding gently and symmetrically (odd products only):
+  // the sideband at 1 kHz + 130.81 Hz is absent at noon. Left (option 0:
+  // the input bends the sine) and right (option 1: the sine rings the
+  // input) both make it.
+  auto tone = Sine(1000.0f, 1.0f, 0.1f);
+  float side[2][2];
+  for (int opt = 0; opt < 2; ++opt) {
+    for (int k = 0; k < 2; ++k) {
+      Controls c = Base();
+      c.option = opt;
+      c.position = 0.0f;
+      c.density = 1.0f;
+      c.bal = k ? (opt ? 1.0f : 0.0f) : 0.5f;
+      auto out = Run(c, 1.0f, true, -1, &tone);
+      side[opt][k] = ToneAmplitude(out, 1130.81f, 9600, out.size() - 64);
+    }
+  }
+  std::printf("    BAL: 1130.8 Hz sideband, left (option 0) %.1f -> %.1f dB, "
+              "right (option 1) %.1f -> %.1f dB\n",
+              Db(side[0][0]), Db(side[0][1]), Db(side[1][0]), Db(side[1][1]));
+  CHECK(side[0][1] > side[0][0] * 4.0f, "BAL left: the input should bend the sine");
+  CHECK(side[1][1] > side[1][0] * 30.0f, "BAL right: the sine should ring the input");
+
+  // FBK: the folder's output back into its input drives it much harder
+  // (a 0.5 ms loop: growl, then chaos): far more energy above 2 kHz.
+  float hf[2];
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Base();
+    c.density = 1.0f;
+    c.fbk = k ? 1.0f : 0.0f;
+    auto out = Run(c, 1.0f, true);
+    Stats s = Measure(out);
+    CHECK(s.finite && s.peak < 1.0f, "bounded");
+    hf[k] = HfShare(out, 9600, 48000);
+  }
+  std::printf("    FBK: energy above 2 kHz %.4f -> %.4f\n", hf[0], hf[1]);
+  CHECK(hf[1] > hf[0] * 3.0f, "FBK should drive the folder");
+
+  // RVB: the FDN service rings on after the gate closes.
+  float late[2];
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Base();
+    c.texture = 0.1f;
+    c.rvb = k ? 0.8f : 0.0f;
+    auto out = Run(c, 2.0f, false, 4);
+    late[k] = Measure(out, 48000, 96000).rms;
+  }
+  std::printf("    RVB: 1-2 s after a ping %.1f dB -> %.1f dB\n", Db(late[0]), Db(late[1]));
+  CHECK(Db(late[1]) - Db(late[0]) > 20.0f, "RVB should add a tail");
+  return true;
+}

@@ -137,3 +137,67 @@ MONSOON_TEST(ensemble_trigger_resets_the_lfos) {
   CHECK(err < 1e-4, "TRIG should reset the LFO phases");
   return true;
 }
+
+MONSOON_TEST(ensemble_bal_fbk_rvb_do_what_they_say) {
+  // BAL: slow vs fast LFO. A 1 kHz sine; the fast (6 Hz) LFO puts
+  // sidebands at 1 kHz +/- multiples of 6 Hz (the three taps' 120-degree
+  // phases cancel some of them, so four are summed).
+  auto sine = Sine(1000.0f, 5.0f, 0.3f);
+  float side[3];
+  for (int k = 0; k < 3; ++k) {
+    Module m;
+    m.SetMode(MODE_ENSEMBLE);
+    auto out = Run(m, sine, [&](size_t, Controls* c) {
+      c->density = 1.0f;
+      c->bal = 0.5f * k;
+    });
+    float carrier = ToneAmplitude(out, 1000.0f, 48000, out.size());
+    side[k] = 0.0f;
+    for (int h = 1; h <= 4; ++h) {
+      side[k] += ToneAmplitude(out, 1000.0f + 6.0f * h, 48000, out.size()) +
+          ToneAmplitude(out, 1000.0f - 6.0f * h, 48000, out.size());
+    }
+    side[k] /= carrier + 1e-9f;
+  }
+  std::printf("    BAL left/noon/right: 6 Hz sidebands %.1f / %.1f / %.1f dB\n",
+              Db(side[0]), Db(side[1]), Db(side[2]));
+  CHECK(side[0] < side[1] * 0.3f, "BAL left should leave only the slow LFO");
+  CHECK(side[2] > side[1] * 1.5f, "BAL right should deepen the fast LFO");
+
+  // FBK: regeneration. An impulse into static delays (DENSITY 0: the
+  // flanger use); the plain ensemble is silent after its taps (~10 ms),
+  // with FBK they keep coming back.
+  float tail[2];
+  for (int k = 0; k < 2; ++k) {
+    Module m;
+    m.SetMode(MODE_ENSEMBLE);
+    auto in = Silence(1.0f);
+    in[4800].l = in[4800].r = 0.8f;
+    auto out = Run(m, in, [&](size_t, Controls* c) {
+      c->density = 0.0f;
+      c->fbk = k ? 1.0f : 0.0f;
+    });
+    Stats s = Measure(out, 4800 + 2400, 4800 + 9600);   // 50 - 100 ms
+    Stats all = Measure(out);
+    CHECK(all.finite && all.peak < 1.0f, "regeneration must stay bounded");
+    tail[k] = s.rms;
+  }
+  std::printf("    FBK: 50-100 ms after an impulse %.1f dB -> %.1f dB\n",
+              Db(tail[0]), Db(tail[1]));
+  CHECK(Db(tail[1]) - Db(tail[0]) > 30.0f, "FBK should regenerate the taps");
+
+  // RVB: the FDN service gives a tail long after the input stopped.
+  float late[2];
+  for (int k = 0; k < 2; ++k) {
+    Module m;
+    m.SetMode(MODE_ENSEMBLE);
+    auto in = Music(1.0f);
+    in.resize(48000 * 3);
+    auto out = Run(m, in, [&](size_t, Controls* c) { c->rvb = k ? 0.8f : 0.0f; });
+    late[k] = Measure(out, 48000 * 2, 48000 * 3).rms;
+  }
+  std::printf("    RVB: 1-2 s after the input stops %.1f dB -> %.1f dB\n",
+              Db(late[0]), Db(late[1]));
+  CHECK(Db(late[1]) - Db(late[0]) > 30.0f && Db(late[1]) > -60.0f, "RVB should add a tail");
+  return true;
+}

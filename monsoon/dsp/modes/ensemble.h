@@ -18,12 +18,23 @@
 // | TRIG     | Reset the LFO phases.                                       |
 // | Options  | none                                                        |
 //
+// Per-mode knobs:
+//   BAL  slow vs fast LFO, noon = v1.0. Left: the fast LFO fades out and
+//        the slow one deepens (x1.5): a pure swirl. Right: the slow LFO
+//        fades out and the fast one deepens (+0.6 ms, even in chorus):
+//        pure shimmer.
+//   FBK  regeneration: the taps are fed back into the delay lines (loop
+//        gain up to 0.85, high-passed at 100 Hz, through the bucket-
+//        brigade filter): flanger jets and metallic ensembles.
+//   RVB  the engine's FDN reverb (the string machine's hall).
+//
 // Memory: 2 x 2048 float delay lines (16 KB).
 
 #ifndef MONSOON_DSP_MODES_ENSEMBLE_H_
 #define MONSOON_DSP_MODES_ENSEMBLE_H_
 
 #include "monsoon/dsp/mode.h"
+#include "monsoon/dsp/modes/knob_fx.h"
 
 namespace monsoon {
 
@@ -37,15 +48,23 @@ class EnsembleMode : public Mode {
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
   bool frozen() const { return frozen_; }
+  float reverb_amount(const Controls& c) const { return c.rvb; }
 
  private:
   inline float Tap(int ch, float delay) const;
+  void SetBbd(float f) KNOB_FX;
+  bool Knobs(const Controls& c, const float* w, size_t n, float* slow_share,
+             float* fast_ms) KNOB_FX;
+  void Regenerate(int ch, const FloatFrame* in, const FloatFrame* out,
+                  size_t n, float dry, float wet) KNOB_FX;
 
   float* line_[2];
   size_t write_;
   float slow_phase_, fast_phase_;
   float base_delay_;
   Svf bbd_[2][2];
+  float regen_, regen_inc_;     // FBK
+  float regen_lp_[2];
   bool frozen_;
 };
 

@@ -32,6 +32,7 @@ bool EnsembleMode::Init(Arena* arena) {
   slow_phase_ = fast_phase_ = 0.0f;
   base_delay_ = 480.0f;
   frozen_ = false;
+  regen_ = regen_inc_ = regen_lp_[0] = regen_lp_[1] = 0.0f;
   return true;
 }
 
@@ -68,8 +69,11 @@ void EnsembleMode::Process(const Controls& c, const FloatFrame* in,
   // Depths in samples.
   const float density = Clamp(c.density, 0.0f, 1.0f);
   const float ms = kSampleRate * 0.001f;
-  const float slow_depth = Crossfade(a.slow, b.slow, t) * kSlowDepthMs * density * ms;
-  const float fast_depth = Crossfade(a.fast, b.fast, t) * density * ms;
+  float slow_share = Crossfade(a.slow, b.slow, t);
+  float fast_ms = Crossfade(a.fast, b.fast, t);
+  const bool knobs = Knobs(c, w, n, &slow_share, &fast_ms);
+  const float slow_depth = slow_share * kSlowDepthMs * density * ms;
+  const float fast_depth = fast_ms * density * ms;
 
   float base_target = (5.0f + 10.0f * Clamp(c.size, 0.0f, 1.0f)) * ms;
   float base_start = base_delay_;
@@ -83,10 +87,7 @@ void EnsembleMode::Process(const Controls& c, const FloatFrame* in,
   // Bucket-brigade darkness.
   const float texture = Clamp(c.texture, 0.0f, 1.0f);
   const float cutoff = 20000.0f * powf(3500.0f / 20000.0f, texture);
-  for (int ch = 0; ch < 2; ++ch) {
-    bbd_[ch][0].set(cutoff / kSampleRate, 0.541f);
-    bbd_[ch][1].set(cutoff / kSampleRate, 1.307f);
-  }
+  SetBbd(cutoff / kSampleRate);
   const bool dark = texture > 0.01f;
   const float drive = 1.0f + 1.5f * texture;
   const float inv_drive = 1.0f / drive;
@@ -121,6 +122,57 @@ void EnsembleMode::Process(const Controls& c, const FloatFrame* in,
     out[s].l = dry * in[s].l + wet * y[0];
     out[s].r = dry * in[s].r + wet * y[1];
     write_ = (write_ + 1) & (kLineSize - 1);
+  }
+  if (knobs) {
+    for (int ch = 0; ch < 2; ++ch) Regenerate(ch, in, out, n, dry, wet);
+    regen_ += regen_inc_ * static_cast<float>(n);
+  }
+}
+
+// Out of line and compiled for size (the flash is nearly full).
+void EnsembleMode::SetBbd(float f) {
+  for (int ch = 0; ch < 2; ++ch) {
+    bbd_[ch][0].set(f, 0.541f);
+    bbd_[ch][1].set(f, 1.307f);
+  }
+}
+
+// BAL moves the modulation between the LFOs; FBK sets the regeneration
+// ramp (the summed taps loop at most at 0.85). Returns whether Regenerate
+// must run.
+bool EnsembleMode::Knobs(const Controls& c, const float* w, size_t n,
+                         float* slow_share, float* fast_ms) {
+  // Left: slow only, x1.5. Right: fast only, +0.6 ms.
+  const float bal = KnobBal(c.bal);
+  const float l = bal < 0.0f ? -bal : 0.0f;
+  const float r = bal + l;
+  *fast_ms = *fast_ms * (1.0f - l) + 0.6f * r;
+  *slow_share *= (1.0f + 0.5f * l) * (1.0f - r);
+  const float rg = (c.fbk < 1.0f ? c.fbk : 1.0f) * 0.85f /
+      (w[0] + w[1] + w[2] + 1e-3f);
+  regen_inc_ = (rg - regen_) / static_cast<float>(n);
+  return rg > 0.0f || regen_ > 0.0f;
+}
+
+// FBK, after the block, per side: the taps' sum y (recovered from the
+// output: out = dry * in + wet * y, wet >= 0.71) goes back into the delay
+// line on top of the input just written there (nothing reads those slots
+// for another 5 ms), high-passed at ~100 Hz.
+void EnsembleMode::Regenerate(int ch, const FloatFrame* in,
+                              const FloatFrame* out, size_t n, float dry,
+                              float wet) {
+  float rg = regen_;
+  const float inv_wet = 1.0f / wet;
+  float* const line = line_[ch];
+  const float* x = &in[0].l + ch;
+  const float* o = &out[0].l + ch;
+  size_t pos = write_ - n;
+  float& lp = regen_lp_[ch];
+  for (size_t i = 0; i < n; ++i, ++pos, x += 2, o += 2) {
+    rg += regen_inc_;
+    const float y = (*o - dry * *x) * inv_wet;
+    lp += 0.013f * (y - lp);   // ~100 Hz: no bass build-up in the loop
+    line[pos & (kLineSize - 1)] += rg * (y - lp);
   }
 }
 

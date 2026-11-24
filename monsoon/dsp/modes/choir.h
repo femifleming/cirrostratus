@@ -17,6 +17,15 @@
 // |          | source when not frozen                                       |
 // | options  | none                                                         |
 //
+// Per-mode knobs:
+//   BAL  the singers' size: the formants move without moving the notes,
+//        noon = v1.0 (alto). Left: down to x0.76 (darker, bigger, male);
+//        right: up to x1.32 (brighter, smaller, children).
+//   FBK  resonance of the input's combs, 0.93 (v1.0) -> 0.995 (the output
+//        is scaled by 1 - feedback): the input rings on and sings its
+//        chord for seconds. Acts on the input part (TEXTURE below 1).
+//   RVB  the engine's FDN reverb (a choir needs a church).
+//
 // Each voice = glottal pulse train (a raised half-sine of 60 % open
 // quotient, slight vibrato) and/or the input through a feedback comb tuned
 // to the voice's note. Voices are panned, summed per side, and shaped by
@@ -27,6 +36,7 @@
 #define MONSOON_DSP_MODES_CHOIR_H_
 
 #include "monsoon/dsp/mode.h"
+#include "monsoon/dsp/modes/knob_fx.h"
 
 namespace monsoon {
 
@@ -42,6 +52,7 @@ class ChoirMode : public Mode {
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
   bool frozen() const { return frozen_; }
+  float reverb_amount(const Controls& c) const { return c.rvb; }
 
   // Test hooks.
   float voice_hz(int v) const { return voice_hz_[v]; }
@@ -56,7 +67,8 @@ class ChoirMode : public Mode {
     float damp;       // comb loop low-pass state
   };
 
-  void UpdateFormants(float position);
+  void UpdateFormants(float position, float shift);
+  float Knobs(const Controls& c, float* comb_scale) KNOB_FX;
 
   Voice voice_[kVoices];
   float voice_hz_[kVoices];
@@ -64,6 +76,7 @@ class ChoirMode : public Mode {
   Svf formant_[2][kFormants];
   float formant_gain_[kFormants];
   float last_position_;
+  float last_bal_;
   size_t write_;
   int inversion_;
   bool frozen_;

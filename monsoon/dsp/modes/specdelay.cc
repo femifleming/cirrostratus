@@ -25,6 +25,7 @@ bool SpecDelayMode::Init(Arena* arena) {
   ctl_.position = 0.5f;
   ctl_.texture = 0.5f;
   clear_ = false;
+  rng_.Seed(0x5DE1);
   return true;
 }
 
@@ -61,6 +62,7 @@ void SpecDelayMode::Transform(float* in, float* out[2], size_t fft_size) {
 
   // Delay curve: lows last (POSITION 0) ... flat ... highs last (1).
   const float tilt = (c.position - 0.5f) * 2.0f;
+  const float bal = KnobBal(c.bal);
   const float span = c.size * static_cast<float>(frames_ - 2);
   // Feedback and its tilt; frozen = lossless.
   const bool freeze = c.freeze;
@@ -77,6 +79,7 @@ void SpecDelayMode::Transform(float* in, float* out[2], size_t fft_size) {
   //    odd bins.
   for (size_t k = 1; k < h; ++k) {
     float curve = 0.5f + 0.5f * tilt * (2.0f * log_pos_[k] - 1.0f);
+    if (bal != 0.0f) curve = Pattern(k, curve, bal);
     size_t d = 1 + static_cast<size_t>(curve * span + 0.5f);
     if (d > frames_ - 1) d = frames_ - 1;
     size_t dr = d + (k & 1);
@@ -110,6 +113,11 @@ void SpecDelayMode::Transform(float* in, float* out[2], size_t fft_size) {
     if (a > peak) peak = a;
   }
 
+  // 2b. FBK blurs the magnitudes across neighbouring bins, RVB turns the
+  //     bins' phases (both act on what is written, so they build up with
+  //     each repeat).
+  if (c.fbk > 0.0f || c.rvb > 0.0f) peak = Smear(in_re, in_im, c.fbk, c.rvb);
+
   // 3. Store it: int16 with a per-frame scale.
   int16_t* dst = memory_ + write_ * kBins * 2;
   dst[0] = dst[1] = 0;
@@ -127,6 +135,62 @@ void SpecDelayMode::Transform(float* in, float* out[2], size_t fft_size) {
     }
   }
   if (++write_ >= frames_) write_ = 0;
+}
+
+// BAL: a pattern 0..1 added to the delay curve (scaled by |BAL|): a
+// zig-zag over log frequency, four teeth (left), or a fixed random value
+// per bin from an integer hash of k (right).
+float SpecDelayMode::Pattern(size_t k, float curve, float bal) const {
+  float pat;
+  if (bal < 0.0f) {
+    pat = log_pos_[k] * 4.0f;
+    pat -= static_cast<float>(static_cast<int>(pat));
+    pat = fabsf(2.0f * pat - 1.0f);
+    bal = -bal;
+  } else {
+    const uint32_t h = static_cast<uint32_t>(k) * 2654435761u;   // Knuth
+    pat = static_cast<float>(h >> 22) * (1.0f / 1023.0f);
+  }
+  curve += bal * (pat - 0.5f);
+  return curve < 0.0f ? 0.0f : (curve > 1.0f ? 1.0f : curve);
+}
+
+// FBK blurs the magnitudes of the frame about to be written across
+// neighbouring bins (up to 60 %), RVB turns a share of the bins (all at
+// full) by a random multiple of 90 degrees; both build up with each
+// repeat. Returns the new peak (for the int16 scale).
+float SpecDelayMode::Smear(float* re, float* im, float fbk, float rvb) {
+  const float blur = (fbk > 1.0f ? 1.0f : fbk) * 0.6f;
+  const float scatter = (rvb > 1.0f ? 1.0f : rvb) * 16777216.0f;
+  float peak = 0.0f;
+  float m_prev = 0.0f;
+  float m_cur = sqrtf(re[1] * re[1] + im[1] * im[1]);
+  for (size_t k = 1; k < kBins; ++k) {
+    const float m_next = k + 1 < kBins ?
+        sqrtf(re[k + 1] * re[k + 1] + im[k + 1] * im[k + 1]) : 0.0f;
+    float x = re[k], y = im[k];
+    if (blur > 0.0f) {
+      const float target = m_cur + blur * (0.5f * (m_prev + m_next) - m_cur);
+      const float g = target / (m_cur + 1e-20f);
+      x *= g;
+      y *= g;
+    }
+    // With probability RVB: -90, +90, 180 or 0 degrees, at random.
+    const uint32_t r = rng_.Next();
+    if (static_cast<float>(r >> 8) < scatter) {
+      const float t = (r & 1) ? -x : y;
+      y = (r & 1) ? -y : -x;
+      x = t;
+      if (r & 2) { x = -x; y = -y; }
+    }
+    re[k] = x;
+    im[k] = y;
+    const float a = fabsf(x) > fabsf(y) ? fabsf(x) : fabsf(y);
+    if (a > peak) peak = a;
+    m_prev = m_cur;
+    m_cur = m_next;
+  }
+  return peak;
 }
 
 }  // namespace monsoon

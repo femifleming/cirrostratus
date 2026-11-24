@@ -19,11 +19,24 @@
 // | FREEZE   | input muted, feedback 1: the spectral echoes hold forever   |
 // | TRIG     | clear the delay memory                                      |
 // | options  | none                                                        |
+//
+// Per-mode knobs:
+//   BAL  delay pattern on top of the POSITION curve, noon = v1.0. Left:
+//        stripes (the delay zig-zags four times across the spectrum, so
+//        neighbouring bands answer early and late); right: scatter (every
+//        bin gets its own random delay, up to the whole SIZE).
+//   FBK  spectral blur: each written frame has its magnitudes averaged
+//        with the neighbouring bins (up to 60 %), so every repeat smears
+//        further across frequency: tones widen into bands of hiss.
+//   RVB  phase diffusion: a share of each written frame's bins (all at
+//        full) is turned by a random multiple of 90 degrees, so every
+//        repeat smears further in time: echoes melt into a wash.
 
 #ifndef MONSOON_DSP_MODES_SPECDELAY_H_
 #define MONSOON_DSP_MODES_SPECDELAY_H_
 
 #include "monsoon/dsp/mode.h"
+#include "monsoon/dsp/modes/knob_fx.h"
 #include "monsoon/dsp/modes/mono_stft.h"
 
 namespace monsoon {
@@ -47,6 +60,8 @@ class SpecDelayMode : public Mode, public MonoStftClient {
 
  private:
   inline void Read(size_t frame, size_t k, float* re, float* im) const;
+  float Pattern(size_t k, float curve, float bal) const KNOB_FX;
+  float Smear(float* re, float* im, float fbk, float rvb) KNOB_FX;
 
   MonoStft stft_;
   int16_t* memory_;   // frames_ x kBins x (re, im)
@@ -55,6 +70,7 @@ class SpecDelayMode : public Mode, public MonoStftClient {
   size_t frames_;
   size_t write_;
   Controls ctl_;
+  Random rng_;
   volatile bool clear_;
 };
 

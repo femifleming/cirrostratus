@@ -15,7 +15,7 @@ bool PutzMode::Init(Arena* arena) {
   learn_sum_ = arena->Allocate<float>(kBins);
   gain_ = arena->Allocate<float>(kBins);
   win_min_ = arena->Allocate<float>(kBins);
-  prev_min_ = arena->Allocate<float>(kBins);
+  prev_min_ = arena->Allocate<float>(2 * kBins);   // + tail_ (RVB)
   if (!noise_ || !smooth_ || !learn_sum_ || !gain_ || !win_min_ ||
       !prev_min_) {
     return false;
@@ -36,6 +36,9 @@ bool PutzMode::Init(Arena* arena) {
   freeze_ = false;
   listen_ = false;
   prev_trigger_ = false;
+  tail_ = prev_min_ + kBins;
+  bal_ = rvb_ = 0.0f;
+  click_[0] = click_[1] = click_[2] = click_[3] = 0.0f;
   memset(notch_, 0, sizeof(notch_));
   notch_f0_ = 0.0f;
   comb_depth_ = 0.0f;
@@ -67,6 +70,8 @@ void PutzMode::Process(const Controls& c, const FloatFrame* in,
   freeze_ = c.freeze;
   if (c.trigger && !prev_trigger_) listen_ = !listen_;
   prev_trigger_ = c.trigger;
+  FloatFrame clean[kBlockSize];
+  in = Knobs(c, in, clean, n);
 
   stft_.Process(in, out, n);
 
@@ -131,6 +136,7 @@ void PutzMode::Transform(float* spectrum[2], size_t fft_size) {
   const float gmin2 = gmin * gmin;
   const float beta = 1.0f - 0.85f * size;              // gain smoothing
   const float beta_up = beta * 2.0f > 1.0f ? 1.0f : beta * 2.0f;
+  const bool knobs = bal_ != 0.0f || rvb_ > 0.001f;
   // Minimum statistics: the noise is the lowest smoothed power seen over
   // the current and the previous ~1 s window (94 hops), so the estimate
   // follows a rising noise floor within 2 s and ignores speech/music.
@@ -155,9 +161,15 @@ void PutzMode::Transform(float* spectrum[2], size_t fft_size) {
         win_min_[k] = 1e9f;
       }
     }
+    // RVB's tail follower: the smoothed power's peak, falling 60 dB in
+    // ~4 s.
+    const float tail = tail_[k] * 0.963f;
+    tail_[k] = smooth_[k] > tail ? smooth_[k] : tail;
     // Power subtraction, as a magnitude gain, with a floor.
     float g = 1.0f;
-    if (density > 0.001f) {
+    if (knobs) {
+      g = sqrtf(KnobPower(k, p, density > 0.001f ? alpha : 0.0f, gmin2));
+    } else if (density > 0.001f) {
       float r = 1.0f - alpha * noise_[k] / (p + 1e-24f);
       if (r < gmin2) r = gmin2;
       g = sqrtf(r);
@@ -190,6 +202,61 @@ void PutzMode::Transform(float* spectrum[2], size_t fft_size) {
     re0[k] *= g; im0[k] *= g;
     re1[k] *= g; im1[k] *= g;
   }
+}
+
+// BAL and RVB are read by Transform; FBK de-crackles the input into
+// `clean` (returned instead of `in` while it is on).
+const FloatFrame* PutzMode::Knobs(const Controls& c, const FloatFrame* in,
+                                  FloatFrame* clean, size_t n) {
+  bal_ = KnobBal(c.bal);
+  rvb_ = c.rvb > 1.0f ? 1.0f : c.rvb;
+  if (c.fbk <= 0.002f || n > kBlockSize) return in;
+  // De-crackle: what a one-pole low-pass (~2.5 kHz, following the cleaned
+  // signal) does not predict is clamped to a multiple of its own level
+  // (fast-ish attack, slow release), so a click lasting a few samples is
+  // flattened and steady sound is not. Threshold 28x (FBK near 0) -> 3x
+  // (full).
+  const float k = 1.0f - (c.fbk > 1.0f ? 1.0f : c.fbk);
+  const float crest = 3.0f + 25.0f * k * k;
+  for (int ch = 0; ch < 2; ++ch) {
+    const float* x = &in[0].l + ch;
+    float* y = &clean[0].l + ch;
+    float lp = click_[2 * ch], env = click_[2 * ch + 1];
+    for (size_t i = 0; i < n; ++i, x += 2, y += 2) {
+      const float h = *x - lp;
+      const float a = fabsf(h);
+      env += (a > env ? 0.004f : 0.0004f) * (a - env);
+      const float lim = crest * env + 1e-4f;
+      const float hc = h > lim ? lim : (h < -lim ? -lim : h);
+      *y = lp + hc;
+      lp += 0.28f * hc;   // the low-pass follows the cleaned signal
+    }
+    click_[2 * ch] = lp;
+    click_[2 * ch + 1] = env;
+  }
+  return clean;
+}
+
+// The power gain of bin k when BAL or RVB is in use.
+// BAL tilts the over-subtraction across the spectrum (weight 0..2 on a
+// fourth-root frequency scale, pivot ~1.5 kHz: the lows or the highs are
+// cleaned twice as hard, the other end is left alone).
+// RVB (de-reverb): the bin's power below its tail follower is pushed
+// down by (power / tail)^(2 RVB) (a blend of 1, the ratio and its square),
+// so falling energy falls up to 3x faster (in dB), at most -24 dB.
+float PutzMode::KnobPower(size_t k, float p, float alpha, float gmin2) {
+  const float x = sqrtf(sqrtf(static_cast<float>(k) * (1.0f / kBins)));
+  const float a = alpha * (1.0f + bal_ * (2.0f * x - 1.0f));
+  float r = 1.0f - a * noise_[k] / (p + 1e-24f);
+  if (r < gmin2) r = gmin2;
+  const float rv = 2.0f * rvb_;
+  if (rv > 0.002f && smooth_[k] < tail_[k]) {
+    const float q = smooth_[k] / tail_[k];
+    float d = rv < 1.0f ? 1.0f + rv * (q - 1.0f)
+                        : q * (1.0f + (rv - 1.0f) * (q - 1.0f));
+    r *= d > 0.004f ? d : 0.004f;
+  }
+  return r;
 }
 
 }  // namespace monsoon
