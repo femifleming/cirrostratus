@@ -43,7 +43,7 @@ void Biquad::Peak(float fc, float q, float db) {
 }
 
 // ---------------------------------------------------------------------------
-inline float MultiModeFilter::Process(float x, float g, float k, float morph) {
+float MultiModeFilter::Process(float x, float g, float k, float morph) {
   x = FastTanh(x * 0.6f) * (1.0f / 0.6f);
   const float a1 = 1.0f / (1.0f + g * (g + k)), a2 = g * a1, a3 = g * a2;
   const float v3 = x - ic2;
@@ -61,11 +61,12 @@ inline float MultiModeFilter::Process(float x, float g, float k, float morph) {
 }
 
 // ---------------------------------------------------------------------------
-// The 12AX7 plate curve, softplus(4(vg+1))/4 ^ 1.5, tabulated over the
-// range the (grid-clamped) stage can reach, normalised so that the
-// small-signal slope at vg = 0 is 1 and plate(0) = 0.
-static const int kPlateTableSize = 512;
-static const float kPlateMin = -3.0f, kPlateMax = 1.25f;
+// The 12AX7 stage transfer: grid conduction (g/(1+0.85g) above 0 V) then
+// the plate curve softplus(4(vg+1))/4 ^ 1.5, as one table over the grid
+// voltage, normalised so that the small-signal slope at vg = 0 is 1 and
+// the output at 0 V is 0.
+static const int kPlateTableSize = 1024;
+static const float kPlateMin = -3.0f, kPlateMax = 13.0f;
 static float plate_table[kPlateTableSize + 1];
 static bool plate_table_ready = false;
 
@@ -81,7 +82,8 @@ static void BuildPlateTable() {
   const float inv_slope = 0.002f / (PlateExact(0.001f) - PlateExact(-0.001f));
   for (int i = 0; i <= kPlateTableSize; ++i) {
     float vg = kPlateMin + (kPlateMax - kPlateMin) * i / kPlateTableSize;
-    plate_table[i] = (PlateExact(vg) - ip0) * inv_slope;
+    float g = vg > 0.0f ? vg / (1.0f + 0.85f * vg) : vg;
+    plate_table[i] = (PlateExact(g) - ip0) * inv_slope;
   }
   plate_table_ready = true;
 }
@@ -103,11 +105,10 @@ void TriodeStage::Init(float osr) {
 
 inline float TriodeStage::Process(float vg) {
   vg -= bias;
-  float g = vg;
-  if (g > 0.0f) g = g / (1.0f + 0.85f * g);  // grid conduction
+  // Grid current charges the coupling cap (blocking distortion / sag).
   const float charge = (vg > 0.0f ? vg : 0.0f) * 0.35f;
   bias += (charge - bias) * (charge > bias ? att : rel);
-  return Plate(g);
+  return Plate(vg);  // table includes the grid-conduction clamp
 }
 
 // 2x oversampling with a 4-coefficient polyphase IIR half-band
@@ -184,6 +185,7 @@ bool Pt2399Line::Init(Arena* arena, uint32_t seed) {
 }
 
 void Pt2399Line::UpdateCoeffs() {
+  coeff_rate = bit_rate;
   leak = expf(-kTwoPi * 25.0f / bit_rate);
   beta = expf(-1.0f / (0.0035f * bit_rate));
   const float isq = 1.0f / sqrtf(bit_rate);
@@ -204,30 +206,50 @@ float Pt2399Line::Process(float x, bool freeze) {
   const int n = static_cast<int>(bit_phase);
   bit_phase -= static_cast<float>(n);
   if (n > 0) {
+    // Local copies (byte stores could alias the members), the RAM byte
+    // under the head cached in a register, branch-free step targets:
+    // run-of-3 coincidence (history 000 or 111) selects d_max.
+    float e_est = enc_est, e_step = enc_step, d_est = dec_est, d_step = dec_step;
+    unsigned e_hist = enc_hist, d_hist = dec_hist;
+    int p = pos;
+    uint8_t* const m = mem;
+    const float lk = leak, b = beta;
+    const float t_max = (1.0f - beta) * d_max, t_min = (1.0f - beta) * d_min;
+    const float target[8] = { t_max, t_min, t_min, t_min,
+                              t_min, t_min, t_min, t_max };
+    const float dx = (in - prev_in) / static_cast<float>(n);
+    float xin = prev_in;
     float acc = 0.0f;
-    const float inv_n = 1.0f / static_cast<float>(n);
-    const float one_minus_beta = 1.0f - beta;
-    for (int k = 1; k <= n; ++k) {
-      const float xin = prev_in + (in - prev_in) * (static_cast<float>(k) * inv_n);
-      const unsigned bit = xin > enc_est ? 1u : 0u;
-      enc_hist = ((enc_hist << 1) | bit) & 7u;
-      enc_step = beta * enc_step + one_minus_beta *
-          ((enc_hist == 0u || enc_hist == 7u) ? d_max : d_min);
-      enc_est = enc_est * leak + (bit ? enc_step : -enc_step);
+    int byte_index = p >> 3;
+    unsigned cur = m[byte_index];
+    for (int k = 0; k < n; ++k) {
+      xin += dx;
+      const unsigned bit = xin > e_est ? 1u : 0u;
+      e_hist = ((e_hist << 1) | bit) & 7u;
+      e_step = b * e_step + target[e_hist];
+      e_est = e_est * lk + (bit ? e_step : -e_step);
 
-      uint8_t& byte = mem[pos >> 3];
-      const uint8_t mask = static_cast<uint8_t>(1u << (pos & 7));
-      const unsigned out_bit = (byte & mask) ? 1u : 0u;
-      if (!freeze) byte = bit ? (byte | mask) : (byte & ~mask);
-      if (++pos >= kBits) pos = 0;
+      const unsigned shift = static_cast<unsigned>(p) & 7u;
+      const unsigned out_bit = (cur >> shift) & 1u;
+      if (!freeze) cur = (cur & ~(1u << shift)) | (bit << shift);
 
-      dec_hist = ((dec_hist << 1) | out_bit) & 7u;
-      dec_step = beta * dec_step + one_minus_beta *
-          ((dec_hist == 0u || dec_hist == 7u) ? d_max : d_min);
-      dec_est = dec_est * leak + (out_bit ? dec_step : -dec_step);
-      acc += dec_est;
+      d_hist = ((d_hist << 1) | out_bit) & 7u;
+      d_step = b * d_step + target[d_hist];
+      d_est = d_est * lk + (out_bit ? d_step : -d_step);
+      acc += d_est;
+
+      if (++p >= kBits) p = 0;
+      if ((p & 7) == 0) {
+        m[byte_index] = static_cast<uint8_t>(cur);
+        byte_index = p >> 3;
+        cur = m[byte_index];
+      }
     }
-    held = acc * inv_n;
+    m[byte_index] = static_cast<uint8_t>(cur);
+    enc_est = e_est; enc_step = e_step; dec_est = d_est; dec_step = d_step;
+    enc_hist = e_hist; dec_hist = d_hist;
+    pos = p;
+    held = acc / static_cast<float>(n);
   }
   prev_in = in;
   float y = out_lp2.Process(out_lp1.Process(held));
@@ -638,8 +660,8 @@ void ChloeMode::Process(const Controls& c, const FloatFrame* in,
   }
   was_trigger_ = c.trigger;
   if (!string && side_[0].pt) {
-    side_[0].pt->UpdateCoeffs();
-    side_[1].pt->UpdateCoeffs();
+    side_[0].pt->MaybeUpdateCoeffs();
+    side_[1].pt->MaybeUpdateCoeffs();
   }
 
   // --- Audio rate ---------------------------------------------------------

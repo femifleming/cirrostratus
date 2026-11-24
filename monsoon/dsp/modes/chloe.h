@@ -49,7 +49,7 @@ struct DcBlock {
 // Zavalishin SVF with a saturating band integrator, LP > BP > HP > notch.
 struct MultiModeFilter {
   float ic1 = 0, ic2 = 0;
-  inline float Process(float x, float g, float k, float morph);
+  float Process(float x, float g, float k, float morph);
 };
 
 struct TriodeStage {
@@ -78,13 +78,17 @@ struct Pt2399Line {
   float bit_rate, target_rate, bit_phase, prev_in, held;
   float enc_est, enc_step, dec_est, dec_step;
   unsigned enc_hist, dec_hist;
-  float leak, beta, d_min, d_max, clock_a;
+  float leak, beta, d_min, d_max, clock_a, coeff_rate;
   Biquad in_lp, out_lp1, out_lp2;
   DcBlock dc;
   Random rng;
   bool Init(Arena* arena, uint32_t seed);
   void SetTime(float sec) { target_rate = kBits / Clamp(sec, 0.02f, 1.6f); }
   void UpdateCoeffs();
+  // Recomputes only when the clock moved by more than 0.3 %.
+  void MaybeUpdateCoeffs() {
+    if (fabsf(bit_rate - coeff_rate) > 0.003f * coeff_rate) UpdateCoeffs();
+  }
   float Process(float x, bool freeze);
 };
 

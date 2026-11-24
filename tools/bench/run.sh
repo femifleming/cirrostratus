@@ -16,6 +16,6 @@ done
 arm-none-eabi-g++ $FLAGS -nostartfiles -Wl,--gc-sections -T tools/bench/bench.ld \
   $OUT/*.o -lm -lc -lnosys -o $OUT/bench.elf
 arm-none-eabi-size $OUT/bench.elf
-timeout 1200 qemu-system-arm -M netduinoplus2 -display none -serial none \
+timeout 3000 qemu-system-arm -M netduinoplus2 -display none -serial none \
   -semihosting-config enable=on,target=native -icount shift=0,sleep=off \
   -kernel $OUT/bench.elf

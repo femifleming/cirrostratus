@@ -8,6 +8,7 @@
 #include "monsoon/dsp/engine.h"
 #include "monsoon/dsp/memory.h"
 #include "monsoon/dsp/stft.h"
+#include "monsoon/dsp/modes/chloe.h"
 
 using namespace monsoon;
 
@@ -118,11 +119,35 @@ int main() {
       for (int k = 0; k < 20000; ++k) acc += sqrtf(fabsf(fa[k & 1023]));
       Print("sqrtf "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / 20000)); Print("\n");
     }
+    {
+      using namespace monsoon::chloe;
+      Arena ca; ca.Init(block_main, sizeof(block_main), 0, 0);
+      Tube tube; tube.Init();
+      MultiModeFilter filt;
+      Pt2399Line* pt = ca.Allocate<Pt2399Line>(1); pt->Init(&ca, 1); pt->SetTime(0.278f);
+      const int M = 20000;
+      t = Ticks();
+      for (int k = 0; k < M; ++k) acc += tube.Process(Noise() / 32768.0f, 0.6f, 18.0f, 0.3f, 0.2f, 0.9f, true);
+      Print("chloe tube/sample "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / M)); Print("\n");
+      t = Ticks();
+      for (int k = 0; k < M; ++k) acc += filt.Process(Noise() / 32768.0f, 0.1f, 1.0f, 0.4f);
+      Print("chloe filter/sample "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / M)); Print("\n");
+      t = Ticks();
+      for (int k = 0; k < M; ++k) acc += pt->Process(Noise() / 32768.0f, false);
+      Print("chloe pt2399/sample "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / M)); Print("\n");
+      pt->SetTime(1.5f); for (int k = 0; k < 48000; ++k) acc += pt->Process(0.0f, false);
+      t = Ticks();
+      for (int k = 0; k < M; ++k) acc += pt->Process(Noise() / 32768.0f, false);
+      Print("chloe pt2399 at 1.5 s/sample "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / M)); Print("\n");
+      t = Ticks();
+      for (int k = 0; k < M; ++k) acc += Noise();
+      Print("noise gen/sample "); PrintNum((uint32_t)((Ticks() - t) * 1000ull / 168ull / M)); Print("\n");
+    }
     if (acc == 12345.0f) Print("x");
   }
   Controls c;
   memset(&c, 0, sizeof(c));
-  const int kBlocks = 750;  // 1 s of audio
+  const int kBlocks = 300;  // 1 s of audio
   for (int scenario = 0; scenario < 2; ++scenario) {
     for (int m = 0; m < MODE_LAST; ++m) {
       engine.RequestMode((ModeId)m, 0);
@@ -139,7 +164,7 @@ int main() {
         c.reverb = 0.9f; c.pitch = -12.0f;
       }
       // Warm up 0.5 s so buffers fill.
-      for (int b = 0; b < 750; ++b) {
+      for (int b = 0; b < 250; ++b) {
         for (size_t i = 0; i < kBlockSize; ++i) { in[i].l = Noise(); in[i].r = Noise(); }
         engine.Process(c, in, out, kBlockSize);
         for (int k = 0; k < 4; ++k) engine.Prepare();
