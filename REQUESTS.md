@@ -16,3 +16,6 @@ What was asked for, in order (2026-11-23 → 24).
 
 ## 2026-11-24 — video manual v2
 > the video needs to have the same voice that aeria os used, and needs to have a visual of the panel layout of monsoon so i know what knobs and sliders do what. you can make the module look faltung style as long as everything is located in the same place. delete the old video and make a new one.
+
+## 2026-11-24 — 1.1: per-mode BAL / FBK / RVB, hard stereo, mono bass
+> on the monsoon, bal feedback and reverb can have unique controls in each mode, i rarely need stereo width as an option, it can be hard stereo, and by default keep bass mono on the main out, below 60hz. implement those knobs as more controls for the modes, make the new firmware and update the manual and video manual.

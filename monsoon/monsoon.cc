@@ -14,6 +14,7 @@
 #include "monsoon/meter.h"
 #include "monsoon/settings.h"
 #include "monsoon/ui.h"
+#include "monsoon/version.h"
 
 // #define PROFILE_INTERRUPT 1
 
@@ -33,6 +34,9 @@ uint8_t block_main[kMainMemoryBytes] __attribute__ ((aligned (8)));
 uint8_t block_ccm[kCcmMemoryBytes] __attribute__ ((aligned (8), section (".ccmdata")));
 
 int __errno;
+
+// Kept in the image (main reads it) so the binary carries its version.
+const char kVersionString[] = "Cirrostratus " CIRROSTRATUS_VERSION;
 
 extern "C" {
 
@@ -109,6 +113,9 @@ static void RunStaticConstructors() {
 }
 
 int main(void) {
+  // Take the version string's address so --gc-sections keeps it.
+  const char* volatile version_string = kVersionString;
+  (void)version_string;
   RunStaticConstructors();
   Init();
   while (1) {
