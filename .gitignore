@@ -1,0 +1,6 @@
+host/build*/
+build/
+*.o
+*.wav
+!docs/*.wav
+.DS_Store
