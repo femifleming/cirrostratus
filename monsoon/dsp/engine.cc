@@ -265,6 +265,9 @@ void Engine::ProcessFloat(const Controls& raw, const FloatFrame* in,
   }
   Controls c;
   ApplyEnvelope(raw, &c);
+#ifdef TEST
+  last_controls_ = c;
+#endif
 
   // Only touch the mode while it is running (Prepare may be re-initialising
   // another one during a switch).
@@ -321,10 +324,14 @@ void Engine::ProcessFloat(const Controls& raw, const FloatFrame* in,
   // Equal-power blend gains, computed at block rate and ramped.
   const float b0 = blend_.value();
   const float b1 = c.blend;
-  float wet_gain = FastSin(b0 * 0.25f), dry_gain = FastCos(b0 * 0.25f);
+  // Exact 0/1 at the ends, so fully dry is bit-transparent.
+  float wet_gain = b0 <= 0.0f ? 0.0f : FastSin(b0 * 0.25f);
+  float dry_gain = b0 <= 0.0f ? 1.0f : FastCos(b0 * 0.25f);
   const float inv_n = 1.0f / static_cast<float>(n);
-  const float wet_inc = (FastSin(b1 * 0.25f) - wet_gain) * inv_n;
-  const float dry_inc = (FastCos(b1 * 0.25f) - dry_gain) * inv_n;
+  const float wet_inc =
+      ((b1 <= 0.0f ? 0.0f : FastSin(b1 * 0.25f)) - wet_gain) * inv_n;
+  const float dry_inc =
+      ((b1 <= 0.0f ? 1.0f : FastCos(b1 * 0.25f)) - dry_gain) * inv_n;
   blend_.Init(b1);
   if (feedback_on) {
     feedback_.Start(fb_target, n);

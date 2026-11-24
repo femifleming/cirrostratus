@@ -91,7 +91,10 @@ class Engine {
   bool supports_morph();
 
   // Mono bass on the main out (LR4 crossover at 60 Hz). On by default.
-  void set_mono_bass(bool on) { mono_bass_.set_on(on); }
+  // `immediate` skips the 20 ms crossfade (start-up, tests).
+  void set_mono_bass(bool on, bool immediate = false) {
+    mono_bass_.set_on(on, immediate);
+  }
   bool mono_bass() const { return mono_bass_.on(); }
 
   // Mute the wet path (used while flash is being written).
@@ -102,6 +105,10 @@ class Engine {
   size_t arena_capacity() const { return arena_.capacity(); }
   bool init_failed() const { return init_failed_; }
   float tamer_depth() const { return tamer_.depth(); }
+#ifdef TEST
+  // What the mode saw in the last block (after the envelope routing).
+  const Controls& last_controls() const { return last_controls_; }
+#endif
   float envelope() const { return envelope_.value(); }
 
  private:
@@ -130,6 +137,9 @@ class Engine {
   const uint8_t* pending_load_data_;
   size_t pending_load_size_;
 
+#ifdef TEST
+  Controls last_controls_;
+#endif
   EnvRouting env_routing_;
   Envelope envelope_;
 

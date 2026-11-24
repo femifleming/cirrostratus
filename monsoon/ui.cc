@@ -49,7 +49,7 @@ void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
   if (d.display == 1) previous_page_ = UI_PAGE_KNOBS;
   engine_->RequestMode(static_cast<ModeId>(d.mode), d.option[d.mode]);
   engine_->set_env_routing(settings_->env_routing(d.mode));
-  engine_->set_mono_bass(settings_->mono_bass());
+  engine_->set_mono_bass(settings_->mono_bass(), true);
 }
 
 void Ui::Poll() {

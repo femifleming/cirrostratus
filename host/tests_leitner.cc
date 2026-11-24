@@ -27,7 +27,7 @@ std::vector<FloatFrame> Run(const std::vector<FloatFrame>& in,
                             Module* keep = nullptr) {
   Module local;
   Module& m = keep ? *keep : local;
-  m.engine().set_mono_bass(false);  // measure the mode, not the output section
+  m.engine().set_mono_bass(false, true);  // measure the mode, not the output section
   m.SetMode(MODE_LEITNER);
   return m.Render(in, [&](size_t b) {
     Controls c = Base();

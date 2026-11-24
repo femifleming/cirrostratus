@@ -99,7 +99,14 @@ class MonoBass {
     on_ = true;
   }
   void Reset() { for (int i = 0; i < 6; ++i) s_[i] = 0.0f; }
-  void set_on(bool on) { on_ = on; }
+  // `immediate` skips the crossfade (start-up, tests).
+  void set_on(bool on, bool immediate = false) {
+    on_ = on;
+    if (immediate) {
+      mix_ = on ? 1.0f : 0.0f;
+      Reset();
+    }
+  }
   bool on() const { return on_; }
 
   void Process(FloatFrame* io, size_t n) {
