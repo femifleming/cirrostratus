@@ -2,6 +2,8 @@
 
 ### *a thin, high sheet of cloud for the Monsoon*
 
+**Version 1.1.0**
+
 > **cir·ro·stra·tus** /ˌsɪroʊˈstreɪtəs/ *n.* — a pale veil of ice crystals
 > spread so high and thin across the sky that the sun shines straight
 > through it, with a ring of light around it: a **halo**.
@@ -11,11 +13,15 @@ module built on Mutable Instruments' Clouds. Clouds made granular weather.
 This firmware goes one layer higher, thinner and brighter:
 
 - **30 modes** in two banks (Clouds had four kinds of sky)
+- **seven controls of their own in every mode**: the four sliders plus the
+  three small knobs **BAL**, **FBK** and **RVB**, which mean something
+  different (and specific) in each mode. That's 90 extra controls, all with
+  CV
 - **48 kHz**, 32-bit float inside, 16-bit block-float buffers that keep quiet
   sounds clean (a −60 dB whisper is stored with 93 dB SNR)
-- a new **output section** on every mode: equal-power blend, a widener that
-  stays mono-compatible, feedback that **tames its own howl**, a lush 8-line
-  reverb, a transparent limiter and dithered output
+- a clean **output section**: equal-power blend, hard stereo (whatever the
+  mode makes), **bass kept mono below 60 Hz**, a transparent limiter and
+  dithered output
 - four **save slots**, **slot morphing**, per-mode **options** and
   **envelope-follower routing**
 
@@ -30,8 +36,10 @@ weather changes.
 2. Push **POSITION** up or down to pick a mode. **Tap WRITE** to flip
    between the green bank and the red bank.
 3. Let go of **DISP**.
-4. Play something in, and wiggle all four sliders. **FREEZE** and **TRIG** do
-   something different (and good) in every mode.
+4. Play something in, and wiggle all four sliders, then the three small
+   knobs **BAL**, **FBK** and **RVB**. They're the mode's own extra controls:
+   BAL at noon and FBK/RVB at zero is the mode plain. **FREEZE** and **TRIG**
+   do something different (and good) in every mode too.
 
 The rest of this manual is the long-range forecast.
 
@@ -83,7 +91,10 @@ of the "build_4" Monsoon firmwares.
 ### After landing
 
 - Your **V/OCT calibration comes along** from the stock firmware
-  automatically. Never calibrated? See 3.6.
+  automatically. Never calibrated? See 3.7.
+- **Coming from Cirrostratus 1.0?** Settings, per-mode options, envelope
+  routings and all four save slots carry over untouched. Mono bass starts
+  on.
 - Old Clouds save slots aren't compatible. Cirrostratus recognises and
   ignores them; it never plays garbage.
 - **Back to stock:** flash the stock Monsoon firmware the same way. Clouds
@@ -101,10 +112,10 @@ of the "build_4" Monsoon firmwares.
 | slider + CV | **TEXTURE** | |
 | TUNE knob + V/OCT | **PITCH** | ±4 octaves; it gently snaps to semitones; noon = no change |
 | GAIN | input gain | analog, as before |
-| WET + CV | **BLEND** | dry ↔ wet, equal power |
-| BAL + CV | **SPREAD** | mono ↔ as-is ↔ extra wide |
-| FBK + CV | **FEEDBACK** | the mode's output back into itself |
-| RVB + CV | **REVERB** | how much and how long |
+| WET + CV | **WET** | dry ↔ wet, equal power, on every mode |
+| BAL + CV | **BAL** | the mode's own control: bipolar, plain at noon |
+| FBK + CV | **FBK** | the mode's own control: plain at zero |
+| RVB + CV | **RVB** | the mode's own control: plain at zero |
 | FREEZE + gate | **FREEZE** | the gate flips whatever the button says |
 | TRIG in | **TRIG** | a different job in every mode |
 | DISP | **DISP** | display, mode menu |
@@ -112,6 +123,14 @@ of the "build_4" Monsoon firmwares.
 
 The slider LEDs still show incoming CV (that's hardware). The four LEDs
 along the top belong to Cirrostratus.
+
+**BAL, FBK and RVB are per-mode controls.** Each mode's table in section 5
+says what they do. The house rule: **BAL is bipolar** (noon = the mode
+plain, left and right of noon do two related things), **FBK and RVB start
+at zero** (fully left = the mode plain). Their CV jacks work like the
+sliders' (the jack adds to the knob). The names are a loose theme: FBK is
+usually something that recirculates or intensifies, RVB something about
+space, tail or wash, BAL a balance between two things.
 
 ---
 
@@ -179,22 +198,36 @@ it's read straight from flash, and POSITION blends toward it. Tap FREEZE on
 it again to let it go.
 
 ### 3.4 The envelope page (weather that follows you)
-Your input's loudness can push any of the four output knobs up or down: the
-reverb that ducks while you play, the wet that opens on loud notes, the
-feedback that swells in the gaps.
+Your input's loudness can push WET and the mode's three knobs up or down:
+the wet that opens on loud notes, a BAL that leans further the harder you
+play, an FBK that swells in the gaps, an RVB that ducks while you play.
+Whatever BAL, FBK and RVB mean in the current mode, that's what moves.
 
 - **Hold FREEZE, tap DISP**: LEDs = WET · BAL · FBK · RVB.
 - **DISP** moves the cursor (blinking).
 - **FREEZE** cycles its amount: off → +½ (dim green) → +1 (green) →
   −½ (dim red) → −1 (red) → off.
 - **WRITE** saves and leaves (it also leaves by itself after 6 s).
+- Each mode keeps its own routing. Routings made with 1.0 carry over to the
+  same knobs.
 
 ### 3.5 FREEZE and TRIG
 - FREEZE toggles on **release**, because the button is also a modifier.
 - The FREEZE **gate** inverts the button: button off + gate high = frozen;
   button on + gate high = thawed.
 
-### 3.6 Teaching it volts (V/OCT calibration)
+### 3.6 Mono bass on/off
+**Hold FREEZE, tap WRITE.** For 1.5 s the LEDs tell you the new state:
+
+- the **two middle LEDs green**: bass gathered in the middle (mono bass
+  **on**, the default);
+- the **two outer LEDs amber**: bass out at the sides (mono bass **off**,
+  full stereo all the way down).
+
+The setting is remembered through power cycles. FREEZE doesn't toggle
+freeze when you use it for this.
+
+### 3.7 Teaching it volts (V/OCT calibration)
 1. **Hold DISP** (the menu opens), then also **hold WRITE** for a second.
    Two LEDs blink.
 2. Send **1 V** into V/OCT, tap **WRITE**. Four LEDs blink.
@@ -206,33 +239,43 @@ feedback that swells in the gaps.
 ## 4. The output section, on every mode
 
 ```
-IN ─┬───────────────────────────────────────────────┐
-    │                                               │ dry
-    └─► (+) ─► MODE ─► DC block ─► SPREAD ─► BLEND ─┴─► REVERB ─► LIMITER ─► OUT
-         ▲                │
-         └── FEEDBACK ◄───┘   25 Hz high-pass · resonance tamer · soft clip
+IN ─┬───────────────────────────────────────────────────────┐ dry
+    │                                                        │
+    └─► MODE ─► DC block ─► WET ─┬─(+ reverb tail)─► MONO BASS ─(+)─► LIMITER ─► OUT
+         ▲                       │   if the mode       < 60 Hz      ▲
+         └── feedback loop ◄─────┘   uses it                        └── dry
+             if the mode uses it
 ```
 
-- **FEEDBACK with manners.** Inside the loop sits a little Quell: two
-  adaptive notches hunt for the loudest narrow peaks and cut harder the more
-  of the loop's energy piles into them. Broad sound passes; a whistle gets
-  talked down. Crank FBK and things *bloom* instead of shriek.
-- **SPREAD**: 0 = mono, noon = untouched, full = wide. The widener is
-  mid/side plus an allpass decorrelator that cancels in mono, so your mix
-  survives a mono club PA, plus a pinch of Haas at the very top.
-- **BLEND**: equal power. Fully dry is bit-transparent.
-- **REVERB**: an 8-line modulated feedback delay network. One knob for send
-  and length together (0.5 s → about 16 s). It's skipped entirely at zero,
-  which saves CPU for the modes.
+- **WET**: equal power, dry ↔ wet. The dry path never goes through anything
+  else, so fully dry is bit-transparent.
+- **Hard stereo.** No widener any more: left is left, right is right,
+  exactly what the mode makes. Modes that are naturally wide (LEITNER,
+  ENSEMBLE, HALL…) are wide on their own.
+- **MONO BASS** (on by default): below 60 Hz everything the module adds is
+  summed to mono, L+R halved to both sides; above it nothing changes. It's
+  a 4th-order Linkwitz-Riley crossover, so the two halves add back up to a
+  flat response. Your sub stays in the middle of the club, your vinyl cut
+  stays cuttable. **Hold FREEZE, tap WRITE** to switch it (3.6).
 - **LIMITER**: −1 dBFS peak limiter, transparent below −2 dBFS, then TPDF
   dither into the codec.
+
+**What happened to FEEDBACK and REVERB?** They became engine services that
+a mode can borrow for one of its knobs when that's truly the best control
+for it. GRAINS borrows both (FBK = the classic Clouds feedback, still with
+its built-in howl tamer: two adaptive notches that talk down a whistling
+loop; RVB = the 8-line FDN reverb, 0.5 → 16 s). A few others borrow one of
+them (their tables say so). Every other mode gets three controls of its
+own, and pays no CPU for a reverb it doesn't use.
 
 ---
 
 ## 5. Modes
 
-**PITCH** = TUNE knob + V/OCT. The four output knobs always do what
-section 4 says. "Keeps" = what a save slot holds for that mode.
+**PITCH** = TUNE knob + V/OCT. WET always blends dry and wet. **BAL**,
+**FBK** and **RVB** are each mode's own: BAL at noon and FBK/RVB at zero
+give the mode plain, exactly as in 1.0. "Keeps" = what a save slot holds
+for that mode.
 
 <!-- MODES -->
 
@@ -248,11 +291,14 @@ section 4 says. "Keeps" = what a save slot holds for that mode.
 | FFT | ARM CMSIS-DSP real FFT, heavy work between interrupts |
 | RAM per mode | about 130 KB (only the running mode holds memory) |
 | CPU | every mode measured on an emulated STM32F405 at ≤ ~2400 instructions per stereo frame including the output section |
+| Output | hard stereo, mono bass below 60 Hz (LR4, switchable), limiter, TPDF dither |
 | Save slots | 4 × 128 KB of flash |
-| Settings | calibration, mode, per-mode option + envelope routing |
+| Settings | calibration, mode, per-mode option + envelope routing, mono bass |
 
-The source, the 180-odd tests and the CPU benchmark live in the repository:
-`make -C host test`, `tools/bench/run.sh`.
+The source, the @@TESTS@@ tests and the CPU benchmark live in the repository:
+`make -C host test`, `tools/bench/run.sh`. Cirrostratus has so far been
+tested on the host and an emulated STM32F405, not yet on a physical
+module.
 
 ---
 

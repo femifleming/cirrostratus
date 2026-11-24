@@ -14,6 +14,9 @@ wooden body, metal sheet, cathedral.
 | PITCH | wet filter: high-cut ← noon (full range) → low-cut |
 | FREEZE | input muted, the space loops back on itself forever |
 | TRIG | next space |
+| BAL | early ↔ late: noon = the IR as it is. Left: the tail fades away (close, dry). Right: the early part fades and the tail swells (far away). Same loudness |
+| FBK | feedback through the IR: the space builds on itself, longer and denser; it never howls (FREEZE is the endless version) |
+| RVB | a long smooth FDN tail (0.5 → 16 s) behind the space (the IRs are at most 170 ms) |
 
 ### Bank 2 (red)
 
@@ -33,6 +36,9 @@ neighbours and pushes them down, stereo-linked so the image doesn't move
 | PITCH | output trim ±12 dB |
 | FREEZE | hold the current cut curve as a static EQ |
 | TRIG | delta: hear only what's being removed |
+| BAL | noon = stereo-linked. Left: mid only (the sides pass untouched). Right: sides only |
+| FBK | hard threshold: anything louder than a level falling 0 → −72 dBFS is pushed down too; all the way up it squashes the spectrum flat (up to DENSITY's depth) |
+| RVB | halo: what's cut rings on as a soft spectral tail, 0.3 → 5 s (also heard in delta) |
 
 #### 17 · LEITNER — spatial path panner (after Leitner / Xenakis)
 *Forecast: the sound takes flight and circles your head.*
@@ -50,6 +56,9 @@ room. Works on headphones and speakers.
 | PITCH | Doppler: none ← physical (noon) → exaggerated ×3 |
 | FREEZE | stop moving; the source stays where it is |
 | TRIG | next path: circle → figure-8 → fly-by → spiral → random flight |
+| BAL | noon = a smooth glide. Left (Leitner): the path becomes 8 loudspeaker stations; the source rests at each and hops to the next. Right (Xenakis): every trip round the path takes a chance length |
+| FBK | trail: the sound is re-emitted every 150 ms from wherever the source has flown to, darker each time |
+| RVB | the room's late tail (the FDN reverb) |
 
 #### 18 · TANTRI — tabla + tanpura
 *Forecast: monsoon season in Varanasi.*
@@ -66,6 +75,9 @@ TRIG. Your input also sets the strings and drum heads ringing.
 | PITCH | Sa, V/OCT (C3 at noon); dayan sits at upper Sa, bayan below |
 | FREEZE | the drone sustains forever; plucking stops; the drums still play |
 | TRIG | play the stroke |
+| BAL | the tanpura's first string: left third Ma, noon Pa, right third Ni |
+| FBK | ring: the drum heads ring up to 5× longer, the closed strokes stop damping, and the drone sets the drums humming |
+| RVB | a room round the drums and the drone (the FDN reverb) |
 
 #### 19 · HARMONIZER — scale harmonizer
 *Forecast: a choir of you, always in key.*
@@ -82,6 +94,9 @@ if you're a little sharp.
 | TEXTURE | stereo spread of the voices |
 | FREEZE | latch: the voices hold their notes while you carry on |
 | TRIG | next chord set |
+| BAL | register: left third every voice an octave down, right third an octave up (same chord shape) |
+| FBK | canon: the voices (not you) echo every 340 ms, darker each time |
+| RVB | glide: the voices slide into each new note, from a snap up to ~0.8 s |
 | Options | 1 major · 2 natural minor · 3 dorian · 4 major pentatonic |
 
 #### 20 · PUTZ — spectral cleaner
@@ -99,6 +114,9 @@ FREEZE; until then it tracks the noise floor by itself (32 ms latency).
 | PITCH | hum fundamental, ± one octave around 50/60 Hz |
 | FREEZE (hold) | learn the noise: play only the noise while holding |
 | TRIG | listen to what's removed |
+| BAL | noon = as before. Left: the lows are cleaned harder (rumble, room) and the highs left alone. Right: hiss only, the bass untouched |
+| FBK | de-crackle: clicks and vinyl crackle on the input are flattened, steady sound passes |
+| RVB | de-reverb: every tail dies up to 3× faster, attacks and held notes stay (works with DENSITY at 0 too) |
 | Options | 1 = 50 Hz mains · 2 = 60 Hz mains |
 
 #### 21 · ENSEMBLE — string-machine ensemble
@@ -116,6 +134,9 @@ the Solina shimmer.
 | PITCH | LFO rate, V/OCT |
 | FREEZE | stop the LFOs where they are |
 | TRIG | reset the LFO phases |
+| BAL | noon = as before. Left: only the slow LFO, deeper (a pure swirl). Right: only the fast one, deeper (pure shimmer, even in chorus) |
+| FBK | regeneration: the taps go round again (with DENSITY low: flanger jets) |
+| RVB | reverb: the string machine's hall (the module's FDN reverb) |
 
 #### 22 · BARBERPOLE — frequency-shift spirals
 *Forecast: endlessly rising (or falling) and never arriving.*
@@ -132,6 +153,9 @@ echoes spiral up or down forever.
 | PITCH | multiplies the shift, V/OCT |
 | FREEZE | infinite spiral, input muted |
 | TRIG | flip direction |
+| BAL | noon = as before. Left: every pass darker (the loop closes to 1.2 kHz). Right: every pass thinner (opens up to 1.5 kHz) |
+| FBK | wow: the loop delay wobbles, so every pass is a little more out of tune, like tape |
+| RVB | dispersion: every pass drags the lows behind the highs, and the repeats melt into falling chirps, like a spring |
 
 #### 23 · SPECDELAY — spectral delay
 *Forecast: the lows arrive late, the highs early (or the other way round).*
@@ -147,6 +171,9 @@ Every frequency band has its own delay and feedback.
 | PITCH | spectral shift per repeat (±24 st): spirals; noon = none |
 | FREEZE | the spectral echoes hold forever |
 | TRIG | clear |
+| BAL | noon = as before. Left: stripes (neighbouring bands answer early and late). Right: scatter (every band gets its own random delay) |
+| FBK | blur: every repeat smears further across frequency, and tones widen into hiss |
+| RVB | diffusion: every repeat smears further in time, and the echoes melt into a wash |
 
 #### 24 · CHOIR — formant choir
 *Forecast: a choir on the horizon, singing whatever you hum.*
@@ -163,6 +190,9 @@ excited by your input and/or their own breath.
 | PITCH | chord root, V/OCT (C3 at noon) |
 | FREEZE | sustain the chord on their own breath, no input needed |
 | TRIG | next inversion |
+| BAL | noon = as before (altos). Left: bigger, darker singers (formants down). Right: smaller, brighter ones (formants up). The notes stay put |
+| FBK | resonance: your input rings on and sings its chord for seconds (TEXTURE left of full) |
+| RVB | reverb: a choir needs a church (the module's FDN reverb) |
 
 #### 25 · FOLDER — wavefolder + low-pass gate
 *Forecast: west-coast weather, with a breeze off the Pacific.*
@@ -180,6 +210,9 @@ TRIG opens the gate.
 | PITCH | internal sine, V/OCT |
 | FREEZE | gate held open: a drone |
 | TRIG | ping the gate |
+| BAL | noon = as before. Left: your input bends the sine's phase (option 1). Right: the sine ring-modulates your input (in option 2 too: a ring mod at PITCH) |
+| FBK | the folder feeds itself: growl, then chaos |
+| RVB | reverb (the module's FDN reverb) |
 | Options | 1 input + sine · 2 input only (an effect) |
 
 #### 26 · HALL — big reverb

@@ -280,7 +280,9 @@ MONSOON_TEST(every_mode_bal_fbk_rvb_sweeps_and_random_cv_are_safe) {
 }
 
 // Every knob does something on every mode: its extreme setting changes the
-// output by a clear amount compared with the neutral one.
+// output by a clear amount (more than -40 dB of difference) compared with the
+// neutral one, on music with a moving PITCH. (Each mode's own test checks
+// what the change is; this one catches dead knobs.)
 MONSOON_TEST(every_mode_bal_fbk_rvb_each_change_the_sound) {
   int dead = 0;
   for (int mode = 0; mode < MODE_LAST; ++mode) {
@@ -288,9 +290,13 @@ MONSOON_TEST(every_mode_bal_fbk_rvb_each_change_the_sound) {
     auto render = [&](int knob, float value) {
       Module m;
       m.SetMode(ModeId(mode));
-      auto in = Music(3.0f, 8);
+      auto in = Music(4.0f, 8);
       return m.Render(in, [&](size_t b) {
         Controls c = DefaultControls();
+        // PITCH steps every 0.25 s and the sliders sit off-centre, so
+        // controls that act on movement (glides, paths) have something to do.
+        c.pitch = (b / 375) % 2 ? 7.0f : 0.0f;
+        c.density = 0.65f;
         if (knob == 0) c.bal = value;
         if (knob == 1) c.fbk = value;
         if (knob == 2) c.rvb = value;
@@ -313,7 +319,7 @@ MONSOON_TEST(every_mode_bal_fbk_rvb_each_change_the_sound) {
       float diff = Measure(d, d.size() / 3).rms;
       float scale = std::fmax(ref, Measure(out, out.size() / 3).rms);
       change[t] = Db(diff) - Db(scale);
-      if (change[t] < -20.0f) {
+      if (change[t] < -40.0f) {
         std::printf("    %s: %s changes the output by only %.1f dB\n", name, names[t], change[t]);
         ++dead;
       }

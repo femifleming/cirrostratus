@@ -7,7 +7,8 @@ Source of truth for the modes. The manual (MANUAL.md) is written from this.
 - STM32F405RGT6, 168 MHz Cortex-M4F, WM8731 codec. Engine runs at **48 kHz**,
   blocks of 32 frames → ~3500 CPU cycles per stereo frame in total.
   Budget per mode (Process + Prepare averaged): **≤ 2000 cycles/frame**.
-  The output section (reverb, spread, tamer, limiter) takes ~300–400.
+  The output section (DC block, blend, mono bass, limiter) takes ~120;
+  the feedback-loop and FDN services add ~110 / ~435 when a mode uses them.
 - RAM for a mode: `Arena` with two regions, ~96 KB main SRAM + ~33 KB CCM
   (≈ 129 KB total). One allocation must fit inside one region; allocate the
   biggest things first. `SampleBuffer` can span both regions.
@@ -27,12 +28,19 @@ Source of truth for the modes. The manual (MANUAL.md) is written from this.
 | size | SIZE slider + CV | 0..1 |
 | texture | TEXTURE slider + CV | 0..1 |
 | pitch | TUNE knob + V/OCT | semitones, −48..+48, 0 at noon |
-| blend / spread / feedback / reverb | WET / BAL / FBK / RVB knobs + CV | 0..1 |
+| blend | WET knob + CV (engine dry/wet) | 0..1 |
+| bal / fbk / rvb | BAL / FBK / RVB knobs + CV: **per-mode controls** | 0..1 |
 | freeze | FREEZE button toggle or FREEZE gate | bool |
 
 Panel buttons: DISP (top left), WRITE (pencil, top right), FREEZE (big).
-In the text below "PITCH" means the TUNE knob + V/OCT input, and the
-output-section names refer to the four small knobs.
+In the text below "PITCH" means the TUNE knob + V/OCT input.
+
+Since 1.1, BAL, FBK and RVB are three extra controls of every mode
+(documented in each mode's header and in docs/modes_*.md). Conventions:
+BAL is bipolar (`KnobBipolar()`, small dead zone) and gives the v1.0 sound
+at noon; FBK and RVB give the v1.0 sound at 0. CV can change them every
+block: everything is smoothed and every internal feedback stays below
+unity (or saturates) except where FREEZE defines an infinite hold.
 | trigger | TRIG input rising edge this block | bool |
 | gate | TRIG input level | bool |
 | option | chosen in the mode menu | 0..num_options−1 |
@@ -46,20 +54,30 @@ red for i ≥ 4. For buffer modes with a mono choice: options 0–3 stereo,
 
 ## Shared output section (engine, all modes)
 
-1. Input + feedback → mode. Feedback = wet output → 25 Hz HP →
-   ResonanceTamer (two adaptive notches; depth rises with how much of the
-   loop's energy sits in narrow peaks, scaled by the FBK knob) →
-   soft clip. Gain curve: smoothstep(feedback).
-2. Wet → DC blocker → Spread: 0 = mono, 0.5 = as produced, 1 = wide
-   (side gain up to 1.6 + mono-compatible allpass decorrelation + ≤0.35 ms
-   Haas at the very top).
-3. Blend: equal power dry/wet.
-4. Reverb: 8-line FDN with 16-bit lines (≈ 15 k samples), modulated, T60
-   0.5–16.5 s from the RVB knob, which also sets the send level.
-5. Limiter (−1 dBFS, transparent below −2 dBFS) → TPDF dither → codec.
+1. Input (+ the feedback service's signal, if the mode uses it) → mode.
+2. Wet → DC blocker → equal-power blend. The dry part goes straight to the
+   output bus (fully dry is bit-transparent); the wet part goes to a wet bus.
+3. FDN reverb service (if the mode maps a knob to it): hears dry + wet, its
+   tail joins the wet bus.
+4. Mono bass on the wet bus: LR4 crossover at 60 Hz done in mid/side
+   (mid → LR4 allpass, side → LR4 high-pass), i.e. HP4(L) + LP4((L+R)/2).
+   On by default; FREEZE hold + WRITE toggles it (settings byte
+   `mono_bass_off`), 20 ms crossfade, free when off.
+5. Dry + wet → limiter (−1 dBFS, transparent below −2 dBFS) → TPDF dither →
+   codec. The output is hard stereo: no widener.
 
-Envelope follower: input level can push any of the 4 output knobs up or
-down (per-mode routing, set in the ENV page).
+Engine services a mode may map a knob to (`Mode::feedback_amount(c)`,
+`Mode::reverb_amount(c)`, pure functions of the controls; 0 = unused and
+skipped):
+- Feedback loop: wet → 25 Hz HP → ResonanceTamer (two adaptive notches;
+  depth rises with how much of the loop's energy sits in narrow peaks) →
+  soft clip → mode input. Gain curve: smoothstep(amount). Used by GRAINS
+  and the modes listed in docs/modes_*.md.
+- FDN: 8 lines, 16-bit (≈ 15 k samples, 32 KB of CCM), modulated, T60
+  0.5–16.5 s, amount sets send and decay.
+
+Envelope follower: input level can push WET, BAL, FBK or RVB up or down
+(per-mode routing, set in the ENV page).
 
 ## Modes
 
@@ -75,8 +93,10 @@ records continuously unless frozen.
   → 1 flat-top (Tukey). Above 0.75 adds random pitch scatter (up to ±1 st).
 - PITCH: grain transposition, quantised by option: 0 chromatic,
   1 minor pentatonic, 2 octaves+fifths, 3 free (unquantised).
-- SPREAD: each grain is panned from the trajectory's own pan (circle /
-  figure-8 use it); spread scales that.
+- Pan: each grain is panned from the trajectory's own pan (circle /
+  figure-8 use it).
+- BAL: left = spray (random offset up to ±½ buffer), right = probability
+  of reversed grains. FBK: feedback service. RVB: FDN service.
 - FREEZE: stop recording. TRIG: next trajectory shape:
   circle → line (back-and-forth scan) → figure-8 → spiral → random walk.
 - Up to 32 voices, Hermite reads. Save: the buffer.
@@ -144,7 +164,7 @@ STFT 2048/512. Left = modulator, right = carrier.
 - SIZE: formant shift of the modulator envelope (×0.5 → ×2).
 - PITCH: carrier transposition.
 - FREEZE: hold the modulator spectrum. TRIG: toggle hold of the carrier.
-- Output mono (same on both sides); SPREAD widens it.
+- Output mono (same on both sides).
 
 ### 7 STRETCH — extreme time stretch
 SampleBuffer stereo (option 0) or mono (option 1), ≤ 118 KB; STFT
