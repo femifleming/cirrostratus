@@ -117,6 +117,19 @@ along the top belong to Cirrostratus.
 
 ## 3. Buttons, pages and little rituals
 
+### 3.0 Sunrise
+Every time you power up, the module greets you with three seconds of
+weather:
+
+1. **Ice crystals**: dim sparkles twinkle across the four LEDs.
+2. **Halo**: two amber rings pulse outward from the middle LEDs to the
+   edges, and the FREEZE LED glows with each pulse.
+3. **The sun breaks through**: amber sweeps to green, left to right.
+4. **The forecast**: your current mode in binary (green or red bank),
+   fading out.
+
+Any button skips it (that press does nothing else).
+
 ### 3.1 Looking at the sky
 - **Tap DISP**: the LEDs flip between the **input level** meter and the
   values of **WET / STER / FDB / RVB**. While frozen, the meter shows the

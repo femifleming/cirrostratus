@@ -1,8 +1,38 @@
-<!-- FALTUNG -->
+#### 15 · FALTUNG — the built-in space library
+*Forecast: eight different rooms, all in the same cloud.*
+
+Convolution with eight stereo spaces synthesized into the firmware (they
+live in flash, so they cost no RAM): room, hall, plate, spring, cabinet,
+wooden body, metal sheet, cathedral.
+
+| Control | |
+|---|---|
+| POSITION | which space (8 zones, 30 ms crossfade) |
+| SIZE | how much of the IR (shorter also saves CPU) |
+| DENSITY | pre-delay 0 → 200 ms |
+| TEXTURE | tilt on the wet sound, dark ↔ bright |
+| PITCH | wet filter: high-cut ← noon (full range) → low-cut |
+| FREEZE | input muted, the space loops back on itself forever |
+| TRIG | next space |
 
 ### Bank 2 (red)
 
-<!-- QUELL -->
+#### 16 · QUELL — resonance suppressor
+*Forecast: harsh peaks clearing by afternoon.*
+
+A spectral dynamic EQ: it finds narrow ringing peaks standing above their
+neighbours and pushes them down, stereo-linked so the image doesn't move
+(27 ms latency).
+
+| Control | |
+|---|---|
+| POSITION | where it listens hardest, 100 Hz → 16 kHz |
+| SIZE | selectivity: only sharp ringing → broad honky areas |
+| DENSITY | depth, up to 24 dB of cut (bottom = transparent) |
+| TEXTURE | speed: slow and smooth → fast |
+| PITCH | output trim ±12 dB |
+| FREEZE | hold the current cut curve as a static EQ |
+| TRIG | delta: hear only what's being removed |
 
 #### 17 · LEITNER — spatial path panner (after Leitner / Xenakis)
 *Forecast: the sound takes flight and circles your head.*
@@ -54,7 +84,22 @@ if you're a little sharp.
 | TRIG | next chord set |
 | Options | 1 major · 2 natural minor · 3 dorian · 4 major pentatonic |
 
-<!-- PUTZ -->
+#### 20 · PUTZ — spectral cleaner
+*Forecast: hiss lifting, hum dispersing.*
+
+A denoiser plus a 50/60 Hz hum comb. It learns the noise when you hold
+FREEZE; until then it tracks the noise floor by itself (32 ms latency).
+
+| Control | |
+|---|---|
+| DENSITY | reduction, up to 30 dB |
+| SIZE | smoothing (fewer "musical noise" twitters) |
+| TEXTURE | transient protection: lets attacks through |
+| POSITION | hum comb depth (8 harmonics) |
+| PITCH | hum fundamental, ± one octave around 50/60 Hz |
+| FREEZE (hold) | learn the noise: play only the noise while holding |
+| TRIG | listen to what's removed |
+| Options | 1 = 50 Hz mains · 2 = 60 Hz mains |
 
 #### 21 · ENSEMBLE — string-machine ensemble
 *Forecast: a 1970s string machine drifts in from the coast.*
@@ -202,4 +247,18 @@ mirrored around an anchor note (highs become lows), or folded under it.
 | FREEZE | hold the spectrum (still warpable) |
 | TRIG | grab a new spectrum while frozen |
 
-<!-- POLISH -->
+#### 30 · POLISH — mastering chain
+*Forecast: clear, bright and finished.*
+
+Tilt → 3-band compressor → tape saturation → width with mono bass (the
+limiter follows). Zero latency, flat when everything is off.
+
+| Control | |
+|---|---|
+| DENSITY | compression amount (one macro for 3 bands, auto make-up) |
+| TEXTURE | tape saturation: clean → warm and driven |
+| POSITION | tone: dark ← flat (noon) → bright |
+| SIZE | width: mono ← as is → 2× side; below 120 Hz always mono |
+| PITCH | output trim ±12 dB |
+| FREEZE | bypass, for A/B |
+| TRIG | auto-gain: match output loudness to input |
