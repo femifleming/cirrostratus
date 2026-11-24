@@ -70,11 +70,16 @@ float HarmonizerMode::TargetNote(float input_note, int root, int scale,
   return static_cast<float>(root + 12 * (oo + s.octaves) + sc[dd]);
 }
 
-bool HarmonizerMode::Init(Arena* arena) {
+__attribute__((cold)) bool HarmonizerMode::Init(Arena* arena) {
   ring_ = arena->Allocate<float>(kRingSize);
   dec_ = arena->Allocate<float>(kDecSize);
   nsdf_ = arena->Allocate<float>(kWindow + kMaxLag + kMaxLag + 8);
-  if (!ring_ || !dec_ || !nsdf_) return false;
+  echo_ = arena->Allocate<int16_t>(kEchoSize);
+  if (!ring_ || !dec_ || !nsdf_ || !echo_) return false;
+  echo_pos_ = 0;
+  echo_lp_ = 0.0f;
+  echo_amt_ = 0.0f;
+  echo_tail_ = 0;
   write_ = 0;
   dec_write_ = 0;
   dec_acc_ = 0.0f;
@@ -89,6 +94,7 @@ bool HarmonizerMode::Init(Arena* arena) {
     log_ratio_[v] = 0.0f;
     latched_note_[v] = 60.0f;
     gain_[v] = 0.0f;
+    glide_note_[v] = 60.0f;
   }
   latched_ = false;
   was_trigger_ = false;
@@ -221,9 +227,24 @@ void HarmonizerMode::Process(const Controls& c, const FloatFrame* in,
   }
   window = Clamp(window, 64.0f, kWindowMax);
 
+  // BAL: the voices' register (thirds of the knob: -1, 0, +1 octave).
+  const float octave = c.bal < 0.33f ? -12.0f : (c.bal > 0.67f ? 12.0f : 0.0f);
+  // RVB: glide time constant 10 ms -> ~0.8 s (squared for fine control).
+  const float rvb = Clamp(c.rvb, 0.0f, 1.0f);
+  const float glide = rvb > 0.0f
+      ? 1.0f - expf(-static_cast<float>(n) /
+                    ((0.01f + 0.8f * rvb * rvb) * kSampleRate))
+      : 1.0f;
+
   float semis[kVoices];
   for (int v = 0; v < kVoices; ++v) {
-    const float t = latched_ ? latched_note_[v] : target[v];
+    float t = (latched_ ? latched_note_[v] : target[v]) + octave;
+    if (glide < 1.0f) {
+      glide_note_[v] += glide * (t - glide_note_[v]);
+      t = glide_note_[v];
+    } else {
+      glide_note_[v] = t;
+    }
     float s = t - input_note + c.size * 0.15f * kDetune[v];
     s = Clamp(s, -36.0f, 36.0f);
     // Glide ~10 ms; jump if the gap is huge (new note far away).
@@ -247,12 +268,22 @@ void HarmonizerMode::Process(const Controls& c, const FloatFrame* in,
     pl[v] = pan > 0.0f ? 1.0f - pan : 1.0f;
     pr[v] = pan < 0.0f ? 1.0f + pan : 1.0f;
   }
+  // FBK: canon echo of the voices (ramped; drains for one line length
+  // after it goes back to zero, then costs nothing).
+  const float fbk = Clamp(c.fbk, 0.0f, 1.0f);
+  if (fbk > 0.0f) echo_tail_ = static_cast<int32_t>(kEchoSize + n);
+  const bool echo = echo_tail_ > 0;
+  const float echo_inc = (fbk - echo_amt_) / static_cast<float>(n);
+  const float echo_coef = 1.0f - expf(-kTwoPi * 2800.0f / kSampleRate);
+  if (fbk == 0.0f && echo_tail_ > 0) echo_tail_ -= static_cast<int32_t>(n);
+
   const float mask = static_cast<float>(kRingSize);
   for (size_t i = 0; i < n; ++i) {
     // Position of this sample in the ring (the block is already written).
     const float now = static_cast<float>(
         (write_ + kRingSize - n + i) & (kRingSize - 1));
     float l = in[i].l, r = in[i].r;
+    float voices = 0.0f;
     for (int v = 0; v < kVoices; ++v) {
       gain_[v] += 0.002f * (g_target[v] - gain_[v]);
       if (gain_[v] < 1e-4f && g_target[v] == 0.0f) continue;
@@ -278,10 +309,24 @@ void HarmonizerMode::Process(const Controls& c, const FloatFrame* in,
       y *= gain_[v];
       l += y * pl[v];
       r += y * pr[v];
+      voices += y;
+    }
+    if (echo) {
+      echo_amt_ += echo_inc;
+      const float e = echo_[echo_pos_] * (1.0f / 16383.0f);
+      echo_lp_ += echo_coef * (e - echo_lp_);
+      const float send = echo_amt_ < 0.5f ? 2.0f * echo_amt_ : 1.0f;
+      echo_[echo_pos_] = static_cast<int16_t>(
+          SoftClip(0.6f * send * voices + 0.75f * echo_amt_ * echo_lp_) *
+          16383.0f);
+      echo_pos_ = (echo_pos_ + 1) & (kEchoSize - 1);
+      l += e;
+      r += e;
     }
     out[i].l = l;
     out[i].r = r;
   }
+  echo_amt_ = echo ? fbk : 0.0f;
 }
 
 }  // namespace monsoon

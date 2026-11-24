@@ -144,3 +144,57 @@ MONSOON_TEST(quell_trim_spans_plus_minus_12_db) {
   CHECK(std::fabs(Db(down) - Db(ref) + 12.0f) < 0.5f, "-12");
   return true;
 }
+
+MONSOON_TEST(quell_bal_fbk_rvb_do_what_they_say) {
+  const size_t a = 48000 * 2, b = 48000 * 3 - 32;
+
+  // BAL: a ring only in the sides (L = +s, R = -s) over noise. Side focus
+  // (right) cuts it; mid focus (left) leaves it alone.
+  auto side_ring = Noise(3.0f, 0.1f);
+  for (size_t i = 0; i < side_ring.size(); ++i) {
+    float s = 0.3f * std::sin(2.0 * M_PI * 1000.0 * i / 48000.0);
+    side_ring[i].l += s;
+    side_ring[i].r -= s;
+  }
+  Controls c = Settings(1.0f);
+  float ring[3];
+  for (int k = 0; k < 3; ++k) {
+    c.bal = 0.5f * k;
+    ring[k] = ToneAmplitude(Run(side_ring, c), 1000.0f, a, b);
+  }
+  std::printf("    BAL side ring: mid focus %.1f dB, linked %.1f dB, side focus "
+              "%.1f dB\n", Db(ring[0]), Db(ring[1]), Db(ring[2]));
+  CHECK(ring[0] > 0.25f && ring[2] < 0.25f * ring[0] && ring[1] < 0.5f * ring[0],
+        "bal");
+
+  // FBK: flat noise has no peaks, so v1.0 leaves it; the hard threshold
+  // squashes it.
+  auto flat = NoiseWithRing(3.0f, 0.0f);
+  c = Settings(1.0f);
+  float in_rms = Measure(flat, a, b).rms;
+  float soft = Measure(Run(flat, c), a, b).rms;
+  c.fbk = 1.0f;
+  float hard = Measure(Run(flat, c), a, b).rms;
+  std::printf("    FBK flat noise %.1f dB: fbk 0 %.1f dB, fbk 1 %.1f dB\n",
+              Db(in_rms), Db(soft), Db(hard));
+  CHECK(Db(in_rms) - Db(soft) < 2.0f && Db(soft) - Db(hard) > 8.0f, "fbk");
+
+  // RVB: a ring that stops at 2 s. With the halo it rings on, fading.
+  auto stop = NoiseWithRing(5.0f, 0.3f);
+  for (size_t i = 0; i < stop.size(); ++i) {
+    if (i >= 96000) stop[i].l = stop[i].r = 0.0f;
+  }
+  c = Settings(1.0f);
+  auto dry_tail = Run(stop, c);
+  c.rvb = 1.0f;
+  auto halo = Run(stop, c);
+  float t0 = Measure(dry_tail, 96000 + 9600, 96000 + 33600).rms;
+  float t1 = Measure(halo, 96000 + 9600, 96000 + 33600).rms;
+  float late = Measure(halo, 96000 + 96000, 96000 + 120000).rms;
+  Stats hs = Measure(halo);
+  std::printf("    RVB rms 0.2-0.7 s after the ring: %.1f dB -> %.1f dB, "
+              "2-2.5 s: %.1f dB, peak %.2f\n", Db(t0), Db(t1), Db(late), hs.peak);
+  CHECK(t1 > 0.01f && t1 > 20.0f * t0 && late < 0.5f * t1, "rvb tail");
+  CHECK(hs.finite && hs.peak < 1.0f, "rvb level");
+  return true;
+}

@@ -161,3 +161,81 @@ MONSOON_TEST(faltung_freeze_sustains_and_stays_bounded) {
   CHECK(s.finite && s.peak <= 1.0f, "unbounded");
   return true;
 }
+
+MONSOON_TEST(faltung_bal_fbk_rvb_do_what_they_say) {
+  // BAL: early (first 20 ms) vs late (100-170 ms) energy of the hall IR.
+  const size_t t0 = 24000 + 512;
+  float early_late[3], total[3];
+  for (int k = 0; k < 3; ++k) {
+    Controls c = Neutral();
+    c.position = 0.2f;  // hall
+    c.bal = 0.5f * k;
+    auto ir = ImpulseResponse(c, 1.0f);
+    float e = Rms(ir, t0, t0 + 960), l = Rms(ir, t0 + 4800, t0 + 8000);
+    early_late[k] = Db(e) - Db(l);
+    total[k] = Db(Rms(ir, t0, t0 + 8192));
+  }
+  std::printf("    BAL early-late: left %.1f dB, noon %.1f dB, right %.1f dB; "
+              "level %.1f / %.1f / %.1f dB\n", early_late[0], early_late[1],
+              early_late[2], total[0], total[1], total[2]);
+  CHECK(early_late[0] > early_late[1] + 15.0f, "left keeps the early part");
+  CHECK(early_late[2] < early_late[1] - 15.0f, "right keeps the tail");
+  CHECK(std::fabs(total[0] - total[1]) < 4.0f && std::fabs(total[2] - total[1]) < 4.0f,
+        "level kept");
+
+  // FBK: the 170 ms room rings on through itself.
+  float tail[2], late = 0.0f;
+  for (int k = 0; k < 2; ++k) {
+    Controls c = Neutral();
+    c.position = 0.2f;
+    c.fbk = k ? 1.0f : 0.0f;
+    auto ir = ImpulseResponse(c, 6.0f);
+    tail[k] = Rms(ir, t0 + 24000, t0 + 48000);  // 0.5-1 s
+    if (k) late = Rms(ir, t0 + 48000 * 4, t0 + 48000 * 5);
+  }
+  std::printf("    FBK after a click: 0.5-1 s %.1f dB -> %.1f dB; 4-5 s %.1f dB "
+              "(the IR itself: %.1f dB)\n", Db(tail[0]), Db(tail[1]), Db(late),
+              total[1]);
+  CHECK(tail[0] < 1e-6f && Db(tail[1]) > total[1] - 30.0f, "feedback tail");
+  CHECK(Db(late) < Db(tail[1]) - 30.0f, "feedback tail decays");
+  // ... bounded with music, and it dies away once the input stops (the
+  // loop gain stays below 1), at full and at 0.7, BAL fully right.
+  for (int ir = 0; ir < kNumFaltungIrs; ++ir) {
+    for (int k = 0; k < 2; ++k) {
+      Module m;
+      m.SetMode(MODE_FALTUNG);
+      auto in = Music(8.0f, 3 + ir);
+      for (size_t i = 48000 * 3; i < in.size(); ++i) in[i].l = in[i].r = 0.0f;
+      auto out = m.Render(in, [&](size_t) {
+        Controls c = Neutral();
+        c.position = (ir + 0.5f) / kNumFaltungIrs;
+        c.fbk = k ? 0.7f : 1.0f;
+        c.bal = 1.0f;
+        return c;
+      });
+      Stats s = Measure(out);
+      float end = Rms(out, 48000 * 7, 48000 * 8);
+      CHECK(s.finite && s.peak <= 1.0f, "ir %d: peak %.2f", ir, s.peak);
+      CHECK(Db(end) < -60.0f, "ir %d: 4-5 s after the input %.1f dB", ir, Db(end));
+    }
+  }
+
+  // RVB: the engine's FDN carries the room on past its 170 ms.
+  float late_tail[2];
+  for (int k = 0; k < 2; ++k) {
+    Module m;
+    m.SetMode(MODE_FALTUNG);
+    auto in = Music(3.0f);
+    for (size_t i = 24000; i < in.size(); ++i) in[i].l = in[i].r = 0.0f;
+    auto out = m.Render(in, [&](size_t) {
+      Controls c = Neutral();
+      c.rvb = k ? 0.8f : 0.0f;
+      return c;
+    });
+    late_tail[k] = Rms(out, 24000 + 48000, 24000 + 96000);  // 1-2 s
+  }
+  std::printf("    RVB 1-2 s after the music stops: %.1f dB -> %.1f dB\n", Db(late_tail[0]),
+              Db(late_tail[1]));
+  CHECK(late_tail[0] < 1e-6f && late_tail[1] > 1e-4f, "reverb");
+  return true;
+}

@@ -8,19 +8,25 @@ namespace monsoon {
 
 using namespace spectral_util;
 
-bool QuellMode::Init(Arena* arena) {
+__attribute__((cold)) bool QuellMode::Init(Arena* arena) {
   if (!stft_.Init(arena, kFftSize, kHop, this)) return false;
   log_mag_ = arena->Allocate<float>(kBins);
   prefix_ = arena->Allocate<float>(kBins + 1);
   cut_ = arena->Allocate<float>(kBins + 1);
   weight_ = arena->Allocate<float>(kBins);
-  if (!log_mag_ || !prefix_ || !cut_ || !weight_) return false;
+  halo_ = arena->Allocate<float>(kBins);
+  if (!log_mag_ || !prefix_ || !cut_ || !weight_ || !halo_) return false;
   focus_built_ = -1.0f;
   position_ = 0.5f;
   size_ = 0.3f;
   density_ = 0.0f;
   texture_ = 0.5f;
+  bal_ = 0.5f;
+  fbk_ = 0.0f;
+  rvb_ = 0.0f;
   freeze_ = false;
+  halo_live_ = false;
+  rng_.Seed(0x9E11);
   delta_ = false;
   prev_trigger_ = false;
   trim_ = 1.0f;
@@ -33,6 +39,9 @@ void QuellMode::Process(const Controls& c, const FloatFrame* in,
   size_ = c.size;
   density_ = c.density;
   texture_ = c.texture;
+  bal_ = c.bal;
+  fbk_ = c.fbk;
+  rvb_ = c.rvb;
   freeze_ = c.freeze;
   if (c.trigger && !prev_trigger_) delta_ = !delta_;
   prev_trigger_ = c.trigger;
@@ -79,9 +88,19 @@ void QuellMode::Transform(float* spectrum[2], size_t fft_size) {
   prefix_[0] = 0.0f;
   prefix_[1] = 0.0f;
   log_mag_[0] = 0.0f;
+  // BAL: mid (left) or side (right) focus. The detector blends from the
+  // linked L+R power toward 2 |M|^2 or 2 |S|^2 (same scale for mono).
+  const float bal = KnobBipolar(bal_);
+  const float focus = fabsf(bal);
+  const float ms_sign = bal < 0.0f ? 1.0f : -1.0f;  // M = L+R, S = L-R
   for (size_t k = 1; k < h; ++k) {
-    const float p = re0[k] * re0[k] + im0[k] * im0[k] +
+    float p = re0[k] * re0[k] + im0[k] * im0[k] +
         re1[k] * re1[k] + im1[k] * im1[k];
+    if (focus > 0.0f) {
+      const float fr = re0[k] + ms_sign * re1[k];
+      const float fi = im0[k] + ms_sign * im1[k];
+      p += focus * (0.5f * (fr * fr + fi * fi) - p);
+    }
     if (p > frame_max) frame_max = p;
     log_mag_[k] = 0.5f * FastLog2(p + 1e-24f);
     prefix_[k + 1] = prefix_[k] + log_mag_[k];
@@ -93,6 +112,11 @@ void QuellMode::Transform(float* spectrum[2], size_t fft_size) {
     const float octaves = 1.0f / 12.0f + size_ * (1.0f - 1.0f / 12.0f);
     const float half = FastExp2(octaves * 0.5f) - 1.0f;
     const float depth = density_ * 4.0f;  // log2 units: 4 = 24 dB
+    // FBK: hard threshold, 0 dBFS (a full-scale sine is ~8.85 here) down
+    // to -72 dBFS; off at zero.
+    const float fbk = fbk_;
+    const bool hard = fbk > 0.0f;
+    const float hard_thr = 9.0f - 12.0f * fbk;
     // TEXTURE: attack 50 -> 3 ms, release 400 -> 40 ms (per 5.3 ms hop).
     const float hop_s = static_cast<float>(kHop) / kSampleRate;
     const float t = texture_;
@@ -116,10 +140,32 @@ void QuellMode::Transform(float* spectrum[2], size_t fft_size) {
           target = excess * weight_[k] * 1.5f;
           if (target > depth) target = depth;
         }
+        if (hard) {
+          float over = (log_mag_[k] - hard_thr) * weight_[k] * 1.5f;
+          if (over > depth) over = depth;
+          if (over > target) target = over;
+        }
       }
       float& cut = cut_[k];
       cut += (target > cut ? att : rel) * (target - cut);
     }
+  }
+
+  // RVB: halo decay per hop (T60 0.3 s -> ~5 s) and level.
+  const float rvb = rvb_;
+  const bool halo = rvb > 0.0f;
+  float halo_decay = 0.0f, halo_gain = 0.0f;
+  if (halo) {
+    if (!halo_live_) {
+      memset(halo_, 0, kBins * sizeof(float));
+      halo_live_ = true;
+    }
+    // Per hop: 1 - hop / tau, T60 = 6.9 tau = 0.3 s + 4.7 s x RVB^2.
+    halo_decay = 1.0f - (6.9f * static_cast<float>(kHop) / kSampleRate) /
+        (0.3f + 4.7f * rvb * rvb);
+    halo_gain = rvb * (1.0f / 128.0f);  // the random bytes below are +/-128
+  } else {
+    halo_live_ = false;
   }
 
   // Apply, smoothing the curve across neighbouring bins.
@@ -130,9 +176,33 @@ void QuellMode::Transform(float* spectrum[2], size_t fft_size) {
     const float c = 0.25f * prev + 0.5f * cut_[k] + 0.25f * next;
     prev = cut_[k];
     float g = FastExp2(-c);
-    if (delta) g = 1.0f - g;
-    re0[k] *= g; im0[k] *= g;
-    re1[k] *= g; im1[k] *= g;
+    const float removed = 1.0f - g;
+    // BAL: the focused part (M or S) gets the cut, the other part less of
+    // it. As a L/R matrix; at noon a = g, x = 0 (v1.0 exactly).
+    float go = focus > 0.0f ? 1.0f + (g - 1.0f) * (1.0f - focus) : g;
+    if (delta) { g = 1.0f - g; go = 1.0f - go; }
+    const float a = 0.5f * (g + go);
+    const float x = 0.5f * ms_sign * (g - go);
+    const float r0 = re0[k], i0 = im0[k], r1 = re1[k], i1 = im1[k];
+    re0[k] = a * r0 + x * r1;
+    im0[k] = a * i0 + x * i1;
+    re1[k] = x * r0 + a * r1;
+    im1[k] = x * i0 + a * i1;
+    if (halo) {
+      // The removed amplitude (|re| + |im| of both sides, roughly the
+      // magnitude) feeds a decaying per-bin level that comes back with
+      // fresh random phases on each side every hop: four random bytes
+      // are a random point in the square for each side.
+      float& hk = halo_[k];
+      hk = halo_decay * hk + (1.0f - halo_decay) * removed *
+          (fabsf(r0) + fabsf(i0) + fabsf(r1) + fabsf(i1));
+      const float amp = hk * halo_gain;
+      const uint32_t rnd = rng_.Next();
+      re0[k] += amp * static_cast<float>(static_cast<int8_t>(rnd));
+      im0[k] += amp * static_cast<float>(static_cast<int8_t>(rnd >> 8));
+      re1[k] += amp * static_cast<float>(static_cast<int8_t>(rnd >> 16));
+      im1[k] += amp * static_cast<float>(static_cast<int8_t>(rnd >> 24));
+    }
   }
 }
 

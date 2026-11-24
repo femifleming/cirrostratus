@@ -14,6 +14,20 @@
 // | TRIG     | Next IR (adds one to the IR chosen by POSITION)             |
 // | Options  | none                                                        |
 //
+// Per-mode knobs:
+//   BAL  early / late: noon = the IR as it is. Left: the IR's tail is faded
+//        down (up to -36 dB at its end): close, dry, intimate. Right: the
+//        early part is faded down and the tail up (+48 dB across the IR):
+//        a far-away space that swells in. The level is kept constant.
+//   FBK  feedback through the IR: the left wet goes back into the
+//        convolution, so the space builds on itself (a 170 ms room rings
+//        several times longer, denser). The loop gain stays below 0.95 at
+//        the IR's peak frequency, so it never howls; FREEZE is the endless
+//        version.
+//   RVB  the engine's FDN reverb: a long smooth tail (0.5 -> 16 s) behind
+//        the IR, which is at most 170 ms (the IR is the early sound, the
+//        FDN the late one).
+//
 // The IRs are synthesised by tools/gen_irs.py and stored in flash as int16
 // partition spectra (faltung_irs.cc, ~135 KB), so they cost no RAM. Input
 // is the mono sum; each IR is stereo. Uniform partitioned convolution,
@@ -38,6 +52,7 @@ class FaltungMode : public Mode {
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
   void Prepare();
+  float reverb_amount(const Controls& c) const { return c.rvb; }
 
   // Diagnostics for tests.
   int current_ir() const { return ir_index_; }
@@ -45,7 +60,9 @@ class FaltungMode : public Mode {
 
  private:
   void ProcessAudioBlock();
-  void Accumulate(int ir, size_t parts, int ch, float* acc);
+  void Accumulate(int ir, size_t parts, int ch, float* acc,
+                  const float* weight);
+  void BalWeights(int ir, size_t parts, float bal, float* weight);
 
   // Prepare side.
   int16_t* fdl_[kMaxPartitions];
@@ -87,6 +104,13 @@ class FaltungMode : public Mode {
   float freeze_gain_;
   float wet_power_;
   float fb_sample_;
+
+  // Knobs.
+  float* part_energy_;           // [ir][partition], both channels
+  volatile float bal_;
+  volatile float bal_peak_;      // largest BAL weight (bounds FBK)
+  float fb_gain_;                // FBK, smoothed per block
+  float fb_left_;                // FBK: last left wet sample
 };
 
 }  // namespace monsoon

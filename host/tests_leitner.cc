@@ -190,3 +190,95 @@ MONSOON_TEST(leitner_trigger_cycles_paths) {
   }
   return true;
 }
+
+MONSOON_TEST(leitner_bal_fbk_rvb_do_what_they_say) {
+  const float one_hz = std::log(50.0f) / std::log(200.0f);  // DENSITY: 1 trip/s
+
+  // BAL left: stations. Share of blocks in which the source stands still.
+  float resting[2];
+  for (int k = 0; k < 2; ++k) {
+    Module m;
+    LeitnerMode* l = static_cast<LeitnerMode*>(m.engine().mode_instance(MODE_LEITNER));
+    float px = 0, py = 0;
+    int still = 0, total = 0;
+    Run(MonoNoise(4.0f), [&](size_t b, Controls* c) {
+      c->density = one_hz;
+      c->size = 0.5f;
+      c->bal = k == 0 ? 0.5f : 0.0f;
+      if (b > 3000) {
+        float d = std::hypot(l->source_x() - px, l->source_y() - py);
+        still += d < 1e-4f;
+        ++total;
+      }
+      px = l->source_x();
+      py = l->source_y();
+    }, &m);
+    resting[k] = float(still) / total;
+  }
+  std::printf("    BAL left: source at rest in %.0f %% of blocks (noon %.0f %%)\n",
+              100 * resting[1], 100 * resting[0]);
+  CHECK(resting[0] < 0.05f && resting[1] > 0.6f, "stations");
+
+  // BAL right: chance. Trip lengths vary (exponential law).
+  float cv[2];
+  for (int k = 0; k < 2; ++k) {
+    Module m;
+    LeitnerMode* l = static_cast<LeitnerMode*>(m.engine().mode_instance(MODE_LEITNER));
+    float prev_phase = 0;
+    size_t last = 0;
+    std::vector<double> trips;
+    Run(Silence(60.0f), [&](size_t b, Controls* c) {
+      c->density = one_hz;
+      c->bal = k == 0 ? 0.5f : 1.0f;
+      if (l->phase() < prev_phase) {
+        if (last) trips.push_back(double(b - last) * 32 / 48000.0);
+        last = b;
+      }
+      prev_phase = l->phase();
+    }, &m);
+    double mean = 0, var = 0;
+    for (double t : trips) mean += t;
+    mean /= trips.size();
+    for (double t : trips) var += (t - mean) * (t - mean);
+    cv[k] = float(std::sqrt(var / trips.size()) / mean);
+    std::printf("    BAL %s: %zu trips, mean %.2f s, spread %.0f %%\n",
+                k ? "right" : "noon", trips.size(), mean, 100 * cv[k]);
+  }
+  CHECK(cv[0] < 0.02f && cv[1] > 0.4f, "chance");
+
+  // FBK: a click leaves a trail of echoes 150 ms apart; v1.0 is silent
+  // after the direct sound (open field).
+  float trail[2];
+  for (int k = 0; k < 2; ++k) {
+    auto in = Silence(2.0f);
+    in[4800].l = in[4800].r = 0.9f;
+    auto out = Run(in, [&](size_t, Controls* c) { c->fbk = k ? 1.0f : 0.0f; });
+    trail[k] = Measure(out, 4800 + 6000, 4800 + 48000).rms;
+    if (k) {
+      // Strongest echo around 150 ms (+ propagation) after the click.
+      size_t best = 0;
+      float peak = 0;
+      for (size_t i = 4800 + 4800; i < 4800 + 9600; ++i) {
+        if (std::fabs(out[i].l) > peak) { peak = std::fabs(out[i].l); best = i; }
+      }
+      std::printf("    FBK first echo %.1f ms after the click, peak %.3f\n",
+                  (best - 4800) / 48.0f, peak);
+      CHECK(best > 4800 + 7200 && best < 4800 + 7200 + 1000, "echo time");
+      CHECK(Measure(out).peak < 1.0f, "bounded");
+    }
+  }
+  std::printf("    FBK tail 125 ms-1 s: %.1f dB -> %.1f dB\n", Db(trail[0]), Db(trail[1]));
+  CHECK(trail[0] < 1e-5f && trail[1] > 3e-4f, "trail");
+
+  // RVB: maps to the engine's FDN (a tail through the whole output).
+  float tail[2];
+  for (int k = 0; k < 2; ++k) {
+    auto in = Silence(3.0f);
+    for (int i = 0; i < 480; ++i) in[4800 + i].l = in[4800 + i].r = 0.5f;
+    auto out = Run(in, [&](size_t, Controls* c) { c->rvb = k ? 0.8f : 0.0f; });
+    tail[k] = Measure(out, 48000, 96000).rms;
+  }
+  std::printf("    RVB tail 1-2 s: %.1f dB -> %.1f dB\n", Db(tail[0]), Db(tail[1]));
+  CHECK(tail[0] < 1e-5f && tail[1] > 1e-3f, "reverb");
+  return true;
+}

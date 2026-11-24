@@ -17,7 +17,7 @@ static inline float OnePoleCoef(float fc, float sr) {
 }
 
 // ---------------------------------------------------------------------------
-void Biquad::Lowpass(float fc, float q) {
+__attribute__((cold)) void Biquad::Lowpass(float fc, float q) {
   fc = Clamp(fc, 10.0f, kSampleRate * 0.45f);
   const float w = kTwoPi * fc / kSampleRate, c = cosf(w);
   const float al = sinf(w) / (2.0f * q), n = 1.0f / (1.0f + al);
@@ -25,7 +25,7 @@ void Biquad::Lowpass(float fc, float q) {
   a1 = -2.0f * c * n; a2 = (1.0f - al) * n;
 }
 
-void Biquad::Highpass(float fc, float q) {
+__attribute__((cold)) void Biquad::Highpass(float fc, float q) {
   fc = Clamp(fc, 5.0f, kSampleRate * 0.45f);
   const float w = kTwoPi * fc / kSampleRate, c = cosf(w);
   const float al = sinf(w) / (2.0f * q), n = 1.0f / (1.0f + al);
@@ -33,7 +33,7 @@ void Biquad::Highpass(float fc, float q) {
   a1 = -2.0f * c * n; a2 = (1.0f - al) * n;
 }
 
-void Biquad::Peak(float fc, float q, float db) {
+__attribute__((cold)) void Biquad::Peak(float fc, float q, float db) {
   fc = Clamp(fc, 10.0f, kSampleRate * 0.45f);
   const float A = powf(10.0f, db / 40.0f), w = kTwoPi * fc / kSampleRate;
   const float c = cosf(w), al = sinf(w) / (2.0f * q);
@@ -70,13 +70,13 @@ static const float kPlateMin = -3.0f, kPlateMax = 13.0f;
 static float plate_table[kPlateTableSize + 1];
 static bool plate_table_ready = false;
 
-static float PlateExact(float vg) {
+__attribute__((cold)) static float PlateExact(float vg) {
   float x = 4.0f * (vg + 1.0f);
   float s = (x > 12.0f ? x : log1pf(expf(x))) * 0.25f;
   return s * sqrtf(s);
 }
 
-static void BuildPlateTable() {
+__attribute__((cold)) static void BuildPlateTable() {
   if (plate_table_ready) return;
   const float ip0 = PlateExact(0.0f);
   const float inv_slope = 0.002f / (PlateExact(0.001f) - PlateExact(-0.001f));
@@ -97,7 +97,7 @@ static inline float Plate(float vg) {
   return plate_table[i] + (plate_table[i + 1] - plate_table[i]) * f;
 }
 
-void TriodeStage::Init(float osr) {
+__attribute__((cold)) void TriodeStage::Init(float osr) {
   att = OnePoleCoef(1.0f / (kTwoPi * 0.002f), osr);
   rel = OnePoleCoef(1.0f / (kTwoPi * 0.120f), osr);
   bias = 0.0f;
@@ -122,7 +122,7 @@ static inline float Allpass1(float x, float a, float* s) {
   return y;
 }
 
-void Tube::Init() {
+__attribute__((cold)) void Tube::Init() {
   BuildPlateTable();
   const float osr = 2.0f * kSampleRate;
   v1.Init(osr);
@@ -167,7 +167,7 @@ float Tube::Process(float x, float drive, float gain, float makeup,
 }
 
 // ---------------------------------------------------------------------------
-bool Pt2399Line::Init(Arena* arena, uint32_t seed) {
+__attribute__((cold)) bool Pt2399Line::Init(Arena* arena, uint32_t seed) {
   mem = arena->Allocate<uint8_t>(kBits / 8);
   if (!mem) return false;
   // Idle pattern 0101... = silence.
@@ -184,7 +184,7 @@ bool Pt2399Line::Init(Arena* arena, uint32_t seed) {
   return true;
 }
 
-void Pt2399Line::UpdateCoeffs() {
+__attribute__((cold)) void Pt2399Line::UpdateCoeffs() {
   coeff_rate = bit_rate;
   leak = expf(-kTwoPi * 25.0f / bit_rate);
   beta = expf(-1.0f / (0.0035f * bit_rate));
@@ -261,7 +261,7 @@ float Pt2399Line::Process(float x, bool freeze) {
 // ---------------------------------------------------------------------------
 static const float kBbdRef = 0.22f;
 
-bool BbdLine::Init(Arena* arena, uint32_t seed) {
+__attribute__((cold)) bool BbdLine::Init(Arena* arena, uint32_t seed) {
   bucket = arena->Allocate<float>(kStages);
   if (!bucket) return false;
   idx = 0;
@@ -324,7 +324,7 @@ float BbdLine::Process(float x, bool freeze) {
 static const float kTapeScale = 16384.0f;
 static const float kTapeWear = 0.2f;  // a tape that has done a few gigs
 
-bool TapeLine::Init(Arena* arena, uint32_t seed) {
+__attribute__((cold)) bool TapeLine::Init(Arena* arena, uint32_t seed) {
   size = kMaxFrames;
   buf = arena->Allocate<int16_t>(size);
   if (!buf) return false;
@@ -440,7 +440,44 @@ float TapeLine::Process(float in, bool freeze) {
 }
 
 // ---------------------------------------------------------------------------
-bool KsLine::Init(Arena* arena) {
+// Mutually prime lengths (2.4 - 17 ms), a little different on each side.
+static const int kDiffLen[2][Diffuser::kStages] = {
+  { 113, 337, 509, 797 }, { 127, 349, 547, 829 }
+};
+static const float kDiffG = 0.6f;
+
+__attribute__((cold)) bool Diffuser::Init(Arena* arena, int side) {
+  int total = 0;
+  for (int k = 0; k < kStages; ++k) {
+    len[k] = kDiffLen[side][k];
+    pos[k] = 0;
+    total += len[k];
+  }
+  buf = arena->Allocate<float>(total);
+  return buf != NULL;
+}
+
+__attribute__((cold)) void Diffuser::Clear() {
+  int total = 0;
+  for (int k = 0; k < kStages; ++k) total += len[k];
+  memset(buf, 0, total * sizeof(float));
+}
+
+inline float Diffuser::Process(float x) {
+  float* b = buf;
+  for (int k = 0; k < kStages; ++k) {
+    const float d = b[pos[k]];
+    const float w = x + kDiffG * d;
+    b[pos[k]] = w;
+    x = d - kDiffG * w;
+    if (++pos[k] >= len[k]) pos[k] = 0;
+    b += len[k];
+  }
+  return x;
+}
+
+// ---------------------------------------------------------------------------
+__attribute__((cold)) bool KsLine::Init(Arena* arena) {
   buf = arena->Allocate<float>(kSize);
   if (!buf) return false;
   w = 0;
@@ -509,7 +546,7 @@ float KsLine::Process(float in, bool freeze, float damp) {
 // ---------------------------------------------------------------------------
 using namespace chloe;
 
-bool ChloeMode::Init(Arena* arena) {
+__attribute__((cold)) bool ChloeMode::Init(Arena* arena) {
   engine_ = init_option_ & 3;
   delay_first_ = init_option_ >= 4;
   for (int i = 0; i < 2; ++i) {
@@ -518,6 +555,7 @@ bool ChloeMode::Init(Arena* arena) {
     s.tube.Init();
     s.pt = NULL; s.bbd = NULL; s.tape = NULL; s.ks = NULL;
     s.fb = 0.0f;
+    s.xfb = s.xfb_x1 = s.xfb_y1 = 0.0f;
     s.fb_hp.Reset();
     s.fb_hp.Highpass(120.0f, 0.6f);
     uint32_t seed = 0x2399 + 77 * i;
@@ -539,7 +577,12 @@ bool ChloeMode::Init(Arena* arena) {
         if (!s.ks || !s.ks->Init(arena)) return false;
         break;
     }
+    s.diff = arena->Allocate<Diffuser>(1);
+    if (!s.diff || !s.diff->Init(arena, i)) return false;
   }
+  diffuse_ = 0.0f;
+  cross_ = 0.0f;
+  diff_live_ = false;
   lx_ = 0.1f; ly_ = 0.0f; lz_ = 20.0f;
   rng_.Seed(0x10e7);
   g_[0] = g_[1] = 0.1f;
@@ -553,7 +596,7 @@ bool ChloeMode::Init(Arena* arena) {
 }
 
 float ChloeMode::RunDelay(Side* s, float x, float time, float regen,
-                          bool freeze, float ks_damp) {
+                          bool freeze, float ks_damp, float diffuse) {
   float y;
   if (s->ks) {
     s->ks->SetPeriod(time);
@@ -561,6 +604,9 @@ float ChloeMode::RunDelay(Side* s, float x, float time, float regen,
     // No high-pass in the string's loop (the line's own DC blocker is
     // enough), or low notes would die.
     s->fb = freeze ? 0.0f : s->ks->Feedback(y, regen);
+    // RVB: the string's output through the diffuser (not its loop: that
+    // would detune it).
+    if (diffuse > 0.0f) y += diffuse * (s->diff->Process(y) - y);
     return y;
   }
   const float in = x + s->fb;
@@ -575,6 +621,9 @@ float ChloeMode::RunDelay(Side* s, float x, float time, float regen,
     y = s->tape->Process(in, freeze);
   }
   float f = s->fb_hp.Process(y);
+  // RVB: the repeats go round through the diffuser (a unity-gain allpass
+  // chain crossfaded in, so the loop gain never rises).
+  if (diffuse > 0.0f) f += diffuse * (s->diff->Process(f) - f);
   s->fb = freeze ? 0.0f : 1.05f * FastTanh(f * regen);
   return y;
 }
@@ -583,9 +632,12 @@ void ChloeMode::Process(const Controls& c, const FloatFrame* in,
                         FloatFrame* out, size_t n) {
   // --- Control rate -------------------------------------------------------
   // Lorenz attractor: speed fixed slow, x drives left cutoff, y right.
+  // BAL sets the speed: x0.25 (left) .. x1 (noon) .. x8 (right).
+  const float bal = KnobBipolar(c.bal);
   {
     const float rho = 28.0f, beta = 8.0f / 3.0f, sigma = 10.0f;
-    const float dt = 0.35f * static_cast<float>(n) / kSampleRate;
+    const float speed = bal > 0.0f ? 1.0f + 7.0f * bal : 1.0f + 0.75f * bal;
+    const float dt = 0.35f * speed * static_cast<float>(n) / kSampleRate;
     const int steps = 2;
     const float h = dt / steps;
     for (int k = 0; k < steps; ++k) {
@@ -603,6 +655,16 @@ void ChloeMode::Process(const Controls& c, const FloatFrame* in,
   const float lor_x = FastTanh(lx_ / (1.4f * scale));
   const float lor_y = FastTanh(ly_ / (1.9f * scale));
   const float lor_z = Clamp((lz_ - 27.0f) / 28.0f, -1.0f, 1.0f);
+  // BAL: depth of the attractor's pull on the cutoffs and on the filter
+  // mode (its speed was applied to the step above).
+  float lor_depth = 9.0f, morph_depth = 0.5f;
+  if (bal < 0.0f) {
+    lor_depth *= 1.0f + bal;
+    morph_depth *= 1.0f + bal;
+  } else if (bal > 0.0f) {
+    lor_depth += 27.0f * bal;    // up to +/-36 semitones
+    morph_depth += 1.0f * bal;   // LP <-> BP <-> HP
+  }
 
   // POSITION: cutoff 30 Hz .. 16 kHz; TUNE transposes it (delay engines);
   // the Lorenz attractor pushes left and right up to +/- 9 semitones apart.
@@ -613,10 +675,11 @@ void ChloeMode::Process(const Controls& c, const FloatFrame* in,
   // the filter mode wanders slowly between LP and BP with the attractor.
   const float res = 0.35f + 0.5f * c.texture;
   const float k = 2.0f - 1.96f * res;
-  morph_ = 0.5f + 0.5f * lor_z;  // 0..1: LP -> BP
+  morph_ = 0.5f + morph_depth * lor_z;  // 0..1: LP -> BP (BAL: 0..2)
+  if (morph_ < 0.0f) morph_ = 0.0f;
   for (int i = 0; i < 2; ++i) {
     const float lor = i == 0 ? lor_x : lor_y;
-    float fc = base * SemitonesToRatio(tune + 9.0f * lor);
+    float fc = base * SemitonesToRatio(tune + lor_depth * lor);
     fc = Clamp(fc, 12.0f, kSampleRate * 0.46f);
     g_[i] = tanf(kPi * fc / kSampleRate);
   }
@@ -664,12 +727,40 @@ void ChloeMode::Process(const Controls& c, const FloatFrame* in,
     side_[1].pt->MaybeUpdateCoeffs();
   }
 
+  // RVB: diffusion amount (smoothed; the lines are cleared when it comes
+  // back from zero, so no old cloud replays).
+  const float rvb = Clamp(c.rvb, 0.0f, 1.0f);
+  if (rvb > 0.0f && !diff_live_) {
+    side_[0].diff->Clear();
+    side_[1].diff->Clear();
+    diff_live_ = true;
+  }
+  diffuse_ += 0.1f * (rvb - diffuse_);
+  if (rvb == 0.0f && diffuse_ < 1e-3f) {
+    diffuse_ = 0.0f;
+    diff_live_ = false;
+  }
+  const float diffuse = diffuse_;
+  // FBK: crossed master feedback, ramped across the block. Divided by the
+  // tube's small-signal gain (gain^0.64 with its makeup), so the knob means
+  // the same at any drive: it sings only near the top with regen.
+  float cross_target = 0.95f * Clamp(c.fbk, 0.0f, 1.0f);
+  if (tube_on && cross_target > 0.0f) cross_target /= gain * makeup * 0.5f * c2;
+  const bool cross = cross_target > 0.0f || cross_ > 0.0f;
+  const float cross_inc = (cross_target - cross_) / static_cast<float>(n);
+  const float xfb_r = 1.0f - kTwoPi * 20.0f / kSampleRate;
+
   // --- Audio rate ---------------------------------------------------------
   const float echo = 0.8f;
   for (size_t s = 0; s < n; ++s) {
     bool freeze = c.freeze || random_freeze_timer_ > 0.0f;
     if (random_freeze_timer_ > 0.0f) random_freeze_timer_ -= 1.0f;
     float io[2] = { in[s].l, in[s].r };
+    if (cross) {
+      cross_ += cross_inc;
+      io[0] += cross_ * side_[1].xfb;
+      io[1] += cross_ * side_[0].xfb;
+    }
     if (pluck_timer_ > 0.0f) {
       pluck_timer_ -= 1.0f;
       float burst = rng_.Bipolar() * 0.9f;
@@ -684,19 +775,33 @@ void ChloeMode::Process(const Controls& c, const FloatFrame* in,
         x = sd.filter.Process(x, g_[i], k, morph_);
         x = sd.tube.Process(x, drive_, gain, makeup, miller_a, c2, tube_on);
         float d = RunDelay(&sd, string ? x * 0.5f : x, time[i], regen, freeze,
-                           ks_damp);
+                           ks_damp, diffuse);
         y = string ? d * 2.0f : x + d * echo;
       } else {
         float d = RunDelay(&sd, string ? x * 0.5f : x, time[i], regen, freeze,
-                           ks_damp);
+                           ks_damp, diffuse);
         x = string ? d : x + d * echo;
         x = sd.tube.Process(x, drive_, gain, makeup, miller_a, c2, tube_on);
         y = sd.filter.Process(x, g_[i], k, morph_);
       }
       io[i] = y;
+      if (cross) {
+        // 20 Hz high-pass, then tanh: what goes to the other side.
+        const float hp = y - sd.xfb_x1 + xfb_r * sd.xfb_y1;
+        sd.xfb_x1 = y;
+        sd.xfb_y1 = hp;
+        sd.xfb = FastTanh(hp);
+      }
     }
     out[s].l = io[0];
     out[s].r = io[1];
+  }
+  if (cross) cross_ = cross_target;
+  if (cross_target == 0.0f) {
+    cross_ = 0.0f;
+    for (int i = 0; i < 2; ++i) {
+      side_[i].xfb = side_[i].xfb_x1 = side_[i].xfb_y1 = 0.0f;
+    }
   }
 }
 

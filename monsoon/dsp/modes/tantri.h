@@ -20,6 +20,16 @@
 // | input    | excites the strings (sympathetic) and both drum heads        |
 // | options  | none                                                         |
 //
+// Per-mode knobs:
+//   BAL  the tanpura's first string: noon = Pa (v1.0), left third = Ma,
+//        right third = Ni (the three classic tunings; mandra Ma 2/3,
+//        mandra Ni 15/16 of Sa).
+//   FBK  ring: the drum heads ring longer (up to 5x), the closed strokes
+//        stop damping them, and the drone sets them humming along
+//        (open, singing tabla at full).
+//   RVB  the engine's FDN reverb: a room round the drums and the drone
+//        (the mode is a dry, close-miked instrument otherwise).
+//
 // What is ported from Tantri:
 //  - tabla: Tantri's modal membranes with Raman's loaded (harmonic) dayan
 //    ratios and the bayan's stretched ones, per-group stroke excitation,
@@ -56,6 +66,7 @@ class TantriMode : public Mode {
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
   bool frozen() const { return frozen_; }
+  float reverb_amount(const Controls& c) const { return c.rvb; }
 
   // Test hooks.
   void Play(int stroke);
@@ -93,7 +104,7 @@ class TantriMode : public Mode {
   void StrikeDrum(Drum* d, const float* drive, float amp, float contact_ms,
                   const float* damp, float noise, float noise_hz);
   void UpdateDrum(Drum* d, const float* ratios, const float* t60s,
-                  const uint8_t* groups, float f0);
+                  const uint8_t* groups, float f0, float ring);
   float TickDrum(Drum* d, float input);
   void TuneStrings(float sa, bool frozen);
   void Pluck(int i, float amp);
@@ -115,6 +126,8 @@ class TantriMode : public Mode {
   size_t write_;
   Random rng_;
   DcBlocker dc_[2];
+  float first_ratio_;       // BAL: first string / Sa
+  float ring_force_;        // FBK: last sample's string force into drums
 };
 
 }  // namespace monsoon

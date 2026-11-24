@@ -10,6 +10,20 @@
 //  - the tape loop is 16-bit and at most 0.6 s long, with a fixed amount of
 //    wear (0.45 s per side); PT2399 bits are packed 8 per byte,
 //  - no poly taps / flock.
+//
+// Per-mode knobs (from the plug-in's shared controls):
+//   BAL  the attractor (speed and depth): noon = v1.0 (+/-9 semitones,
+//        slow, LP <-> BP). Left: calmer and shallower until it stops (the
+//        two cutoffs together, the filter halfway LP/BP, 1/4 speed).
+//        Right: up to 8x faster and +/-3 octaves, the filter wandering
+//        LP <-> BP <-> HP.
+//   FBK  master feedback, crossed like the plug-in's: the left output
+//        feeds the right input and the right the left (20 Hz high-pass,
+//        tanh, up to 0.95). With regen it ping-pongs and can sing.
+//   RVB  diffusion in the regen loop (after the plug-in's poly cloud): four
+//        allpasses per side smear every repeat a little more, so echoes
+//        blur into a cloud. String engine: it diffuses the strings' output
+//        (a soundboard haze).
 
 #ifndef MONSOON_DSP_MODES_CHLOE_H_
 #define MONSOON_DSP_MODES_CHLOE_H_
@@ -127,6 +141,16 @@ struct TapeLine {
   float Process(float in, bool freeze);
 };
 
+// Four Schroeder allpasses in series (RVB).
+struct Diffuser {
+  static const int kStages = 4;
+  float* buf;
+  int len[kStages], pos[kStages];
+  bool Init(Arena* arena, int side);
+  void Clear();
+  inline float Process(float x);
+};
+
 struct KsLine {
   static const int kSize = 4336;  // 90 ms
   float* buf;
@@ -153,6 +177,8 @@ class ChloeMode : public Mode {
   // 4-7: the same with delay > tube > filter.
   uint8_t num_options() const { return 8; }
   bool option_requires_init() const { return true; }
+  // Test hook: the current cutoff of one side (Hz).
+  float cutoff_hz(int i) const { return atanf(g_[i]) * kSampleRate / kPi; }
 
  private:
   struct Side {
@@ -164,9 +190,11 @@ class ChloeMode : public Mode {
     chloe::KsLine* ks;
     chloe::Biquad fb_hp;
     float fb;
+    chloe::Diffuser* diff;
+    float xfb, xfb_x1, xfb_y1;   // FBK: this side's output, high-passed
   };
   float RunDelay(Side* s, float x, float time, float regen, bool freeze,
-                 float ks_damp);
+                 float ks_damp, float diffuse);
 
   Side side_[2];
   int engine_;
@@ -179,6 +207,9 @@ class ChloeMode : public Mode {
   float random_freeze_timer_;
   float pluck_timer_;
   bool was_trigger_;
+  float diffuse_;      // RVB, smoothed
+  float cross_;        // FBK, ramped
+  bool diff_live_;
 };
 
 }  // namespace monsoon
