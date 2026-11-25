@@ -29,3 +29,4 @@ What was asked for, in order (2026-11-23 → 24).
 > have this setting effect all buffer effects, so i can choose it in a master setting and get loinger buffers on the effects that use buffers if i want.
 > give a list of the new timings per buffer for each resoultion setting as well.
 > make a new video manual when your done, and make the msuic sliglty quaiter in this new one.
+> the manual needs to be visual and show me the module like the video

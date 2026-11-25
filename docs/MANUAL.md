@@ -4,6 +4,8 @@
 
 **Version 1.2.0**
 
+<!-- PANEL cover -->
+
 > **cir·ro·stra·tus** /ˌsɪroʊˈstreɪtəs/ *n.* — a pale veil of ice crystals
 > spread so high and thin across the sky that the sun shines straight
 > through it, with a ring of light around it: a **halo**.
@@ -34,6 +36,8 @@ weather changes.
 
 ## 0. Forecast in thirty seconds
 
+<!-- PANEL quick -->
+
 1. Hold **DISP**. The four top LEDs show a number.
 2. Push **POSITION** up or down to pick a mode. **Tap WRITE** to flip
    between the green bank and the red bank.
@@ -59,6 +63,8 @@ You get:
 
 ### 1a. By ear (recommended)
 
+<!-- PANEL install -->
+
 Your Monsoon already has the Clouds/Monsoon audio bootloader if it runs any
 of the "build_4" Monsoon firmwares.
 
@@ -70,9 +76,9 @@ of the "build_4" Monsoon firmwares.
 4. Computer volume about ¾, **GAIN** about noon.
 5. Play `cirrostratus.wav` from the beginning (about 6¼ minutes; put the kettle on). It sounds like a
    modem singing. That's correct.
-   - While it receives, the LEDs dance with the level.
-   - **All four light green** each time a chunk is written to flash.
-   - When the file ends, the module reboots into Cirrostratus and greets you
+    - While it receives, the LEDs dance with the level.
+    - **All four light green** each time a chunk is written to flash.
+    - When the file ends, the module reboots into Cirrostratus and greets you
      with a little **rain** running across the LEDs.
 6. **Four red blinking LEDs** mean reception failed (too quiet, too loud, a
    notification ping…). Press **FREEZE**, fix the level, and play the file
@@ -85,9 +91,9 @@ of the "build_4" Monsoon firmwares.
 2. Connect an ST-Link to the 10-pin SWD header on the Monsoon board, with
    the module powered.
 3. In the firmware folder:
-   - `make -f monsoon/makefile flash` writes the application and keeps the
+    - `make -f monsoon/makefile flash` writes the application and keeps the
      bootloader, settings and slots.
-   - `make -f monsoon/bootloader/makefile && make -f monsoon/makefile flash_all`
+    - `make -f monsoon/bootloader/makefile && make -f monsoon/makefile flash_all`
      writes bootloader + application to a blank chip (settings reset).
 
 ### After landing
@@ -139,6 +145,8 @@ space, tail or wash, BAL a balance between two things.
 ## 3. Buttons, pages and little rituals
 
 ### 3.0 Sunrise
+
+<!-- PANEL sunrise -->
 Every time you power up, the module greets you with three seconds of
 weather:
 
@@ -152,12 +160,16 @@ weather:
 Any button skips it (that press does nothing else).
 
 ### 3.1 Looking at the sky
+
+<!-- PANEL look -->
 - **Tap DISP**: the LEDs flip between the **input level** meter and the
   values of **WET / BAL / FBK / RVB**. While frozen, the meter shows the
   output.
 - The FREEZE LED is the freeze state, always.
 
 ### 3.2 Choosing a mode
+
+<!-- PANEL menu -->
 1. **Hold DISP** for a second. The LEDs show the current mode in binary:
    **green = bank 1** (modes 1–15), **red = bank 2** (16–30).
 2. **Move POSITION** to browse. The menu only starts following POSITION
@@ -185,6 +197,8 @@ Every mode remembers its own option and envelope routing, even through
 power cycles.
 
 ### 3.3 Four jars of sky (save slots)
+
+<!-- PANEL slots -->
 - **Hold WRITE**: the save page (slot LED blinks red). **DISP** picks a
   slot, **WRITE** saves. About a second of silence while flash is written.
 - **Tap WRITE**: the load page (slot LED blinks green). **DISP** picks,
@@ -200,6 +214,8 @@ it's read straight from flash, and POSITION blends toward it. Tap FREEZE on
 it again to let it go.
 
 ### 3.4 The envelope page (weather that follows you)
+
+<!-- PANEL envelope -->
 Your input's loudness can push WET and the mode's three knobs up or down:
 the wet that opens on loud notes, a BAL that leans further the harder you
 play, an FBK that swells in the gaps, an RVB that ducks while you play.
@@ -219,6 +235,8 @@ Whatever BAL, FBK and RVB mean in the current mode, that's what moves.
   button on + gate high = thawed.
 
 ### 3.6 Mono bass on/off
+
+<!-- PANEL monobass -->
 **Hold FREEZE, tap WRITE.** For 1.5 s the LEDs tell you the new state:
 
 - the **two middle LEDs green**: bass gathered in the middle (mono bass
@@ -230,6 +248,8 @@ The setting is remembered through power cycles. FREEZE doesn't toggle
 freeze when you use it for this.
 
 ### 3.7 Buffer quality (longer buffers)
+
+<!-- PANEL quality -->
 One master setting for every mode that records into a buffer: **GRAINS,
 STRETCH, CAPTURE, TAPE, BARBERPOLE** and **BLOOM**. Store the audio at a
 lower sample rate and/or 8-bit and the same memory holds up to six times
@@ -273,6 +293,8 @@ quality it was recorded with** and plays back at it, whatever the setting;
 the next time the mode restarts it follows the setting again.
 
 ### 3.8 Teaching it volts (V/OCT calibration)
+
+<!-- PANEL calibrate -->
 1. **Hold DISP** (the menu opens), then also **hold WRITE** for a second.
    Two LEDs blink.
 2. Send **1 V** into V/OCT, tap **WRITE**. Four LEDs blink.
@@ -282,6 +304,8 @@ the next time the mode restarts it follows the setting again.
 ---
 
 ## 4. The output section, on every mode
+
+<!-- PANEL output -->
 
 ```
 IN ─┬──────────────────────────────────────────┐ dry

@@ -4,6 +4,9 @@
 
 **Version 1.2.0**
 
+<img class="panel" src="img/cover.png" width="300" align="right" alt="Monsoon panel: cover">
+
+
 > **cir·ro·stra·tus** /ˌsɪroʊˈstreɪtəs/ *n.* — a pale veil of ice crystals
 > spread so high and thin across the sky that the sun shines straight
 > through it, with a ring of light around it: a **halo**.
@@ -34,6 +37,9 @@ weather changes.
 
 ## 0. Forecast in thirty seconds
 
+<img class="panel" src="img/quick.png" width="300" align="right" alt="Monsoon panel: quick">
+
+
 1. Hold **DISP**. The four top LEDs show a number.
 2. Push **POSITION** up or down to pick a mode. **Tap WRITE** to flip
    between the green bank and the red bank.
@@ -59,6 +65,9 @@ You get:
 
 ### 1a. By ear (recommended)
 
+<img class="panel" src="img/install.png" width="300" align="right" alt="Monsoon panel: install">
+
+
 Your Monsoon already has the Clouds/Monsoon audio bootloader if it runs any
 of the "build_4" Monsoon firmwares.
 
@@ -70,9 +79,9 @@ of the "build_4" Monsoon firmwares.
 4. Computer volume about ¾, **GAIN** about noon.
 5. Play `cirrostratus.wav` from the beginning (about 6¼ minutes; put the kettle on). It sounds like a
    modem singing. That's correct.
-   - While it receives, the LEDs dance with the level.
-   - **All four light green** each time a chunk is written to flash.
-   - When the file ends, the module reboots into Cirrostratus and greets you
+    - While it receives, the LEDs dance with the level.
+    - **All four light green** each time a chunk is written to flash.
+    - When the file ends, the module reboots into Cirrostratus and greets you
      with a little **rain** running across the LEDs.
 6. **Four red blinking LEDs** mean reception failed (too quiet, too loud, a
    notification ping…). Press **FREEZE**, fix the level, and play the file
@@ -85,9 +94,9 @@ of the "build_4" Monsoon firmwares.
 2. Connect an ST-Link to the 10-pin SWD header on the Monsoon board, with
    the module powered.
 3. In the firmware folder:
-   - `make -f monsoon/makefile flash` writes the application and keeps the
+    - `make -f monsoon/makefile flash` writes the application and keeps the
      bootloader, settings and slots.
-   - `make -f monsoon/bootloader/makefile && make -f monsoon/makefile flash_all`
+    - `make -f monsoon/bootloader/makefile && make -f monsoon/makefile flash_all`
      writes bootloader + application to a blank chip (settings reset).
 
 ### After landing
@@ -106,22 +115,24 @@ of the "build_4" Monsoon firmwares.
 
 ## 2. The panel
 
+<img class="panel" src="img/panel.png" width="300" align="right" alt="Monsoon panel">
+
 | On the panel | We call it | |
 |---|---|---|
-| slider + CV | **POSITION** | also picks the mode in the mode menu |
-| slider + CV | **DENSITY** | |
-| slider + CV | **SIZE** | |
-| slider + CV | **TEXTURE** | |
-| TUNE knob + V/OCT | **PITCH** | ±4 octaves; it gently snaps to semitones; noon = no change |
-| GAIN | input gain | analog, as before |
-| WET + CV | **WET** | dry ↔ wet, equal power, on every mode |
-| BAL + CV | **BAL** | the mode's own control: bipolar, plain at noon |
-| FBK + CV | **FBK** | the mode's own control: plain at zero |
-| RVB + CV | **RVB** | the mode's own control: plain at zero |
-| FREEZE + gate | **FREEZE** | the gate flips whatever the button says |
-| TRIG in | **TRIG** | a different job in every mode |
-| DISP | **DISP** | display, mode menu |
-| ✎ | **WRITE** | load, save, bank flip |
+| ① slider + CV | **POSITION** | also picks the mode in the mode menu |
+| ② slider + CV | **DENSITY** | |
+| ③ slider + CV | **SIZE** | |
+| ④ slider + CV | **TEXTURE** | |
+| ⑤ TUNE knob + V/OCT | **PITCH** | ±4 octaves; it gently snaps to semitones; noon = no change |
+| ⑥ GAIN | input gain | analog, as before |
+| ⑦ WET + CV | **WET** | dry ↔ wet, equal power, on every mode |
+| ⑧ BAL + CV | **BAL** | the mode's own control: bipolar, plain at noon |
+| ⑨ FBK + CV | **FBK** | the mode's own control: plain at zero |
+| ⑩ RVB + CV | **RVB** | the mode's own control: plain at zero |
+| ⑪ FREEZE + gate | **FREEZE** | the gate flips whatever the button says |
+| ⑫ TRIG in | **TRIG** | a different job in every mode |
+| ⑬ DISP | **DISP** | display, mode menu |
+| ⑭ ✎ | **WRITE** | load, save, bank flip |
 
 The slider LEDs still show incoming CV (that's hardware). The four LEDs
 along the top belong to Cirrostratus.
@@ -139,6 +150,9 @@ space, tail or wash, BAL a balance between two things.
 ## 3. Buttons, pages and little rituals
 
 ### 3.0 Sunrise
+
+<img class="panel" src="img/sunrise.png" width="300" align="right" alt="Monsoon panel: sunrise">
+
 Every time you power up, the module greets you with three seconds of
 weather:
 
@@ -152,12 +166,18 @@ weather:
 Any button skips it (that press does nothing else).
 
 ### 3.1 Looking at the sky
+
+<img class="panel" src="img/look.png" width="300" align="right" alt="Monsoon panel: look">
+
 - **Tap DISP**: the LEDs flip between the **input level** meter and the
   values of **WET / BAL / FBK / RVB**. While frozen, the meter shows the
   output.
 - The FREEZE LED is the freeze state, always.
 
 ### 3.2 Choosing a mode
+
+<img class="panel" src="img/menu.png" width="300" align="right" alt="Monsoon panel: menu">
+
 1. **Hold DISP** for a second. The LEDs show the current mode in binary:
    **green = bank 1** (modes 1–15), **red = bank 2** (16–30).
 2. **Move POSITION** to browse. The menu only starts following POSITION
@@ -185,6 +205,9 @@ Every mode remembers its own option and envelope routing, even through
 power cycles.
 
 ### 3.3 Four jars of sky (save slots)
+
+<img class="panel" src="img/slots.png" width="300" align="right" alt="Monsoon panel: slots">
+
 - **Hold WRITE**: the save page (slot LED blinks red). **DISP** picks a
   slot, **WRITE** saves. About a second of silence while flash is written.
 - **Tap WRITE**: the load page (slot LED blinks green). **DISP** picks,
@@ -200,6 +223,9 @@ it's read straight from flash, and POSITION blends toward it. Tap FREEZE on
 it again to let it go.
 
 ### 3.4 The envelope page (weather that follows you)
+
+<img class="panel" src="img/envelope.png" width="300" align="right" alt="Monsoon panel: envelope">
+
 Your input's loudness can push WET and the mode's three knobs up or down:
 the wet that opens on loud notes, a BAL that leans further the harder you
 play, an FBK that swells in the gaps, an RVB that ducks while you play.
@@ -219,6 +245,9 @@ Whatever BAL, FBK and RVB mean in the current mode, that's what moves.
   button on + gate high = thawed.
 
 ### 3.6 Mono bass on/off
+
+<img class="panel" src="img/monobass.png" width="300" align="right" alt="Monsoon panel: monobass">
+
 **Hold FREEZE, tap WRITE.** For 1.5 s the LEDs tell you the new state:
 
 - the **two middle LEDs green**: bass gathered in the middle (mono bass
@@ -230,6 +259,9 @@ The setting is remembered through power cycles. FREEZE doesn't toggle
 freeze when you use it for this.
 
 ### 3.7 Buffer quality (longer buffers)
+
+<img class="panel" src="img/quality.png" width="300" align="right" alt="Monsoon panel: quality">
+
 One master setting for every mode that records into a buffer: **GRAINS,
 STRETCH, CAPTURE, TAPE, BARBERPOLE** and **BLOOM**. Store the audio at a
 lower sample rate and/or 8-bit and the same memory holds up to six times
@@ -273,6 +305,9 @@ quality it was recorded with** and plays back at it, whatever the setting;
 the next time the mode restarts it follows the setting again.
 
 ### 3.8 Teaching it volts (V/OCT calibration)
+
+<img class="panel" src="img/calibrate.png" width="300" align="right" alt="Monsoon panel: calibrate">
+
 1. **Hold DISP** (the menu opens), then also **hold WRITE** for a second.
    Two LEDs blink.
 2. Send **1 V** into V/OCT, tap **WRITE**. Four LEDs blink.
@@ -282,6 +317,9 @@ the next time the mode restarts it follows the setting again.
 ---
 
 ## 4. The output section, on every mode
+
+<img class="panel" src="img/output.png" width="300" align="right" alt="Monsoon panel: output">
+
 
 ```
 IN ─┬──────────────────────────────────────────┐ dry
@@ -325,6 +363,321 @@ mode pays no CPU for a reverb it doesn't use.
 give the mode plain, exactly as in 1.0. "Keeps" = what a save slot holds
 for that mode.
 
+### Bank 1 (green)
+
+#### 1 · GRAINS — trajectory grains
+*Forecast: scattered showers, falling in shapes.*
+
+Grains are read from a recorded buffer along a moving path, not at random
+spots. Buffer: 0.62 s stereo or 1.24 s mono, up to 3.66 s / 7.32 s at a
+lower buffer quality (3.7).
+
+<img class="panel" src="img/mode01.png" width="300" align="right" alt="Monsoon panel: mode 1 GRAINS">
+
+| Control | |
+|---|---|
+| ① POSITION | centre of the path (bottom = newest audio) |
+| ② SIZE | path size and speed: bottom = a fixed point; up = wider and faster (0.05 → 2 Hz) |
+| ③ DENSITY | grain rate 1 → 150 grains/s; grain length follows (long and sparse → short and dense) |
+| ④ TEXTURE | window: percussive → smooth (Hann) → flat; top quarter adds pitch scatter |
+| ⑤ PITCH | grain transposition, quantised by the option |
+| ⑥ BAL | noon = plain. Left: spray (grains scatter around the path, up to half the buffer away). Right: more and more grains play backwards, all of them at full |
+| ⑦ FBK | feedback: the cloud back into itself, Clouds style, with the howl tamer on duty |
+| ⑧ RVB | the 8-line FDN reverb: send and length together, 0.5 → 16 s |
+| ⑨ FREEZE | stop recording |
+| ⑩ TRIG | next path shape: circle → line → figure-8 → spiral → random walk |
+| ⑪ Options | 1 chromatic · 2 minor pentatonic · 3 octaves + fifths · 4 free; options 5–8 = the same in mono (double length) |
+| Keeps | the buffer |
+
+#### 2 · SPECTRAL — spectral freeze / resynthesis
+*Forecast: a held moment, refracted into its colours.*
+
+2048-point phase vocoder with peak-locked partials (64 ms latency).
+
+<img class="panel" src="img/mode02.png" width="300" align="right" alt="Monsoon panel: mode 2 SPECTRAL">
+
+| Control | |
+|---|---|
+| ① POSITION | partial thinning: all bins → only the strongest peaks. With a morph slot armed: blend from the current spectrum to the slot's |
+| ② SIZE | harmonic snap: pulls partials onto the harmonic series of the PITCH root |
+| ③ DENSITY | blur (smears the spectrum over time) |
+| ④ TEXTURE | tilt, dark ↔ bright, flat at noon (±9 dB/oct) |
+| ⑤ PITCH | transposition without changing speed |
+| ⑥ FREEZE | hold the spectrum; it keeps resynthesising with a slight drift |
+| ⑦ TRIG | grab a new spectrum while frozen |
+| ⑧ BAL | noon = as before. Turning it shifts every partial by the same number of Hz (not a ratio), so harmonic sounds go inharmonic. Left shifts down, right shifts up, exponential: a few Hz near noon, ±1 kHz at the ends |
+| ⑨ FBK | regeneration: the last output spectrum comes back as a floor under the next frame (held 0.1 → 8 s). On its own it sustains; with BAL or PITCH set every pass moves the partials again, so they spiral up or down |
+| ⑩ RVB | phase diffusion: random phases blend in, coherent → a whispered wash in the same colours |
+| Keeps / morph | the frozen spectrum / yes |
+
+#### 3 · CONVOLVE — freeze captures the impulse response
+*Forecast: the room you're standing in is whatever you just played.*
+
+Your own audio becomes the space the sound plays in. The impulse response
+(IR) can be up to 139 ms, and FBK makes it ring on much longer. The
+mode starts with a small synthetic room so it sounds straight away.
+
+<img class="panel" src="img/mode03.png" width="300" align="right" alt="Monsoon panel: mode 3 CONVOLVE">
+
+| Control | |
+|---|---|
+| ① FREEZE (on) / TRIG | capture a new IR from the last 139 ms of input |
+| ② POSITION | where in that capture the IR starts (bottom = newest) |
+| ③ SIZE | IR length, with fade-out |
+| ④ DENSITY | IR envelope: reverse swell ← as captured (noon) → faster decay |
+| ⑤ TEXTURE | IR brightness: low-pass below noon, treble boost above |
+| ⑥ PITCH | IR playback rate |
+| ⑦ BAL | noon = as before. Left: only the attacks of the input reach the IR. Right: only the body (attacks ducked, so hits swell instead of crack). It shapes the input before everything, so captures hear it too |
+| ⑧ FBK | feedback (the module's feedback loop, with its howl tamer): the IR rings on much longer |
+| ⑨ RVB | IR smear: the IR gets eight decaying echoes of itself (3 → 97 ms), and captures melt into a dense wash |
+| Keeps | the capture and its settings |
+
+#### 4 · RESONATOR — sympathetic strings with jawari
+*Forecast: eight strings hum along, with a buzzing bridge.*
+
+Eight tuned strings, excited by the input, tuned to the cent.
+
+<img class="panel" src="img/mode04.png" width="300" align="right" alt="Monsoon panel: mode 4 RESONATOR">
+
+| Control | |
+|---|---|
+| ① PITCH | root (C2 at noon), V/OCT |
+| ② SIZE | tuning: unison/octaves → fifths → sitar sympathetic set → harmonic series → inharmonic |
+| ③ DENSITY | decay 0.2 → 20 s |
+| ④ POSITION | brightness and pickup point |
+| ⑤ TEXTURE | jawari: clean string → strong sitar-bridge buzz |
+| ⑥ FREEZE | infinite sustain, input cut |
+| ⑦ TRIG | pluck all strings |
+| ⑧ BAL | noon = as before. Left: detune, the strings spread up to ±25 cents (beating, a chorus of strings). Right: stretch, intervals widen up to +10 % (an octave ~+120 cents: piano-like, then bell-like) |
+| ⑨ FBK | sympathetic coupling: energy passes from string to string. Strings tuned close together trade it back and forth (slow beating, blooming), and a note in one wakes the others |
+| ⑩ RVB | body: the strings sound through a resonant wooden box (~8.5 ms resonance, tail up to ~0.35 s) |
+
+#### 5 · DIFFERENCE — difference tones (after the Oneirophone)
+*Forecast: notes that only happen inside your head. Really.*
+
+The input is frequency-shifted into high pairs of tones, f and f + Δ. Your
+ear makes the tone at Δ, a note that isn't in the signal.
+
+<img class="panel" src="img/mode05.png" width="300" align="right" alt="Monsoon panel: mode 5 DIFFERENCE">
+
+| Control | |
+|---|---|
+| ① PITCH | the heard tone Δ (C3 at noon), V/OCT |
+| ② POSITION | register of the pairs, 2 → 8 kHz |
+| ③ SIZE | input bandwidth: narrow (purest illusion) → whole input (rich) |
+| ④ DENSITY | 1 → 6 pairs: Δ × 1, 3/2, 5/4, 2, 7/4, 9/8 (a chord of phantom notes) |
+| ⑤ TEXTURE | purity: 0 = only in your ear; up = the difference tone becomes physically present (works through any speaker) |
+| ⑥ FREEZE | drone of pure sine pairs at the held level |
+| ⑦ BAL | noon = as before. Left: glide, the heard note slides to each new pitch (20 ms → 2 s). Right: dichotic, f to the left ear and f + Δ to the right; on headphones the difference tone gives way to binaural beats |
+| ⑧ FBK | spiral: the shifted sound recirculates (50 ms) and climbs by Δ on every pass. Echoes rise; held sounds build a ladder f, f+Δ, f+2Δ… that makes the phantom note stronger |
+| ⑨ RVB | reverb (the module's FDN reverb; both tones reverberate, so the phantom note survives) |
+
+#### 6 · CROSS — left/right spectral morph
+*Forecast: two weather fronts collide.*
+
+Left input = modulator, right input = carrier (64 ms latency). With only IN L patched,
+both sides are the same signal.
+
+<img class="panel" src="img/mode06.png" width="300" align="right" alt="Monsoon panel: mode 6 CROSS">
+
+| Control | |
+|---|---|
+| ① POSITION | vocoder (L's envelope on R) → morph → L's magnitudes with R's phases |
+| ② DENSITY | envelope resolution (coarse vocoder bands → fine detail) |
+| ③ TEXTURE | envelope speed (attack/release) |
+| ④ SIZE | formant shift of the modulator (×0.5 → ×2) |
+| ⑤ PITCH | carrier transposition |
+| ⑥ FREEZE | hold the modulator |
+| ⑦ TRIG | toggle holding the carrier |
+| ⑧ BAL | noon = as before (carrier = right input). Left: the carrier fades to white noise (whispered; consonants come through). Right: it fades to an internal buzz played by PITCH (C3 at noon, V/OCT), a classic vocoder from one input; PITCH then stops transposing R |
+| ⑨ FBK | formant emphasis: the modulator's envelope sharpens (peak and energy kept): more talkative, then resonant, wah-like peaks |
+| ⑩ RVB | reverb (the module's FDN reverb; CROSS is mono, this gives it a stereo room) |
+
+#### 7 · STRETCH — extreme time-stretch
+*Forecast: one second, smeared across an afternoon.*
+
+A phase vocoder with phase locking reads a recorded buffer slowly: 0.30 s
+stereo or 0.89 s mono, up to 1.76 s / 5.23 s at a lower buffer quality (3.7).
+
+<img class="panel" src="img/mode07.png" width="300" align="right" alt="Monsoon panel: mode 7 STRETCH">
+
+| Control | |
+|---|---|
+| ① SIZE | stretch: 1× → ~1000× at 0.9 → standing still from about 0.98 |
+| ② POSITION | where the read zone sits in the buffer |
+| ③ DENSITY | smear |
+| ④ TEXTURE | coherent (phase vocoder) → Paulstretch (random phases) |
+| ⑤ PITCH | transposition without speed change |
+| ⑥ FREEZE | stop recording |
+| ⑦ TRIG | jump to the newest audio |
+| ⑧ BAL | noon = as before. Left: the read slows, stands still at 9 o'clock, and runs backwards at full left. Right: scatter, the read window jumps to random spots (up to half the buffer away, ~10 jumps/s) |
+| ⑨ FBK | re-record: the output goes back into the recording, so stretches get stretched again and smear into drones (nothing is recorded while frozen) |
+| ⑩ RVB | octave halo: every partial also sounds an octave up, a shimmer over the stretch |
+| ⑪ Options | 1 stereo · 2 mono (longer) |
+| Keeps | the buffer |
+
+#### 8 · SPREEK — voice
+*Forecast: everything starts talking (and singing).*
+
+LPC speech analysis, five-formant vowels and a singing carrier. BAL, FBK
+and RVB shape the internal carrier, so they need DENSITY above zero.
+
+<img class="panel" src="img/mode08.png" width="300" align="right" alt="Monsoon panel: mode 8 SPREEK">
+
+| Control | |
+|---|---|
+| ① POSITION | bottom: the input's own voice envelope (talkbox); then vowels a → e → i → o → u |
+| ② SIZE | vocal-tract length (formants × 0.7 → 1.4) |
+| ③ DENSITY | source: the input itself → an internal singing carrier at PITCH, following the input's level |
+| ④ TEXTURE | smooth → breathy |
+| ⑤ PITCH | carrier pitch, V/OCT |
+| ⑥ FREEZE | hold the phoneme as a drone |
+| ⑦ TRIG | consonant burst |
+| ⑧ BAL | noon = as before. Left: glide (PITCH slides; an octave takes up to ~0.6 s). Right: vibrato (5.3 Hz, up to ±1 semitone) |
+| ⑨ FBK | growl: every other glottal period comes weaker and longer — from a rough edge to vocal fry with an undertone an octave down (pitch stays put) |
+| ⑩ RVB | choir: two more carriers join, up to ±22 cents apart and drifting, so one voice becomes a small chorus |
+| ⑪ Options | 1 adult formants · 2 child formants |
+
+#### 9 · CAPTURE — captured wavetable voice
+*Forecast: catch a sound, play it like a synth.*
+
+FREEZE turns the last half second of input (up to 3 s at a lower buffer
+quality, 3.7) into a 16-frame wavetable. The
+table is band-limited per octave, so it stays alias-free up high. Until the
+first capture it plays a sine → saw table.
+
+<img class="panel" src="img/mode09.png" width="300" align="right" alt="Monsoon panel: mode 9 CAPTURE">
+
+| Control | |
+|---|---|
+| ① FREEZE | capture (pitch-detected, one period per frame) |
+| ② POSITION | scan through the frames (and on into the morph slot's frames) |
+| ③ PITCH | V/OCT, C3 at noon |
+| ④ DENSITY | unison 1 → 7 voices, detuned and spread |
+| ⑤ TEXTURE | brightness |
+| ⑥ SIZE | envelope: pluck → pad |
+| ⑦ TRIG | gate. Drones until the first gate arrives |
+| ⑧ BAL | noon = as before. Left: bend — phase distortion, the first half of each cycle read up to 6× faster (CZ style). Right: sync formant — the table read up to 6× per cycle under a soft window, a resonant peak sweeping up. Stays alias-free |
+| ⑨ FBK | self-FM: each voice bends its own phase (DX-style operator feedback) — warmer, then saw-like, then a rasp |
+| ⑩ RVB | reverb (the module's reverb, for a voice with no space of its own) |
+| Keeps / morph | the table / yes |
+
+#### 10 · GENDY — dynamic stochastic synthesis (Xenakis)
+*Forecast: Brownian drizzle, organised by Xenakis.*
+
+Two independent GENDYN voices (left/right). The breakpoints of a waveform
+take bounded random walks.
+
+<img class="panel" src="img/mode10.png" width="300" align="right" alt="Monsoon panel: mode 10 GENDY">
+
+| Control | |
+|---|---|
+| ① PITCH | centre frequency, V/OCT |
+| ② DENSITY | 3 → 40 breakpoints |
+| ③ TEXTURE | step size: static → restless |
+| ④ SIZE | barriers: stable pitch → wild |
+| ⑤ POSITION | random distribution: Cauchy → logistic → hyperbolic cosine → arcsine |
+| ⑥ FREEZE | freeze the walks (the waveform repeats exactly) |
+| ⑦ TRIG | reseed the breakpoints from the input's last period |
+| ⑧ BAL | noon = both voices around PITCH. The right voice moves in whole semitones: left down to an octave below, right up to an octave above (fifths, fourths, octaves) |
+| ⑨ FBK | cross-coupling: each voice stretches or squeezes the other's segments (up to ±80 %), so the two walks start steering each other |
+| ⑩ RVB | reverb (the module's reverb) |
+| Keeps | the breakpoints |
+
+#### 11 · SHIMMER — shimmer cascade
+*Forecast: a reverb whose echoes keep climbing toward the sun.*
+
+A diffuse four-line delay network with pitch shifters inside, so every pass
+climbs (or falls) again.
+
+<img class="panel" src="img/mode11.png" width="300" align="right" alt="Monsoon panel: mode 11 SHIMMER">
+
+| Control | |
+|---|---|
+| ① POSITION | harmonic set: plain · octave · fifth · octave + fifth · Oneirophone ratios (7/4, 9/8, 3/2) · octave down |
+| ② SIZE | room size |
+| ③ DENSITY | decay, up to endless |
+| ④ TEXTURE | damping |
+| ⑤ PITCH | extra transposition of the shift |
+| ⑥ FREEZE | hold forever, input muted |
+| ⑦ TRIG | clear the tail |
+| ⑧ BAL | noon = as before. Left: less of each pass is shifted (fully left = a plain reverb in any set). Right: mirror — the fourth line falls by the inverse of the set's interval, so the cascade climbs and falls |
+| ⑨ FBK | tank modulation: the four delay lines wobble on two slow LFOs; the ringing smears into a lush, chorused tail |
+| ⑩ RVB | pre-delay 0 → 250 ms before the network (glides when turned) |
+
+#### 12 · TAPE — multi-head tape echo
+*Forecast: warm, wobbly, three heads at the ready.*
+
+Variable-speed tape with an anti-aliased record path: slower tape gives
+longer, darker echoes. Heads at 1×, 2× and 3× spacing (0.2 / 0.4 / 0.6 s at
+1× in stereo, about twice that in mono; up to 6× longer at a lower buffer
+quality, 3.7).
+
+<img class="panel" src="img/mode12.png" width="300" align="right" alt="Monsoon panel: mode 12 TAPE">
+
+| Control | |
+|---|---|
+| ① SIZE | tape speed ×0.25 → ×2 (×1 at noon) |
+| ② PITCH | fine speed, V/OCT |
+| ③ POSITION | heads: 1 · 2 · 3 · 1+2 · 2+3 · 1+3 · 1+2+3 · all into the repeats · swell |
+| ④ DENSITY | feedback, up to gentle self-oscillation |
+| ⑤ TEXTURE | tape character: wow, flutter, saturation, head bump |
+| ⑥ FREEZE | loop hold: repeats sustain, no new input |
+| ⑦ TRIG | tape stop (spins down); next TRIG spins back up |
+| ⑧ BAL | noon = as before. Left: darker repeats (loop low-pass 7 kHz → 500 Hz). Right: thinner repeats (loop high-pass up to 2 kHz), the dub telephone fade |
+| ⑨ FBK | ping-pong: the repeats cross to the other side (fully right = every repeat swaps). Stereo tape only |
+| ⑩ RVB | diffusion in the loop: every pass smears a little more, so the echoes melt into a spring-like wash |
+| ⑪ Options | 1 stereo · 2 mono (twice as long) |
+| Keeps | the tape |
+
+#### 13 · PLATES — sympathetic plates (after the Ronin plates)
+*Forecast: sheet metal (and glass, and wood) singing back.*
+
+24 plate modes from real plate physics, read by two pickups and excited by
+the input.
+
+<img class="panel" src="img/mode13.png" width="300" align="right" alt="Monsoon panel: mode 13 PLATES">
+
+| Control | |
+|---|---|
+| ① PITCH | root, V/OCT |
+| ② SIZE | shape: square plate → long bar |
+| ③ POSITION | strike/pickup position |
+| ④ DENSITY | decay 0.3 → 30 s |
+| ⑤ TEXTURE | material: metal → glass → wood |
+| ⑥ FREEZE | ring forever, input cut |
+| ⑦ TRIG | strike |
+| ⑧ BAL | noon = as before. Left: the modes are pulled onto whole harmonics (fully left = a tuned, pitched plate). Right: the series stretches — more clang, bell / tam-tam |
+| ⑨ FBK | tension: hard hits ring sharp (up to ~3 semitones) and glide back down as they decay |
+| ⑩ RVB | reverb (the module's reverb, so a struck plate gets a room) |
+
+#### 14 · CHLOE — the Chloaelis strip
+*Forecast: your Chloaelis, shrunk to fit the cloud.*
+
+Your Chloaelis channel strip, one per side, hard left and right: multimode
+filter → 12AX7 tube → delay. The Lorenz attractor pushes the left and right
+cutoffs apart and lets the filter wander between low-pass and band-pass.
+
+<img class="panel" src="img/mode14.png" width="300" align="right" alt="Monsoon panel: mode 14 CHLOE">
+
+| Control | |
+|---|---|
+| ① POSITION | filter cutoff 30 Hz → 16 kHz |
+| ② TEXTURE | tube drive (bottom = tube out) and filter resonance |
+| ③ SIZE | delay time 20 ms → 1.6 s (tape: up to 0.45 s). String engine: interval of the right string (unison, 5th, octave, 12th, 2 octaves, 4th) |
+| ④ DENSITY | regeneration; past about 85 % it runs away and sings |
+| ⑤ PITCH | transposes the cutoff (play the resonant filter). String engine: the note |
+| ⑥ FREEZE | delay freeze: PT2399 RAM held bit for bit, BBD buckets, tape loop, string |
+| ⑦ TRIG | random freeze (0.2–1.5 s). String engine: pluck |
+| ⑧ BAL | the Lorenz attractor: noon = as before. Left: calmer and shallower until it stops (both cutoffs together, the filter halfway LP/BP, ¼ speed). Right: up to 8× faster and ±3 octaves, the filter wandering LP → BP → HP |
+| ⑨ FBK | master feedback, crossed like the plug-in: left out → right in, right out → left in. With regen up it ping-pongs and can sing |
+| ⑩ RVB | diffusion in the regen loop: every repeat smears a little more and the echoes blur into a cloud (string engine: a haze on the strings) |
+| ⑪ Options | 1 PT2399 · 2 BBD · 3 tape · 4 Karplus-Strong string, all filter → tube → delay; 5–8 the same as delay → tube → filter |
+
+On the module: the tube runs 2× oversampled (4× in the plug-in), one
+delay line per side (time changes glide), the tape is 0.45 s per side with
+fixed wear, and there are no poly taps or flock.
+
 #### 15 · FALTUNG — the built-in space library
 *Forecast: eight different rooms, all in the same cloud.*
 
@@ -332,18 +685,20 @@ Convolution with eight stereo spaces synthesized into the firmware (they
 live in flash, so they cost no RAM): room, hall, plate, spring, cabinet,
 wooden body, metal sheet, cathedral.
 
+<img class="panel" src="img/mode15.png" width="300" align="right" alt="Monsoon panel: mode 15 FALTUNG">
+
 | Control | |
 |---|---|
-| POSITION | which space (8 zones, 30 ms crossfade) |
-| SIZE | how much of the IR (shorter also saves CPU) |
-| DENSITY | pre-delay 0 → 200 ms |
-| TEXTURE | tilt on the wet sound, dark ↔ bright |
-| PITCH | wet filter: high-cut ← noon (full range) → low-cut |
-| FREEZE | input muted, the space loops back on itself forever |
-| TRIG | next space |
-| BAL | early ↔ late: noon = the IR as it is. Left: the tail fades away (close, dry). Right: the early part fades and the tail swells (far away). Same loudness |
-| FBK | feedback through the IR: the space builds on itself, longer and denser; it never howls (FREEZE is the endless version) |
-| RVB | a long smooth FDN tail (0.5 → 16 s) behind the space (the IRs are at most 170 ms) |
+| ① POSITION | which space (8 zones, 30 ms crossfade) |
+| ② SIZE | how much of the IR (shorter also saves CPU) |
+| ③ DENSITY | pre-delay 0 → 200 ms |
+| ④ TEXTURE | tilt on the wet sound, dark ↔ bright |
+| ⑤ PITCH | wet filter: high-cut ← noon (full range) → low-cut |
+| ⑥ FREEZE | input muted, the space loops back on itself forever |
+| ⑦ TRIG | next space |
+| ⑧ BAL | early ↔ late: noon = the IR as it is. Left: the tail fades away (close, dry). Right: the early part fades and the tail swells (far away). Same loudness |
+| ⑨ FBK | feedback through the IR: the space builds on itself, longer and denser; it never howls (FREEZE is the endless version) |
+| ⑩ RVB | a long smooth FDN tail (0.5 → 16 s) behind the space (the IRs are at most 170 ms) |
 
 ### Bank 2 (red)
 
@@ -354,18 +709,20 @@ A spectral dynamic EQ: it finds narrow ringing peaks standing above their
 neighbours and pushes them down, stereo-linked so the image doesn't move
 (27 ms latency).
 
+<img class="panel" src="img/mode16.png" width="300" align="right" alt="Monsoon panel: mode 16 QUELL">
+
 | Control | |
 |---|---|
-| POSITION | where it listens hardest, 100 Hz → 16 kHz |
-| SIZE | selectivity: only sharp ringing → broad honky areas |
-| DENSITY | depth, up to 24 dB of cut (bottom = transparent) |
-| TEXTURE | speed: slow and smooth → fast |
-| PITCH | output trim ±12 dB |
-| FREEZE | hold the current cut curve as a static EQ |
-| TRIG | delta: hear only what's being removed |
-| BAL | noon = stereo-linked. Left: mid only (the sides pass untouched). Right: sides only |
-| FBK | hard threshold: anything louder than a level falling 0 → −72 dBFS is pushed down too; all the way up it squashes the spectrum flat (up to DENSITY's depth) |
-| RVB | halo: what's cut rings on as a soft spectral tail, 0.3 → 5 s (also heard in delta) |
+| ① POSITION | where it listens hardest, 100 Hz → 16 kHz |
+| ② SIZE | selectivity: only sharp ringing → broad honky areas |
+| ③ DENSITY | depth, up to 24 dB of cut (bottom = transparent) |
+| ④ TEXTURE | speed: slow and smooth → fast |
+| ⑤ PITCH | output trim ±12 dB |
+| ⑥ FREEZE | hold the current cut curve as a static EQ |
+| ⑦ TRIG | delta: hear only what's being removed |
+| ⑧ BAL | noon = stereo-linked. Left: mid only (the sides pass untouched). Right: sides only |
+| ⑨ FBK | hard threshold: anything louder than a level falling 0 → −72 dBFS is pushed down too; all the way up it squashes the spectrum flat (up to DENSITY's depth) |
+| ⑩ RVB | halo: what's cut rings on as a soft spectral tail, 0.3 → 5 s (also heard in delta) |
 
 #### 17 · LEITNER — spatial path panner (after Leitner / Xenakis)
 *Forecast: the sound takes flight and circles your head.*
@@ -374,18 +731,20 @@ The input becomes a source flying along a path around you, with ear-delay,
 head shadow, distance, air, Doppler and four reflections from a virtual
 room. Works on headphones and speakers.
 
+<img class="panel" src="img/mode17.png" width="300" align="right" alt="Monsoon panel: mode 17 LEITNER">
+
 | Control | |
 |---|---|
-| POSITION | where the path is centred: noon = in front, ¾ = left, ¼ = right, ends = behind |
-| SIZE | radius / distance, 1 → 10 m |
-| DENSITY | speed, 0.02 → 4 trips per second |
-| TEXTURE | room: open field → big room with strong reflections |
-| PITCH | Doppler: none ← physical (noon) → exaggerated ×3 |
-| FREEZE | stop moving; the source stays where it is |
-| TRIG | next path: circle → figure-8 → fly-by → spiral → random flight |
-| BAL | noon = a smooth glide. Left (Leitner): the path becomes 8 loudspeaker stations; the source rests at each and hops to the next. Right (Xenakis): every trip round the path takes a chance length |
-| FBK | trail: the sound is re-emitted every 150 ms from wherever the source has flown to, darker each time |
-| RVB | the room's late tail (the FDN reverb) |
+| ① POSITION | where the path is centred: noon = in front, ¾ = left, ¼ = right, ends = behind |
+| ② SIZE | radius / distance, 1 → 10 m |
+| ③ DENSITY | speed, 0.02 → 4 trips per second |
+| ④ TEXTURE | room: open field → big room with strong reflections |
+| ⑤ PITCH | Doppler: none ← physical (noon) → exaggerated ×3 |
+| ⑥ FREEZE | stop moving; the source stays where it is |
+| ⑦ TRIG | next path: circle → figure-8 → fly-by → spiral → random flight |
+| ⑧ BAL | noon = a smooth glide. Left (Leitner): the path becomes 8 loudspeaker stations; the source rests at each and hops to the next. Right (Xenakis): every trip round the path takes a chance length |
+| ⑨ FBK | trail: the sound is re-emitted every 150 ms from wherever the source has flown to, darker each time |
+| ⑩ RVB | the room's late tail (the FDN reverb) |
 
 #### 18 · TANTRI — tabla + tanpura
 *Forecast: monsoon season in Varanasi.*
@@ -393,18 +752,20 @@ room. Works on headphones and speakers.
 A tanpura drone with a curved jawari bridge, and a tabla pair you play with
 TRIG. Your input also sets the strings and drum heads ringing.
 
+<img class="panel" src="img/mode18.png" width="300" align="right" alt="Monsoon panel: mode 18 TANTRI">
+
 | Control | |
 |---|---|
-| POSITION | which stroke TRIG plays: Na · Tin · Tun · Te · Ge · Ke · Dha · Dhin |
-| SIZE | bayan palm pressure: bends the bass drum up to +55 % (the "ghe" glide) |
-| DENSITY | tanpura: silent → louder and faster plucking (Pa Sa Sa sa, 30 → 90 per minute) |
-| TEXTURE | jawari: plain string → full buzzing bridge |
-| PITCH | Sa, V/OCT (C3 at noon); dayan sits at upper Sa, bayan below |
-| FREEZE | the drone sustains forever; plucking stops; the drums still play |
-| TRIG | play the stroke |
-| BAL | the tanpura's first string: left third Ma, noon Pa, right third Ni |
-| FBK | ring: the drum heads ring up to 5× longer, the closed strokes stop damping, and the drone sets the drums humming |
-| RVB | a room round the drums and the drone (the FDN reverb) |
+| ① POSITION | which stroke TRIG plays: Na · Tin · Tun · Te · Ge · Ke · Dha · Dhin |
+| ② SIZE | bayan palm pressure: bends the bass drum up to +55 % (the "ghe" glide) |
+| ③ DENSITY | tanpura: silent → louder and faster plucking (Pa Sa Sa sa, 30 → 90 per minute) |
+| ④ TEXTURE | jawari: plain string → full buzzing bridge |
+| ⑤ PITCH | Sa, V/OCT (C3 at noon); dayan sits at upper Sa, bayan below |
+| ⑥ FREEZE | the drone sustains forever; plucking stops; the drums still play |
+| ⑦ TRIG | play the stroke |
+| ⑧ BAL | the tanpura's first string: left third Ma, noon Pa, right third Ni |
+| ⑨ FBK | ring: the drum heads ring up to 5× longer, the closed strokes stop damping, and the drone sets the drums humming |
+| ⑩ RVB | a room round the drums and the drone (the FDN reverb) |
 
 #### 19 · HARMONIZER — scale harmonizer
 *Forecast: a choir of you, always in key.*
@@ -412,19 +773,21 @@ TRIG. Your input also sets the strings and drum heads ringing.
 Tracks your pitch and adds up to three voices exactly on scale degrees, even
 if you're a little sharp.
 
+<img class="panel" src="img/mode19.png" width="300" align="right" alt="Monsoon panel: mode 19 HARMONIZER">
+
 | Control | |
 |---|---|
-| POSITION | chord set: 3rd up · 5th up · 3rd+5th · octave up+down · 3rd below+above · 4th+7th · 3rd+5th+octave · 5th+9th+octave down |
-| PITCH | the key, V/OCT (C at noon; each semitone moves the key) |
-| DENSITY | how many voices (1 → 3) and how loud |
-| SIZE | humanise: a little detune and delay per voice |
-| TEXTURE | stereo spread of the voices |
-| FREEZE | latch: the voices hold their notes while you carry on |
-| TRIG | next chord set |
-| BAL | register: left third every voice an octave down, right third an octave up (same chord shape) |
-| FBK | canon: the voices (not you) echo every 340 ms, darker each time |
-| RVB | glide: the voices slide into each new note, from a snap up to ~0.8 s |
-| Options | 1 major · 2 natural minor · 3 dorian · 4 major pentatonic |
+| ① POSITION | chord set: 3rd up · 5th up · 3rd+5th · octave up+down · 3rd below+above · 4th+7th · 3rd+5th+octave · 5th+9th+octave down |
+| ② PITCH | the key, V/OCT (C at noon; each semitone moves the key) |
+| ③ DENSITY | how many voices (1 → 3) and how loud |
+| ④ SIZE | humanise: a little detune and delay per voice |
+| ⑤ TEXTURE | stereo spread of the voices |
+| ⑥ FREEZE | latch: the voices hold their notes while you carry on |
+| ⑦ TRIG | next chord set |
+| ⑧ BAL | register: left third every voice an octave down, right third an octave up (same chord shape) |
+| ⑨ FBK | canon: the voices (not you) echo every 340 ms, darker each time |
+| ⑩ RVB | glide: the voices slide into each new note, from a snap up to ~0.8 s |
+| ⑪ Options | 1 major · 2 natural minor · 3 dorian · 4 major pentatonic |
 
 #### 20 · PUTZ — spectral cleaner
 *Forecast: hiss lifting, hum dispersing.*
@@ -432,19 +795,21 @@ if you're a little sharp.
 A denoiser plus a 50/60 Hz hum comb. It learns the noise when you hold
 FREEZE; until then it tracks the noise floor by itself (32 ms latency).
 
+<img class="panel" src="img/mode20.png" width="300" align="right" alt="Monsoon panel: mode 20 PUTZ">
+
 | Control | |
 |---|---|
-| DENSITY | reduction, up to 30 dB |
-| SIZE | smoothing (fewer "musical noise" twitters) |
-| TEXTURE | transient protection: lets attacks through |
-| POSITION | hum comb depth (8 harmonics) |
-| PITCH | hum fundamental, ± one octave around 50/60 Hz |
-| FREEZE (hold) | learn the noise: play only the noise while holding |
-| TRIG | listen to what's removed |
-| BAL | noon = as before. Left: the lows are cleaned harder (rumble, room) and the highs left alone. Right: hiss only, the bass untouched |
-| FBK | de-crackle: clicks and vinyl crackle on the input are flattened, steady sound passes |
-| RVB | de-reverb: every tail dies up to 3× faster, attacks and held notes stay (works with DENSITY at 0 too) |
-| Options | 1 = 50 Hz mains · 2 = 60 Hz mains |
+| ① DENSITY | reduction, up to 30 dB |
+| ② SIZE | smoothing (fewer "musical noise" twitters) |
+| ③ TEXTURE | transient protection: lets attacks through |
+| ④ POSITION | hum comb depth (8 harmonics) |
+| ⑤ PITCH | hum fundamental, ± one octave around 50/60 Hz |
+| ⑥ FREEZE (hold) | learn the noise: play only the noise while holding |
+| ⑦ TRIG | listen to what's removed |
+| ⑧ BAL | noon = as before. Left: the lows are cleaned harder (rumble, room) and the highs left alone. Right: hiss only, the bass untouched |
+| ⑨ FBK | de-crackle: clicks and vinyl crackle on the input are flattened, steady sound passes |
+| ⑩ RVB | de-reverb: every tail dies up to 3× faster, attacks and held notes stay (works with DENSITY at 0 too) |
+| ⑪ Options | 1 = 50 Hz mains · 2 = 60 Hz mains |
 
 #### 21 · ENSEMBLE — string-machine ensemble
 *Forecast: a 1970s string machine drifts in from the coast.*
@@ -452,18 +817,20 @@ FREEZE; until then it tracks the noise floor by itself (32 ms latency).
 Three modulated delay taps per side, a slow and a fast LFO at 120° steps:
 the Solina shimmer.
 
+<img class="panel" src="img/mode21.png" width="300" align="right" alt="Monsoon panel: mode 21 ENSEMBLE">
+
 | Control | |
 |---|---|
-| POSITION | chorus → ensemble → vibrato |
-| SIZE | base delay 5 → 15 ms |
-| DENSITY | modulation depth |
-| TEXTURE | clean hi-fi → dark bucket-brigade |
-| PITCH | LFO rate, V/OCT |
-| FREEZE | stop the LFOs where they are |
-| TRIG | reset the LFO phases |
-| BAL | noon = as before. Left: only the slow LFO, deeper (a pure swirl). Right: only the fast one, deeper (pure shimmer, even in chorus) |
-| FBK | regeneration: the taps go round again (with DENSITY low: flanger jets) |
-| RVB | reverb: the string machine's hall (the module's FDN reverb) |
+| ① POSITION | chorus → ensemble → vibrato |
+| ② SIZE | base delay 5 → 15 ms |
+| ③ DENSITY | modulation depth |
+| ④ TEXTURE | clean hi-fi → dark bucket-brigade |
+| ⑤ PITCH | LFO rate, V/OCT |
+| ⑥ FREEZE | stop the LFOs where they are |
+| ⑦ TRIG | reset the LFO phases |
+| ⑧ BAL | noon = as before. Left: only the slow LFO, deeper (a pure swirl). Right: only the fast one, deeper (pure shimmer, even in chorus) |
+| ⑨ FBK | regeneration: the taps go round again (with DENSITY low: flanger jets) |
+| ⑩ RVB | reverb: the string machine's hall (the module's FDN reverb) |
 
 #### 22 · BARBERPOLE — frequency-shift spirals
 *Forecast: endlessly rising (or falling) and never arriving.*
@@ -471,36 +838,40 @@ the Solina shimmer.
 A frequency shifter inside a feedback delay: every pass shifts again, so
 echoes spiral up or down forever.
 
+<img class="panel" src="img/mode22.png" width="300" align="right" alt="Monsoon panel: mode 22 BARBERPOLE">
+
 | Control | |
 |---|---|
-| POSITION | shift, bipolar: noon = none, up ↑ / down ↓, up to 2 kHz |
-| SIZE | loop delay 1.5 ms → 0.5 s (up to 3 s at a lower buffer quality, 3.7) |
-| DENSITY | feedback |
-| TEXTURE | both sides the same way → left up, right down |
-| PITCH | multiplies the shift, V/OCT |
-| FREEZE | infinite spiral, input muted |
-| TRIG | flip direction |
-| BAL | noon = as before. Left: every pass darker (the loop closes to 1.2 kHz). Right: every pass thinner (opens up to 1.5 kHz) |
-| FBK | wow: the loop delay wobbles, so every pass is a little more out of tune, like tape |
-| RVB | dispersion: every pass drags the lows behind the highs, and the repeats melt into falling chirps, like a spring |
+| ① POSITION | shift, bipolar: noon = none, up ↑ / down ↓, up to 2 kHz |
+| ② SIZE | loop delay 1.5 ms → 0.5 s (up to 3 s at a lower buffer quality, 3.7) |
+| ③ DENSITY | feedback |
+| ④ TEXTURE | both sides the same way → left up, right down |
+| ⑤ PITCH | multiplies the shift, V/OCT |
+| ⑥ FREEZE | infinite spiral, input muted |
+| ⑦ TRIG | flip direction |
+| ⑧ BAL | noon = as before. Left: every pass darker (the loop closes to 1.2 kHz). Right: every pass thinner (opens up to 1.5 kHz) |
+| ⑨ FBK | wow: the loop delay wobbles, so every pass is a little more out of tune, like tape |
+| ⑩ RVB | dispersion: every pass drags the lows behind the highs, and the repeats melt into falling chirps, like a spring |
 
 #### 23 · SPECDELAY — spectral delay
 *Forecast: the lows arrive late, the highs early (or the other way round).*
 
 Every frequency band has its own delay and feedback.
 
+<img class="panel" src="img/mode23.png" width="300" align="right" alt="Monsoon panel: mode 23 SPECDELAY">
+
 | Control | |
 |---|---|
-| POSITION | delay curve: lows last ← all together (noon) → highs last |
-| SIZE | longest delay 5 ms → 0.5 s |
-| DENSITY | feedback |
-| TEXTURE | feedback tilt: dark repeats ← flat → thin bright repeats |
-| PITCH | spectral shift per repeat (±24 st): spirals; noon = none |
-| FREEZE | the spectral echoes hold forever |
-| TRIG | clear |
-| BAL | noon = as before. Left: stripes (neighbouring bands answer early and late). Right: scatter (every band gets its own random delay) |
-| FBK | blur: every repeat smears further across frequency, and tones widen into hiss |
-| RVB | diffusion: every repeat smears further in time, and the echoes melt into a wash |
+| ① POSITION | delay curve: lows last ← all together (noon) → highs last |
+| ② SIZE | longest delay 5 ms → 0.5 s |
+| ③ DENSITY | feedback |
+| ④ TEXTURE | feedback tilt: dark repeats ← flat → thin bright repeats |
+| ⑤ PITCH | spectral shift per repeat (±24 st): spirals; noon = none |
+| ⑥ FREEZE | the spectral echoes hold forever |
+| ⑦ TRIG | clear |
+| ⑧ BAL | noon = as before. Left: stripes (neighbouring bands answer early and late). Right: scatter (every band gets its own random delay) |
+| ⑨ FBK | blur: every repeat smears further across frequency, and tones widen into hiss |
+| ⑩ RVB | diffusion: every repeat smears further in time, and the echoes melt into a wash |
 
 #### 24 · CHOIR — formant choir
 *Forecast: a choir on the horizon, singing whatever you hum.*
@@ -508,18 +879,20 @@ Every frequency band has its own delay and feedback.
 Four voices on a chord that follows V/OCT, each through vowel formants,
 excited by your input and/or their own breath.
 
+<img class="panel" src="img/mode24.png" width="300" align="right" alt="Monsoon panel: mode 24 CHOIR">
+
 | Control | |
 |---|---|
-| POSITION | vowel a → e → i → o → u |
-| DENSITY | chord: unison · fifths · major · minor · sus4 · dom7 |
-| SIZE | voice spread: detune, width, vibrato |
-| TEXTURE | the input pitched through the voices → their own glottal breath |
-| PITCH | chord root, V/OCT (C3 at noon) |
-| FREEZE | sustain the chord on their own breath, no input needed |
-| TRIG | next inversion |
-| BAL | noon = as before (altos). Left: bigger, darker singers (formants down). Right: smaller, brighter ones (formants up). The notes stay put |
-| FBK | resonance: your input rings on and sings its chord for seconds (TEXTURE left of full) |
-| RVB | reverb: a choir needs a church (the module's FDN reverb) |
+| ① POSITION | vowel a → e → i → o → u |
+| ② DENSITY | chord: unison · fifths · major · minor · sus4 · dom7 |
+| ③ SIZE | voice spread: detune, width, vibrato |
+| ④ TEXTURE | the input pitched through the voices → their own glottal breath |
+| ⑤ PITCH | chord root, V/OCT (C3 at noon) |
+| ⑥ FREEZE | sustain the chord on their own breath, no input needed |
+| ⑦ TRIG | next inversion |
+| ⑧ BAL | noon = as before (altos). Left: bigger, darker singers (formants down). Right: smaller, brighter ones (formants up). The notes stay put |
+| ⑨ FBK | resonance: your input rings on and sings its chord for seconds (TEXTURE left of full) |
+| ⑩ RVB | reverb: a choir needs a church (the module's FDN reverb) |
 
 #### 25 · FOLDER — wavefolder + low-pass gate
 *Forecast: west-coast weather, with a breeze off the Pacific.*
@@ -528,19 +901,21 @@ A sine wavefolder (oversampled, clean) into a vactrol low-pass gate. Your
 input and an internal sine get folded together, and your input's level or
 TRIG opens the gate.
 
+<img class="panel" src="img/mode25.png" width="300" align="right" alt="Monsoon panel: mode 25 FOLDER">
+
 | Control | |
 |---|---|
-| POSITION | fold amount 1× → 10× |
-| SIZE | symmetry: noon = odd harmonics, either side adds even ones |
-| DENSITY | gate type: low-pass → combo → VCA |
-| TEXTURE | vactrol decay 30 ms → 3 s |
-| PITCH | internal sine, V/OCT |
-| FREEZE | gate held open: a drone |
-| TRIG | ping the gate |
-| BAL | noon = as before. Left: your input bends the sine's phase (option 1). Right: the sine ring-modulates your input (in option 2 too: a ring mod at PITCH) |
-| FBK | the folder feeds itself: growl, then chaos |
-| RVB | reverb (the module's FDN reverb) |
-| Options | 1 input + sine · 2 input only (an effect) |
+| ① POSITION | fold amount 1× → 10× |
+| ② SIZE | symmetry: noon = odd harmonics, either side adds even ones |
+| ③ DENSITY | gate type: low-pass → combo → VCA |
+| ④ TEXTURE | vactrol decay 30 ms → 3 s |
+| ⑤ PITCH | internal sine, V/OCT |
+| ⑥ FREEZE | gate held open: a drone |
+| ⑦ TRIG | ping the gate |
+| ⑧ BAL | noon = as before. Left: your input bends the sine's phase (option 1). Right: the sine ring-modulates your input (in option 2 too: a ring mod at PITCH) |
+| ⑨ FBK | the folder feeds itself: growl, then chaos |
+| ⑩ RVB | reverb (the module's FDN reverb) |
+| ⑪ Options | 1 input + sine · 2 input only (an effect) |
 
 #### 26 · HALL — big reverb
 *Forecast: cathedral conditions, visibility unlimited.*
@@ -548,18 +923,20 @@ TRIG opens the gate.
 A big eight-line reverb with diffusion inside every line: up to 30 seconds
 of tail, separate from the output reverb.
 
+<img class="panel" src="img/mode26.png" width="300" align="right" alt="Monsoon panel: mode 26 HALL">
+
 | Control | |
 |---|---|
-| POSITION | pre-delay 0 → 250 ms |
-| SIZE | room size |
-| DENSITY | decay 0.4 → 30 s |
-| TEXTURE | damping: dark → bright |
-| PITCH | modulation: none ← gentle chorus (noon) → deep |
-| FREEZE | hold forever |
-| TRIG | clear the tail |
-| BAL | noon = as before. Left: the lows die sooner (bass decay down to ×0.25: a clear, airy hall). Right: the lows ring on (×3: warm and heavy) |
-| FBK | pre-delay echoes: the pre-delay repeats (time = POSITION), and every echo blooms into the hall. Nothing at POSITION 0 |
-| RVB | diffusion backs off: the smooth wash turns grainy and its echoes come apart, like a stone stairwell |
+| ① POSITION | pre-delay 0 → 250 ms |
+| ② SIZE | room size |
+| ③ DENSITY | decay 0.4 → 30 s |
+| ④ TEXTURE | damping: dark → bright |
+| ⑤ PITCH | modulation: none ← gentle chorus (noon) → deep |
+| ⑥ FREEZE | hold forever |
+| ⑦ TRIG | clear the tail |
+| ⑧ BAL | noon = as before. Left: the lows die sooner (bass decay down to ×0.25: a clear, airy hall). Right: the lows ring on (×3: warm and heavy) |
+| ⑨ FBK | pre-delay echoes: the pre-delay repeats (time = POSITION), and every echo blooms into the hall. Nothing at POSITION 0 |
+| ⑩ RVB | diffusion backs off: the smooth wash turns grainy and its echoes come apart, like a stone stairwell |
 
 #### 27 · BLOOM — swells + reverse blooms
 *Forecast: everything arrives backwards first, then gently.*
@@ -567,18 +944,20 @@ of tail, separate from the output reverb.
 Each sound is heard reversed and swelling just before it arrives, then
 arrives with its attack smoothed into a swell.
 
+<img class="panel" src="img/mode27.png" width="300" align="right" alt="Monsoon panel: mode 27 BLOOM">
+
 | Control | |
 |---|---|
-| POSITION | swell time: attacks untouched → ~2 s swell on every note |
-| SIZE | reverse window 50 → 280 ms (the delay is twice this; up to 1.68 s at a lower buffer quality, 3.7) |
-| DENSITY | reverse-bloom level |
-| TEXTURE | diffusion: clean reverse → hazy reverse reverb |
-| PITCH | transposition of the reverse bloom (±12 st) |
-| FREEZE | the last window keeps blooming, over and over |
-| TRIG | restart the reverse heads now |
-| BAL | noon = as before. Left: more and more blooms fade out instead of in (reverse echoes that strike, then trail away). Right: more and more play forwards, swelling in, one window late |
-| FBK | regeneration (the module's feedback loop): every bloom blooms again (reversed twice = forwards again …) |
-| RVB | haze tail: the diffusion chain becomes a loop, so the blooms ring on after the note (reverse reverb → note → reverb) |
+| ① POSITION | swell time: attacks untouched → ~2 s swell on every note |
+| ② SIZE | reverse window 50 → 280 ms (the delay is twice this; up to 1.68 s at a lower buffer quality, 3.7) |
+| ③ DENSITY | reverse-bloom level |
+| ④ TEXTURE | diffusion: clean reverse → hazy reverse reverb |
+| ⑤ PITCH | transposition of the reverse bloom (±12 st) |
+| ⑥ FREEZE | the last window keeps blooming, over and over |
+| ⑦ TRIG | restart the reverse heads now |
+| ⑧ BAL | noon = as before. Left: more and more blooms fade out instead of in (reverse echoes that strike, then trail away). Right: more and more play forwards, swelling in, one window late |
+| ⑨ FBK | regeneration (the module's feedback loop): every bloom blooms again (reversed twice = forwards again …) |
+| ⑩ RVB | haze tail: the diffusion chain becomes a loop, so the blooms ring on after the note (reverse reverb → note → reverb) |
 
 #### 28 · GAMELAN — metallophones
 *Forecast: bronze rain, beating gently in pairs.*
@@ -586,19 +965,21 @@ arrives with its attack smoothed into a swell.
 Seven keys in pelog or slendro. Every key has a twin tuned a few hertz away,
 so they beat (ombak).
 
+<img class="panel" src="img/mode28.png" width="300" align="right" alt="Monsoon panel: mode 28 GAMELAN">
+
 | Control | |
 |---|---|
-| POSITION | which key TRIG strikes |
-| SIZE | ombak (beating) 0 → 10 Hz |
-| DENSITY | decay 0.3 → 20 s |
-| TEXTURE | saron bar → bonang kettle → gong (two octaves down) |
-| PITCH | root, V/OCT (C4 at noon) |
-| FREEZE | ring forever |
-| TRIG | strike |
-| BAL | mallet: noon = as before. Left: softer, padded (upper partials fade, round and dull). Right: harder (upper partials up to ×5). Shapes TRIG strikes |
-| FBK | tutup: on each strike the other hand chokes the key struck before (up to 60 dB in 60 ms). 0 = everything rings |
-| RVB | the pendopo: a reverb around the bank (the module's FDN reverb) |
-| Options | 1 pelog · 2 slendro |
+| ① POSITION | which key TRIG strikes |
+| ② SIZE | ombak (beating) 0 → 10 Hz |
+| ③ DENSITY | decay 0.3 → 20 s |
+| ④ TEXTURE | saron bar → bonang kettle → gong (two octaves down) |
+| ⑤ PITCH | root, V/OCT (C4 at noon) |
+| ⑥ FREEZE | ring forever |
+| ⑦ TRIG | strike |
+| ⑧ BAL | mallet: noon = as before. Left: softer, padded (upper partials fade, round and dull). Right: harder (upper partials up to ×5). Shapes TRIG strikes |
+| ⑨ FBK | tutup: on each strike the other hand chokes the key struck before (up to 60 dB in 60 ms). 0 = everything rings |
+| ⑩ RVB | the pendopo: a reverb around the bank (the module's FDN reverb) |
+| ⑪ Options | 1 pelog · 2 slendro |
 
 #### 29 · MIRROR — spectral warping
 *Forecast: the sky reflected in a puddle, upside down.*
@@ -606,18 +987,20 @@ so they beat (ombak).
 Every partial is moved to a new frequency: stretched apart (bells),
 mirrored around an anchor note (highs become lows), or folded under it.
 
+<img class="panel" src="img/mode29.png" width="300" align="right" alt="Monsoon panel: mode 29 MIRROR">
+
 | Control | |
 |---|---|
-| POSITION | stretch → invert → fold |
-| SIZE | amount: clean → full warp |
-| PITCH | the anchor / mirror note, V/OCT (C4 at noon) |
-| DENSITY | spectral blur |
-| TEXTURE | tilt, dark ↔ bright |
-| FREEZE | hold the spectrum (still warpable) |
-| TRIG | grab a new spectrum while frozen |
-| BAL | frequency shift: noon none, left down, right up, up to ±1 kHz. Every partial moves by the same Hz, so harmonic sounds turn inharmonic; below 0 Hz they reflect back up |
-| FBK | warp feedback: the warped spectrum is warped again and again. Partials spiral (stretch glides them away from the anchor, BAL slides them, fold piles them under it); with no warp it's a spectral sustain |
-| RVB | reverb (the module's FDN reverb; MIRROR's output is mono, the space comes from here) |
+| ① POSITION | stretch → invert → fold |
+| ② SIZE | amount: clean → full warp |
+| ③ PITCH | the anchor / mirror note, V/OCT (C4 at noon) |
+| ④ DENSITY | spectral blur |
+| ⑤ TEXTURE | tilt, dark ↔ bright |
+| ⑥ FREEZE | hold the spectrum (still warpable) |
+| ⑦ TRIG | grab a new spectrum while frozen |
+| ⑧ BAL | frequency shift: noon none, left down, right up, up to ±1 kHz. Every partial moves by the same Hz, so harmonic sounds turn inharmonic; below 0 Hz they reflect back up |
+| ⑨ FBK | warp feedback: the warped spectrum is warped again and again. Partials spiral (stretch glides them away from the anchor, BAL slides them, fold piles them under it); with no warp it's a spectral sustain |
+| ⑩ RVB | reverb (the module's FDN reverb; MIRROR's output is mono, the space comes from here) |
 
 #### 30 · POLISH — mastering chain
 *Forecast: clear, bright and finished.*
@@ -625,305 +1008,20 @@ mirrored around an anchor note (highs become lows), or folded under it.
 Tilt → 3-band compressor → tape saturation → width with mono bass (the
 limiter follows). Zero latency, flat when everything is off.
 
-| Control | |
-|---|---|
-| DENSITY | compression amount (one macro for 3 bands, auto make-up) |
-| TEXTURE | tape saturation: clean → warm and driven |
-| POSITION | tone: dark ← flat (noon) → bright |
-| SIZE | width: mono ← as is → 2× side; below 120 Hz always mono |
-| PITCH | output trim ±12 dB |
-| FREEZE | bypass, for A/B |
-| TRIG | auto-gain: match output loudness to input |
-| BAL | where the compressor leans: noon = as before. Left: the lows get squeezed harder (tight, dense bass). Right: the highs do (tames harshness) |
-| FBK | parallel ("New York") compression: a smashed copy under the mix. Quiet detail comes up, peaks stay |
-| RVB | air: new harmonics above 6 kHz, made from the highs (sparkle, not EQ) |
-
-### Bank 1 (green)
-
-#### 1 · GRAINS — trajectory grains
-*Forecast: scattered showers, falling in shapes.*
-
-Grains are read from a recorded buffer along a moving path, not at random
-spots. Buffer: 0.62 s stereo or 1.24 s mono, up to 3.66 s / 7.32 s at a
-lower buffer quality (3.7).
+<img class="panel" src="img/mode30.png" width="300" align="right" alt="Monsoon panel: mode 30 POLISH">
 
 | Control | |
 |---|---|
-| POSITION | centre of the path (bottom = newest audio) |
-| SIZE | path size and speed: bottom = a fixed point; up = wider and faster (0.05 → 2 Hz) |
-| DENSITY | grain rate 1 → 150 grains/s; grain length follows (long and sparse → short and dense) |
-| TEXTURE | window: percussive → smooth (Hann) → flat; top quarter adds pitch scatter |
-| PITCH | grain transposition, quantised by the option |
-| BAL | noon = plain. Left: spray (grains scatter around the path, up to half the buffer away). Right: more and more grains play backwards, all of them at full |
-| FBK | feedback: the cloud back into itself, Clouds style, with the howl tamer on duty |
-| RVB | the 8-line FDN reverb: send and length together, 0.5 → 16 s |
-| FREEZE | stop recording |
-| TRIG | next path shape: circle → line → figure-8 → spiral → random walk |
-| Options | 1 chromatic · 2 minor pentatonic · 3 octaves + fifths · 4 free; options 5–8 = the same in mono (double length) |
-| Keeps | the buffer |
-
-#### 2 · SPECTRAL — spectral freeze / resynthesis
-*Forecast: a held moment, refracted into its colours.*
-
-2048-point phase vocoder with peak-locked partials (64 ms latency).
-
-| Control | |
-|---|---|
-| POSITION | partial thinning: all bins → only the strongest peaks. With a morph slot armed: blend from the current spectrum to the slot's |
-| SIZE | harmonic snap: pulls partials onto the harmonic series of the PITCH root |
-| DENSITY | blur (smears the spectrum over time) |
-| TEXTURE | tilt, dark ↔ bright, flat at noon (±9 dB/oct) |
-| PITCH | transposition without changing speed |
-| FREEZE | hold the spectrum; it keeps resynthesising with a slight drift |
-| TRIG | grab a new spectrum while frozen |
-| BAL | noon = as before. Turning it shifts every partial by the same number of Hz (not a ratio), so harmonic sounds go inharmonic. Left shifts down, right shifts up, exponential: a few Hz near noon, ±1 kHz at the ends |
-| FBK | regeneration: the last output spectrum comes back as a floor under the next frame (held 0.1 → 8 s). On its own it sustains; with BAL or PITCH set every pass moves the partials again, so they spiral up or down |
-| RVB | phase diffusion: random phases blend in, coherent → a whispered wash in the same colours |
-| Keeps / morph | the frozen spectrum / yes |
-
-#### 3 · CONVOLVE — freeze captures the impulse response
-*Forecast: the room you're standing in is whatever you just played.*
-
-Your own audio becomes the space the sound plays in. The impulse response
-(IR) can be up to 139 ms, and FBK makes it ring on much longer. The
-mode starts with a small synthetic room so it sounds straight away.
-
-| Control | |
-|---|---|
-| FREEZE (on) / TRIG | capture a new IR from the last 139 ms of input |
-| POSITION | where in that capture the IR starts (bottom = newest) |
-| SIZE | IR length, with fade-out |
-| DENSITY | IR envelope: reverse swell ← as captured (noon) → faster decay |
-| TEXTURE | IR brightness: low-pass below noon, treble boost above |
-| PITCH | IR playback rate |
-| BAL | noon = as before. Left: only the attacks of the input reach the IR. Right: only the body (attacks ducked, so hits swell instead of crack). It shapes the input before everything, so captures hear it too |
-| FBK | feedback (the module's feedback loop, with its howl tamer): the IR rings on much longer |
-| RVB | IR smear: the IR gets eight decaying echoes of itself (3 → 97 ms), and captures melt into a dense wash |
-| Keeps | the capture and its settings |
-
-#### 4 · RESONATOR — sympathetic strings with jawari
-*Forecast: eight strings hum along, with a buzzing bridge.*
-
-Eight tuned strings, excited by the input, tuned to the cent.
-
-| Control | |
-|---|---|
-| PITCH | root (C2 at noon), V/OCT |
-| SIZE | tuning: unison/octaves → fifths → sitar sympathetic set → harmonic series → inharmonic |
-| DENSITY | decay 0.2 → 20 s |
-| POSITION | brightness and pickup point |
-| TEXTURE | jawari: clean string → strong sitar-bridge buzz |
-| FREEZE | infinite sustain, input cut |
-| TRIG | pluck all strings |
-| BAL | noon = as before. Left: detune, the strings spread up to ±25 cents (beating, a chorus of strings). Right: stretch, intervals widen up to +10 % (an octave ~+120 cents: piano-like, then bell-like) |
-| FBK | sympathetic coupling: energy passes from string to string. Strings tuned close together trade it back and forth (slow beating, blooming), and a note in one wakes the others |
-| RVB | body: the strings sound through a resonant wooden box (~8.5 ms resonance, tail up to ~0.35 s) |
-
-#### 5 · DIFFERENCE — difference tones (after the Oneirophone)
-*Forecast: notes that only happen inside your head. Really.*
-
-The input is frequency-shifted into high pairs of tones, f and f + Δ. Your
-ear makes the tone at Δ, a note that isn't in the signal.
-
-| Control | |
-|---|---|
-| PITCH | the heard tone Δ (C3 at noon), V/OCT |
-| POSITION | register of the pairs, 2 → 8 kHz |
-| SIZE | input bandwidth: narrow (purest illusion) → whole input (rich) |
-| DENSITY | 1 → 6 pairs: Δ × 1, 3/2, 5/4, 2, 7/4, 9/8 (a chord of phantom notes) |
-| TEXTURE | purity: 0 = only in your ear; up = the difference tone becomes physically present (works through any speaker) |
-| FREEZE | drone of pure sine pairs at the held level |
-| BAL | noon = as before. Left: glide, the heard note slides to each new pitch (20 ms → 2 s). Right: dichotic, f to the left ear and f + Δ to the right; on headphones the difference tone gives way to binaural beats |
-| FBK | spiral: the shifted sound recirculates (50 ms) and climbs by Δ on every pass. Echoes rise; held sounds build a ladder f, f+Δ, f+2Δ… that makes the phantom note stronger |
-| RVB | reverb (the module's FDN reverb; both tones reverberate, so the phantom note survives) |
-
-#### 6 · CROSS — left/right spectral morph
-*Forecast: two weather fronts collide.*
-
-Left input = modulator, right input = carrier (64 ms latency). With only IN L patched,
-both sides are the same signal.
-
-| Control | |
-|---|---|
-| POSITION | vocoder (L's envelope on R) → morph → L's magnitudes with R's phases |
-| DENSITY | envelope resolution (coarse vocoder bands → fine detail) |
-| TEXTURE | envelope speed (attack/release) |
-| SIZE | formant shift of the modulator (×0.5 → ×2) |
-| PITCH | carrier transposition |
-| FREEZE | hold the modulator |
-| TRIG | toggle holding the carrier |
-| BAL | noon = as before (carrier = right input). Left: the carrier fades to white noise (whispered; consonants come through). Right: it fades to an internal buzz played by PITCH (C3 at noon, V/OCT), a classic vocoder from one input; PITCH then stops transposing R |
-| FBK | formant emphasis: the modulator's envelope sharpens (peak and energy kept): more talkative, then resonant, wah-like peaks |
-| RVB | reverb (the module's FDN reverb; CROSS is mono, this gives it a stereo room) |
-
-#### 7 · STRETCH — extreme time-stretch
-*Forecast: one second, smeared across an afternoon.*
-
-A phase vocoder with phase locking reads a recorded buffer slowly: 0.30 s
-stereo or 0.89 s mono, up to 1.76 s / 5.23 s at a lower buffer quality (3.7).
-
-| Control | |
-|---|---|
-| SIZE | stretch: 1× → ~1000× at 0.9 → standing still from about 0.98 |
-| POSITION | where the read zone sits in the buffer |
-| DENSITY | smear |
-| TEXTURE | coherent (phase vocoder) → Paulstretch (random phases) |
-| PITCH | transposition without speed change |
-| FREEZE | stop recording |
-| TRIG | jump to the newest audio |
-| BAL | noon = as before. Left: the read slows, stands still at 9 o'clock, and runs backwards at full left. Right: scatter, the read window jumps to random spots (up to half the buffer away, ~10 jumps/s) |
-| FBK | re-record: the output goes back into the recording, so stretches get stretched again and smear into drones (nothing is recorded while frozen) |
-| RVB | octave halo: every partial also sounds an octave up, a shimmer over the stretch |
-| Options | 1 stereo · 2 mono (longer) |
-| Keeps | the buffer |
-
-#### 8 · SPREEK — voice
-*Forecast: everything starts talking (and singing).*
-
-LPC speech analysis, five-formant vowels and a singing carrier. BAL, FBK
-and RVB shape the internal carrier, so they need DENSITY above zero.
-
-| Control | |
-|---|---|
-| POSITION | bottom: the input's own voice envelope (talkbox); then vowels a → e → i → o → u |
-| SIZE | vocal-tract length (formants × 0.7 → 1.4) |
-| DENSITY | source: the input itself → an internal singing carrier at PITCH, following the input's level |
-| TEXTURE | smooth → breathy |
-| PITCH | carrier pitch, V/OCT |
-| FREEZE | hold the phoneme as a drone |
-| TRIG | consonant burst |
-| BAL | noon = as before. Left: glide (PITCH slides; an octave takes up to ~0.6 s). Right: vibrato (5.3 Hz, up to ±1 semitone) |
-| FBK | growl: every other glottal period comes weaker and longer — from a rough edge to vocal fry with an undertone an octave down (pitch stays put) |
-| RVB | choir: two more carriers join, up to ±22 cents apart and drifting, so one voice becomes a small chorus |
-| Options | 1 adult formants · 2 child formants |
-
-#### 9 · CAPTURE — captured wavetable voice
-*Forecast: catch a sound, play it like a synth.*
-
-FREEZE turns the last half second of input (up to 3 s at a lower buffer
-quality, 3.7) into a 16-frame wavetable. The
-table is band-limited per octave, so it stays alias-free up high. Until the
-first capture it plays a sine → saw table.
-
-| Control | |
-|---|---|
-| FREEZE | capture (pitch-detected, one period per frame) |
-| POSITION | scan through the frames (and on into the morph slot's frames) |
-| PITCH | V/OCT, C3 at noon |
-| DENSITY | unison 1 → 7 voices, detuned and spread |
-| TEXTURE | brightness |
-| SIZE | envelope: pluck → pad |
-| TRIG | gate. Drones until the first gate arrives |
-| BAL | noon = as before. Left: bend — phase distortion, the first half of each cycle read up to 6× faster (CZ style). Right: sync formant — the table read up to 6× per cycle under a soft window, a resonant peak sweeping up. Stays alias-free |
-| FBK | self-FM: each voice bends its own phase (DX-style operator feedback) — warmer, then saw-like, then a rasp |
-| RVB | reverb (the module's reverb, for a voice with no space of its own) |
-| Keeps / morph | the table / yes |
-
-#### 10 · GENDY — dynamic stochastic synthesis (Xenakis)
-*Forecast: Brownian drizzle, organised by Xenakis.*
-
-Two independent GENDYN voices (left/right). The breakpoints of a waveform
-take bounded random walks.
-
-| Control | |
-|---|---|
-| PITCH | centre frequency, V/OCT |
-| DENSITY | 3 → 40 breakpoints |
-| TEXTURE | step size: static → restless |
-| SIZE | barriers: stable pitch → wild |
-| POSITION | random distribution: Cauchy → logistic → hyperbolic cosine → arcsine |
-| FREEZE | freeze the walks (the waveform repeats exactly) |
-| TRIG | reseed the breakpoints from the input's last period |
-| BAL | noon = both voices around PITCH. The right voice moves in whole semitones: left down to an octave below, right up to an octave above (fifths, fourths, octaves) |
-| FBK | cross-coupling: each voice stretches or squeezes the other's segments (up to ±80 %), so the two walks start steering each other |
-| RVB | reverb (the module's reverb) |
-| Keeps | the breakpoints |
-
-#### 11 · SHIMMER — shimmer cascade
-*Forecast: a reverb whose echoes keep climbing toward the sun.*
-
-A diffuse four-line delay network with pitch shifters inside, so every pass
-climbs (or falls) again.
-
-| Control | |
-|---|---|
-| POSITION | harmonic set: plain · octave · fifth · octave + fifth · Oneirophone ratios (7/4, 9/8, 3/2) · octave down |
-| SIZE | room size |
-| DENSITY | decay, up to endless |
-| TEXTURE | damping |
-| PITCH | extra transposition of the shift |
-| FREEZE | hold forever, input muted |
-| TRIG | clear the tail |
-| BAL | noon = as before. Left: less of each pass is shifted (fully left = a plain reverb in any set). Right: mirror — the fourth line falls by the inverse of the set's interval, so the cascade climbs and falls |
-| FBK | tank modulation: the four delay lines wobble on two slow LFOs; the ringing smears into a lush, chorused tail |
-| RVB | pre-delay 0 → 250 ms before the network (glides when turned) |
-
-#### 12 · TAPE — multi-head tape echo
-*Forecast: warm, wobbly, three heads at the ready.*
-
-Variable-speed tape with an anti-aliased record path: slower tape gives
-longer, darker echoes. Heads at 1×, 2× and 3× spacing (0.2 / 0.4 / 0.6 s at
-1× in stereo, about twice that in mono; up to 6× longer at a lower buffer
-quality, 3.7).
-
-| Control | |
-|---|---|
-| SIZE | tape speed ×0.25 → ×2 (×1 at noon) |
-| PITCH | fine speed, V/OCT |
-| POSITION | heads: 1 · 2 · 3 · 1+2 · 2+3 · 1+3 · 1+2+3 · all into the repeats · swell |
-| DENSITY | feedback, up to gentle self-oscillation |
-| TEXTURE | tape character: wow, flutter, saturation, head bump |
-| FREEZE | loop hold: repeats sustain, no new input |
-| TRIG | tape stop (spins down); next TRIG spins back up |
-| BAL | noon = as before. Left: darker repeats (loop low-pass 7 kHz → 500 Hz). Right: thinner repeats (loop high-pass up to 2 kHz), the dub telephone fade |
-| FBK | ping-pong: the repeats cross to the other side (fully right = every repeat swaps). Stereo tape only |
-| RVB | diffusion in the loop: every pass smears a little more, so the echoes melt into a spring-like wash |
-| Options | 1 stereo · 2 mono (twice as long) |
-| Keeps | the tape |
-
-#### 13 · PLATES — sympathetic plates (after the Ronin plates)
-*Forecast: sheet metal (and glass, and wood) singing back.*
-
-24 plate modes from real plate physics, read by two pickups and excited by
-the input.
-
-| Control | |
-|---|---|
-| PITCH | root, V/OCT |
-| SIZE | shape: square plate → long bar |
-| POSITION | strike/pickup position |
-| DENSITY | decay 0.3 → 30 s |
-| TEXTURE | material: metal → glass → wood |
-| FREEZE | ring forever, input cut |
-| TRIG | strike |
-| BAL | noon = as before. Left: the modes are pulled onto whole harmonics (fully left = a tuned, pitched plate). Right: the series stretches — more clang, bell / tam-tam |
-| FBK | tension: hard hits ring sharp (up to ~3 semitones) and glide back down as they decay |
-| RVB | reverb (the module's reverb, so a struck plate gets a room) |
-
-#### 14 · CHLOE — the Chloaelis strip
-*Forecast: your Chloaelis, shrunk to fit the cloud.*
-
-Your Chloaelis channel strip, one per side, hard left and right: multimode
-filter → 12AX7 tube → delay. The Lorenz attractor pushes the left and right
-cutoffs apart and lets the filter wander between low-pass and band-pass.
-
-| Control | |
-|---|---|
-| POSITION | filter cutoff 30 Hz → 16 kHz |
-| TEXTURE | tube drive (bottom = tube out) and filter resonance |
-| SIZE | delay time 20 ms → 1.6 s (tape: up to 0.45 s). String engine: interval of the right string (unison, 5th, octave, 12th, 2 octaves, 4th) |
-| DENSITY | regeneration; past about 85 % it runs away and sings |
-| PITCH | transposes the cutoff (play the resonant filter). String engine: the note |
-| FREEZE | delay freeze: PT2399 RAM held bit for bit, BBD buckets, tape loop, string |
-| TRIG | random freeze (0.2–1.5 s). String engine: pluck |
-| BAL | the Lorenz attractor: noon = as before. Left: calmer and shallower until it stops (both cutoffs together, the filter halfway LP/BP, ¼ speed). Right: up to 8× faster and ±3 octaves, the filter wandering LP → BP → HP |
-| FBK | master feedback, crossed like the plug-in: left out → right in, right out → left in. With regen up it ping-pongs and can sing |
-| RVB | diffusion in the regen loop: every repeat smears a little more and the echoes blur into a cloud (string engine: a haze on the strings) |
-| Options | 1 PT2399 · 2 BBD · 3 tape · 4 Karplus-Strong string, all filter → tube → delay; 5–8 the same as delay → tube → filter |
-
-On the module: the tube runs 2× oversampled (4× in the plug-in), one
-delay line per side (time changes glide), the tape is 0.45 s per side with
-fixed wear, and there are no poly taps or flock.
+| ① DENSITY | compression amount (one macro for 3 bands, auto make-up) |
+| ② TEXTURE | tape saturation: clean → warm and driven |
+| ③ POSITION | tone: dark ← flat (noon) → bright |
+| ④ SIZE | width: mono ← as is → 2× side; below 120 Hz always mono |
+| ⑤ PITCH | output trim ±12 dB |
+| ⑥ FREEZE | bypass, for A/B |
+| ⑦ TRIG | auto-gain: match output loudness to input |
+| ⑧ BAL | where the compressor leans: noon = as before. Left: the lows get squeezed harder (tight, dense bass). Right: the highs do (tames harshness) |
+| ⑨ FBK | parallel ("New York") compression: a smashed copy under the mix. Quiet detail comes up, peaks stay |
+| ⑩ RVB | air: new harmonics above 6 kHz, made from the highs (sparkle, not EQ) |
 
 
 
