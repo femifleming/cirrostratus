@@ -1,55 +1,78 @@
-# BRIBESTAGES
+# Dobbeltrap
 
-Formerly Qiemem Bribery Edition. Custom firmware for the Mutable Instruments Stages module. It's [qiemem's bipolar multi-mode firmware](https://github.com/qiemem/eurorack/tree/bipolar/stages) v1.3.0 with three additions:
+**A staircase of dice for Mutable Instruments Stages.** (*dobbel* = dice, *trap* = staircase)
 
-- **Segment linking:** you choose which segments form an envelope with the buttons, and patching cables no longer changes your groups.
-- **Follow segments:** an envelope follower. Patch audio into a segment and its output follows the loudness.
-- **Sync LFO segments:** link several and each one becomes its own LFO, all locked to one clock in the first segment. Every segment picks its own division or multiplication, shape and phase.
+Dobbeltrap is a new mode for Stages in which every segment is its own instrument. Tap a button and the segment becomes the next type:
 
-Everything qiemem's firmware does still works.
+| Light | Type | Flavours |
+|---|---|---|
+| green | **Random** | uniform, gaussian, Xenakis walk, pink 1/f, quantised, kin, orbit |
+| yellow | **Chaos** | Turing loop, logistic map, Lorenz, cellular automaton, coin gates, dust |
+| red | **Envelope** | attack *and* decay in one segment, with curve, loop and 1 to 4 ratchets |
+| green/red | **Oscillator** | morph, 16-wave bank, additive, difference pair, fold, FM from the left, Gendy, wave-rider; built-in VCA voice option |
+| yellow/red | **Processor** | envelope follower, transient gate, slew, crush/fold, gesture looper |
 
-**Web page:** [thisisbribery.com/bribestages](https://www.thisisbribery.com/bribestages/), where you can also play the update audio straight from the page.
+Hold a button and move the slider to pick the flavour, turn the knob to set its hidden setting, hold half a second for its extra option (bipolar, loop, voice, invert). Neighbours can team up: Orbit and Lorenz rows read one shared point or attractor, cellular automata share one ring of cells, FM and the wave-rider listen to the segment on their left.
 
-**Support:** find it useful? [Buy me a coffee on Ko-fi](https://ko-fi.com/thisisbribery).
+It is built on [BRIBESTAGES](https://github.com/thisisbribery/bribestages) (qiemem's bipolar multi-mode firmware plus segment linking, envelope followers and sync LFOs). All of that still works in its own modes; Dobbeltrap is one more mode, on **button 6** (hold 5 s). Ouroboros alternate moved to a second hold of button 5.
+
+**Manual:** [`docs/Dobbeltrap-Manual.pdf`](docs/Dobbeltrap-Manual.pdf), with a drawing of the panel for every section (also readable as [`docs/Dobbeltrap-Manual.md`](docs/Dobbeltrap-Manual.md)).
+
+> Tested on the host (111 tests on the real engine code) and on an emulated Cortex-M4 for CPU, and the update file is checked to decode to exactly the firmware. **Not yet run on a real Stages.**
 
 ## Download
 
-Get the firmware from the [v1.1 release](https://github.com/thisisbribery/bribestages/releases/tag/v1.1) or [firmware/](firmware/), or right-click a link and choose Save Link As:
-- [bribestages-v1.1.wav](https://github.com/thisisbribery/bribestages/raw/main/firmware/bribestages-v1.1.wav), for a module mounted normally.
-- [bribestages-v1.1-flipped.wav](https://github.com/thisisbribery/bribestages/raw/main/firmware/bribestages-v1.1-flipped.wav), for a module mounted upside down.
-
-Older versions are on the [releases page](https://github.com/thisisbribery/bribestages/releases).
-
-## Why
-
-On stock Stages, the gate jacks decide how segments group together: a segment with a cable in its gate jack starts a new group. That's fine in the studio. Playing live, I kept losing track of which gate jacks I'd patched, and a cable going in or out in the middle of a set would split or merge my envelopes without warning. Linking lets you set the groups with the buttons, so the patch can change without the envelopes changing.
-
-I also wanted an envelope follower in the case without giving up a module for one. Stages segments can already read audio through their CV jacks, so any segment can now be one.
-
-And sometimes I want several LFOs that move together, like a slow one and a fast one on the same beat, without multing a clock out to every gate jack and burning a cable and a mult on it. Sync LFOs take one clock into the first segment and give every linked segment its own LFO at its own division or multiple, all locked to that clock.
+[`firmware/dobbeltrap-v1.0.wav`](firmware/dobbeltrap-v1.0.wav) for a module mounted normally, [`firmware/dobbeltrap-v1.0-flipped.wav`](firmware/dobbeltrap-v1.0-flipped.wav) upside down (SHA-256 in `firmware/SHA256SUMS.txt`). Also on the [releases page](../../releases).
 
 ## Install
 
-The module updates from an audio file. Its updater is built in and can't be damaged by a failed attempt, so you can always try again.
-
-**You need:** a computer or phone with a headphone jack (a wired USB headphone adapter works, Bluetooth doesn't) and a 3.5 mm patch cable.
+The module updates from an audio file; the updater can't be damaged by a failed attempt.
 
 1. Power the rack off. Unplug every cable from the Stages.
-2. Patch the headphone out into the **CV input of the rightmost segment** (top row of jacks).
-3. Set the **rightmost slider to the middle**. It sets the input gain.
-4. Hold the **rightmost button** and power the rack on. The rightmost slider light blinks green: the module is waiting for audio.
-5. Set the volume high. Turn off sound effects, EQ and notifications. Unplug speakers and headphones from the computer: the update sound is harsh.
-6. Play the .wav from the start. The six button lights are a level meter: **3 or 4 lit is right**. Move the rightmost slider to get there.
-7. Green slider lights run left to right while it loads. It takes about 80 seconds.
-8. When the file ends, the module restarts on the new firmware.
+2. Patch a headphone out (wired; not Bluetooth) into the **CV input of segment 6** (top row, rightmost).
+3. Set **slider 6 to the middle** (input gain).
+4. Hold **button 6** and power on. Slider 6's light blinks green.
+5. Volume high; sound effects, EQ and notifications off.
+6. Play the .wav from the start. The button lights are a level meter: **3 or 4 lit is right**.
+7. Green slider lights run left to right (about 80 s); the module restarts on the new firmware.
 
-**If all six button lights blink red:** the level was too low or the audio cut out. Press the rightmost button, raise the gain with the rightmost slider, and play the file again from the start. If the module doesn't restart when the file ends, power off and start again from step 4.
+All six button lights blinking red: press button 6, raise slider 6, play again from the start. Upside-down module: use the `-flipped` file, mirrored (leftmost segment). Then **hold button 6 for 5 seconds** to enter Dobbeltrap.
 
-**Upside-down module:** use the `-flipped` file. Everything is mirrored as you look at it: patch into the leftmost segment's CV input, hold the leftmost button, set the level with the leftmost slider.
+Your BRIBESTAGES / qiemem settings are kept; Dobbeltrap stores its own settings separately, in the last 4 KB of flash.
 
-**Your settings:** coming from an earlier BRIBESTAGES (or Qiemem Bribery Edition) version or from qiemem v1.3.0, your segment types, links and mode are kept. Coming from stock Mutable firmware, settings reset, as with any qiemem install. To go back, flash [qiemem's own v1.3.0 release](https://github.com/qiemem/eurorack/releases) the same way.
+## Build
 
-## Segment linking
+Needs the Arm GNU toolchain and Python 3.
+
+```
+touch stages/resources.cc stages/resources.h
+make -f stages/makefile TOOLCHAIN_PATH=<toolchain>/
+make -f stages/makefile TOOLCHAIN_PATH=<toolchain>/ build/stages/stages.bin
+python3 tools/qpsk.py encode build/stages/stages.bin dobbeltrap.wav
+python3 tools/qpsk.py decode dobbeltrap.wav check.bin    # expect bad=0
+```
+Add `FLIPPED=1` for the upside-down build.
+
+**Tests** (no hardware): `make -f stages/test/dobbel.mk test` runs the engine on the computer with sanitizers: pitch and 1 V/oct, envelope times, ratchets, loop, random rates, ranges and clocked chance, the quantiser, orbit, kin, Turing, logistic, Lorenz, coin, dust, cellular, follower, transient, slew, looper, crush, FM, rider and the wave bank.
+
+**CPU:** `tools/bench/run.sh` runs the engine on QEMU's Cortex-M4F and prints instructions per sample for six segments of every flavour (worst 1125, default layout 588; Stages has 2304 cycles per sample).
+
+**Manual:** `python3 tools/manual/make_manual.py` (Pillow, `markdown`, Chrome) draws the panel figures and builds the PDF from `docs/MANUAL.md`.
+
+## What changed, against BRIBESTAGES v1.1
+
+| File | What |
+|---|---|
+| `stages/dobbel.h/.cc` | the Dobbeltrap engine: all types and flavours, hardware-free |
+| `stages/stages.cc` | the mode's process function; the engine lives in the idle segment generators' memory and they are re-initialised when you leave |
+| `stages/settings.h/.cc` | Dobbeltrap's settings in their own flash pages (the State chunk keeps its size, so nobody's settings reset) |
+| `stages/ui.cc/.h` | the mode on button 6, Ouroboros alternate on a second hold of button 5, Dobbeltrap's buttons and lights |
+| `stages/modes.h` | `MULTI_MODE_DOBBEL` |
+| `stages/test/dobbel_test.cc`, `tools/bench/`, `tools/manual/` | tests, CPU benchmark, manual |
+
+## BRIBESTAGES features (unchanged, in their own modes)
+
+### Segment linking
 
 Linking works in the three segment generator modes (Stages, Advanced, Slow LFO) with a single module. With two Stages chained, or in the 6EG and Ouroboros modes, everything behaves as stock qiemem. Your links stay stored and come back when you return to a segment generator mode.
 
@@ -73,7 +96,7 @@ Linking works in the three segment generator modes (Stages, Advanced, Slow LFO) 
 
 **No gate in the first segment:** a looped group runs by itself, like a multi-stage LFO. A group without a loop waits for a gate.
 
-## Follow segments
+### Follow segments
 
 Patch audio into a segment's CV jack and the segment's output becomes the envelope of that audio.
 
@@ -104,7 +127,7 @@ Follow works where linking works. In other modes, a stored Follow segment runs a
 - The jack is read 3906 times a second, so pure sine tones at exact multiples of 1953 Hz read low. Real audio almost never sits there.
 - With a very short release, low notes ripple: a 50 Hz bass makes the envelope wobble at 100 Hz. Raise the release to smooth it.
 
-## Sync LFO segments
+### Sync LFO segments
 
 One clock in, a bank of LFOs out. Make a few segments Sync LFOs and link them: each segment then runs its own LFO from its own output, and all of them are locked to the clock patched into the first segment's gate. Set one to the clock, one to x2, one to /4 and they stay in step for as long as the clock runs.
 
@@ -142,60 +165,12 @@ Then link them as usual: hold the first, tap the last. Link first and change the
 
 **Limits:** Sync LFOs work where linking works (Stages, Advanced and Slow LFO modes, one module). In other modes, or with two Stages chained, a stored Sync LFO runs as a ramp.
 
-## Everything else
 
-All of qiemem's features are unchanged: bipolar segments, slow and audio-rate LFOs, re-trigger control, 6EG mode, Ouroboros and the rest. Their docs are in [stages/README.md](stages/README.md), with a cheat sheet in [stages/resources/](stages/resources/).
+## Credits
 
-## What's in this repo
+- **Mutable Instruments / Émilie Gillet**: Stages, stmlib, the audio bootloader (MIT).
+- **qiemem** (and joeSeggiola): the bipolar multi-mode firmware (MIT).
+- **BRIBESTAGES** by Bribery: linking, Follow and Sync LFO segments (MIT).
+- **SDS Digital SDS VCO**: inspiration for the wave bank, the voice option and the wave-rider.
 
-| Path | What |
-|---|---|
-| `firmware/` | The .wav files to flash. |
-| `stages/` | Stages firmware source: qiemem v1.3.0 plus these changes. |
-| `stmlib/`, `tides2/ramp/`, `plaits/` | The Mutable library code Stages needs to build. |
-| `tools/qpsk.py` | Turns a firmware .bin into an update .wav, and checks one. |
-
-The changed files, against qiemem v1.3.0:
-- `stages/chain_state.cc/.h`: link and unlink gestures, groups set by links instead of gate jacks, free-running groups, Follow and Sync LFO in the type cycle, followers stand alone, Sync LFO groups.
-- `stages/segment_generator.cc/.h`: the envelope follower, and the Sync LFO clock and shapes.
-- `stages/settings.h`: links and Follow are stored in two spare bits of each segment's settings, so qiemem settings carry over. A Sync LFO is the Follow bit with a different type.
-- `stages/ui.cc/.h`: link flashes, the two-button mode-change guard, Follow lights and gain, Sync LFO lights and phase.
-- `stages/stages.cc`: free-run gate, follower input and lights, Sync LFO lights.
-- `stages/io_buffer.h`, `stages/cv_reader.cc`: an unsmoothed CV reading for the follower.
-- `stages/test/links/`: host tests.
-
-This version also fixes two bugs that were in the first linking build on stock firmware. A loop change could be missed when it arrived a moment late, and a free-running group could stop after you changed one of its segments.
-
-## Build
-
-Needs the [Arm GNU toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (tested with 14.2.rel1) and Python 3 with numpy.
-
-```
-touch stages/resources.cc stages/resources.h
-make -f stages/makefile TOOLCHAIN_PATH=<toolchain>/
-make -f stages/makefile TOOLCHAIN_PATH=<toolchain>/ build/stages/stages.bin
-make -f stages/makefile TOOLCHAIN_PATH=<toolchain>/ FLIPPED=1
-make -f stages/makefile TOOLCHAIN_PATH=<toolchain>/ FLIPPED=1 build/stages-flipped/stages-flipped.bin
-python3 tools/qpsk.py encode build/stages/stages.bin out.wav
-python3 tools/qpsk.py decode out.wav check.bin    # expect bad=0
-```
-The `touch` skips regenerating the lookup tables, which needs Python 2. The first `make` without a target generates the dependency files.
-
-Host tests, no hardware needed:
-```
-sh stages/test/links/run.sh
-```
-They run the real firmware code with simulated buttons, gates and audio.
-
-## Changelog
-
-- **v1.1:** Sync LFO segments. Renamed from Qiemem Bribery Edition to BRIBESTAGES.
-- **v1.0:** segment linking and Follow segments on qiemem v1.3.0.
-
-## Credits and licence
-
-- Stages and its code: Emilie Gillet, Mutable Instruments.
-- Multi-mode firmware: joeSeggiola. Bipolar firmware: qiemem.
-- Linking and Follow: Bribery.
-
-Code is MIT licensed, see [LICENSE](LICENSE). This is an unofficial firmware, not made or supported by Mutable Instruments.
+MIT-licensed, see [LICENSE](LICENSE).
