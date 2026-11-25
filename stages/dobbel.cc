@@ -59,8 +59,42 @@ inline float Clamp(float x, float lo, float hi) {
   return x < lo ? lo : (x > hi ? hi : x);
 }
 
+// No libm in the real-time paths: the newlib wrappers need errno (not linked
+// in this firmware) and cost far too many cycles per sample.
+inline float Floor(float x) {
+  const int i = static_cast<int>(x);
+  return static_cast<float>(x < static_cast<float>(i) ? i - 1 : i);
+}
+
 inline float Wrap(float x) {
-  return x - floorf(x);
+  return x - Floor(x);
+}
+
+// 2^x, about 1e-4 relative error (0.15 cent).
+inline float Exp2(float x) {
+  if (x < -126.0f) return 0.0f;
+  if (x > 126.0f) x = 126.0f;
+  const float fi = Floor(x);
+  const float f = x - fi;
+  const float p = 1.0f + f * (0.6931472f + f * (0.2402265f + f * (
+      0.0555041f + f * (0.0096181f + f * 0.0013334f))));
+  union { float f; int32_t i; } u;
+  u.f = p;
+  u.i += static_cast<int32_t>(fi) * 8388608;  // add fi to the exponent
+  return u.f;
+}
+
+// log2 for the constant ranges below (evaluated once per call site value).
+inline float Log2(float x) {
+  union { float f; int32_t i; } u;
+  u.f = x;
+  const float e = static_cast<float>(((u.i >> 23) & 0xff) - 127);
+  u.i = (u.i & 0x007fffff) | 0x3f800000;  // mantissa in [1, 2)
+  const float m = u.f;
+  // log2(m) on [1, 2): good to ~1e-4
+  return e + (m - 1.0f) * (1.4425449f + (m - 1.0f) * (-0.7181452f + (m - 1.0f) * (
+      0.4575485f + (m - 1.0f) * (-0.2779042f + (m - 1.0f) * (0.1217970f + (m - 1.0f) *
+      -0.0258411f)))));
 }
 
 // sin(2 pi p) and cos(2 pi p) for p in [0, 1)
@@ -74,7 +108,7 @@ inline float Cos(float p) {
 
 // lo * (hi / lo) ^ x
 inline float ExpMap(float x, float lo, float hi) {
-  return lo * expf(x * logf(hi / lo));
+  return lo * Exp2(x * Log2(hi / lo));
 }
 
 inline float Gauss() {
@@ -82,12 +116,12 @@ inline float Gauss() {
           Random::GetFloat()) * 0.25f;
 }
 
-inline float Blep(float t, float dt) {
+inline float Blep(float t, float dt, float inv_dt) {
   if (t < dt) {
-    t /= dt;
+    t *= inv_dt;
     return t + t - t * t - 1.0f;
   } else if (t > 1.0f - dt) {
-    t = (t - 1.0f) / dt;
+    t = (t - 1.0f) * inv_dt;
     return t * t + t + t + 1.0f;
   }
   return 0.0f;
@@ -96,21 +130,45 @@ inline float Blep(float t, float dt) {
 // Reflects x back into [-1, 1] as many times as needed.
 inline float Fold(float x) {
   float u = (x + 1.0f) * 0.25f;
-  u -= floorf(u);
+  u -= Floor(u);
   return 1.0f - 4.0f * fabsf(u - 0.5f);
+}
+
+inline float b_for_additive(float pot) {
+  return pot < 0.0f ? 0.0f : (pot > 1.0f ? 1.0f : pot);
 }
 
 // Envelope curve: x in [0, 1], shape 0 (exponential, fast start) to 1
 // (logarithmic, slow start); 0.5 is linear.
-inline float Curve(float x, float shape) {
-  float k = expf((shape - 0.5f) * 5.0f);
+// k = CurveK(shape), worked out once per block.
+inline float CurveK(float shape) {
+  return Exp2((shape - 0.5f) * 7.2134752f);  // e^((shape - 0.5) * 5)
+}
+
+inline float Curve(float x, float k) {
   return x / (x + k * (1.0f - x));
 }
 
 inline float OnePoleCoefficient(float seconds) {
   if (seconds <= 0.0f) return 1.0f;
-  return 1.0f - expf(-1.0f / (seconds * kSampleRate));
+  // 1 - e^-z; for small z a series keeps the precision 1 - Exp2() would lose
+  const float z = 1.0f / (seconds * kSampleRate);
+  if (z < 0.25f) {
+    return z * (1.0f - z * (0.5f - z * (0.16666667f - z * 0.041666667f)));
+  }
+  return 1.0f - Exp2(-1.4426950f * z);
 }
+
+const float kInvSampleRate = 1.0f / kSampleRate;
+const float kInvAudioPeak = 1.0f / kAudioPeak;
+const float kInv255 = 1.0f / 255.0f;
+const float kInv32000 = 1.0f / 32000.0f;
+const float kInv32767 = 1.0f / 32767.0f;
+const float kHarmonicWeight[17] = {
+  0.0f, 1.0f, 1.0f / 2, 1.0f / 3, 1.0f / 4, 1.0f / 5, 1.0f / 6, 1.0f / 7,
+  1.0f / 8, 1.0f / 9, 1.0f / 10, 1.0f / 11, 1.0f / 12, 1.0f / 13, 1.0f / 14,
+  1.0f / 15, 1.0f / 16
+};
 
 const uint8_t kCellularRules[8] = { 30, 90, 110, 150, 184, 45, 73, 54 };
 
@@ -131,6 +189,45 @@ void Engine::Init(Memory* memory) {
   BuildBank();
 }
 
+namespace {
+
+float BankSample(int t, int n, const float* smooth_random) {
+  const float p = static_cast<float>(n) / kBankLength;
+  const float s = Sin(p);
+  float v = 0.0f;
+  switch (t) {
+    case 0: v = s; break;                                         // sine
+    case 1: v = 1.0f - 4.0f * fabsf(p - 0.5f) ; v = -v; break;     // triangle
+    case 2: v = 2.0f * p - 1.0f; break;                           // saw
+    case 3: v = p < 0.5f ? 1.0f : -1.0f; break;                   // square
+    case 4: v = p < 0.25f ? 1.0f : -1.0f; break;                  // pulse 25 %
+    case 5: v = p < 0.1f ? 1.0f : -1.0f; break;                   // pulse 10 %
+    case 6: v = s > 0.0f ? s : 0.0f; break;                       // half sine
+    case 7: v = fabsf(s); break;                                  // full-wave sine
+    case 8: v = s * s * s; break;                                 // pinched sine
+    case 9: v = Floor(p * 4.0f) / 1.5f - 1.0f; break;            // 4 steps
+    case 10: v = Floor(p * 8.0f) / 3.5f - 1.0f; break;           // 8 steps
+    case 11: v = Sin(Wrap(p * 5.0f)) * (0.5f - 0.5f * Cos(p)); break;  // formant
+    case 12: v = Wrap(p * 2.7f) * 2.0f - 1.0f; break;             // sync saw
+    case 13: {                                                    // frozen noise
+        const float x = p * 16.0f;
+        const int k = static_cast<int>(x);
+        const float f = x - k;
+        const float e = f * f * (3.0f - 2.0f * f);
+        v = smooth_random[k] + (smooth_random[k + 1] - smooth_random[k]) * e;
+      }
+      break;
+    case 14: v = s + 0.5f * Sin(Wrap(p * 2.0f)); break;           // sine + octave
+    case 15:                                                      // organ
+      v = s + 0.6f * Sin(Wrap(p * 2.0f)) + 0.4f * Sin(Wrap(p * 4.0f)) +
+          0.25f * Sin(Wrap(p * 3.0f));
+      break;
+  }
+  return v;
+}
+
+}  // namespace
+
 // Sixteen waveforms in the spirit of the SDS VCO's bank: the classics, then
 // shapes that only a table can make.
 void Engine::BuildBank() {
@@ -141,53 +238,22 @@ void Engine::BuildBank() {
   smooth_random[16] = smooth_random[0];
   Random::Seed(seed);
 
-  float w[kBankLength];
   for (int t = 0; t < kBankTables; ++t) {
-    float peak = 0.0f;
+    // two passes (mean and peak, then write) so no table sits on the stack
     float mean = 0.0f;
     for (int n = 0; n < kBankLength; ++n) {
-      const float p = static_cast<float>(n) / kBankLength;
-      const float s = Sin(p);
-      float v = 0.0f;
-      switch (t) {
-        case 0: v = s; break;                                         // sine
-        case 1: v = 1.0f - 4.0f * fabsf(p - 0.5f) ; v = -v; break;     // triangle
-        case 2: v = 2.0f * p - 1.0f; break;                           // saw
-        case 3: v = p < 0.5f ? 1.0f : -1.0f; break;                   // square
-        case 4: v = p < 0.25f ? 1.0f : -1.0f; break;                  // pulse 25 %
-        case 5: v = p < 0.1f ? 1.0f : -1.0f; break;                   // pulse 10 %
-        case 6: v = s > 0.0f ? s : 0.0f; break;                       // half sine
-        case 7: v = fabsf(s); break;                                  // full-wave sine
-        case 8: v = s * s * s; break;                                 // pinched sine
-        case 9: v = floorf(p * 4.0f) / 1.5f - 1.0f; break;            // 4 steps
-        case 10: v = floorf(p * 8.0f) / 3.5f - 1.0f; break;           // 8 steps
-        case 11: v = Sin(Wrap(p * 5.0f)) * (0.5f - 0.5f * Cos(p)); break;  // formant
-        case 12: v = Wrap(p * 2.7f) * 2.0f - 1.0f; break;             // sync saw
-        case 13: {                                                    // frozen noise
-            const float x = p * 16.0f;
-            const int k = static_cast<int>(x);
-            const float f = x - k;
-            const float e = f * f * (3.0f - 2.0f * f);
-            v = smooth_random[k] + (smooth_random[k + 1] - smooth_random[k]) * e;
-          }
-          break;
-        case 14: v = s + 0.5f * Sin(Wrap(p * 2.0f)); break;           // sine + octave
-        case 15:                                                      // organ
-          v = s + 0.6f * Sin(Wrap(p * 2.0f)) + 0.4f * Sin(Wrap(p * 4.0f)) +
-              0.25f * Sin(Wrap(p * 3.0f));
-          break;
-      }
-      w[n] = v;
-      mean += v;
+      mean += BankSample(t, n, smooth_random);
     }
     mean /= kBankLength;
+    float peak = 0.0f;
     for (int n = 0; n < kBankLength; ++n) {
-      w[n] -= mean;
-      if (fabsf(w[n]) > peak) peak = fabsf(w[n]);
+      const float v = fabsf(BankSample(t, n, smooth_random) - mean);
+      if (v > peak) peak = v;
     }
     const float scale = peak > 0.0f ? 32000.0f / peak : 0.0f;
     for (int n = 0; n < kBankLength; ++n) {
-      memory_->bank[t][n] = static_cast<int16_t>(w[n] * scale);
+      memory_->bank[t][n] = static_cast<int16_t>(
+          (BankSample(t, n, smooth_random) - mean) * scale);
     }
   }
 }
@@ -216,7 +282,11 @@ void Engine::Reset(int i, uint8_t type, uint8_t flavour) {
     s.gendy_dur[k] = 1.0f;
   }
   s.gendy_sum = 12.0f;
+  s.gendy_inv = 1.0f;
   s.armed = true;  // the transient gate is ready for the first hit
+  if (type == TYPE_RANDOM && flavour == RANDOM_QUANTISED) {
+    s.target = s.value = s.lp = 0.0f;  // start on a note, not between two
+  }
   if (type == TYPE_OSCILLATOR && flavour == OSC_RIDER) {
     for (int n = 0; n < kRiderLength; ++n) {
       memory_->rider[i][n] = static_cast<int16_t>(
@@ -240,9 +310,9 @@ bool Engine::Tick(Segment* s, const Input& in, float rate_hz, size_t n) {
     }
     return false;
   }
-  s->phase += rate_hz / kSampleRate;
+  s->phase += rate_hz * kInvSampleRate;
   if (s->phase >= 1.0f) {
-    s->phase -= floorf(s->phase);
+    s->phase -= Floor(s->phase);
     s->period = kSampleRate / rate_hz;
     s->since = 0;
     return true;
@@ -302,12 +372,16 @@ void Engine::ProcessRandom(
   const float aux = c.aux(i);
   const bool bipolar = c.alt(i);
   const int run = RunPosition(i, c);
+  // slew: the pot, as a fraction of the time between new values
+  const float slew_b = s.flavour == RANDOM_KIN ? 0.2f : b;
+  const float tau = slew_b * slew_b * s.period;
+  const float slew = tau < 0.5f ? 1.0f : 1.0f / (1.0f + tau);
 
   for (size_t n = 0; n < size; ++n) {
     if (s.flavour == RANDOM_ORBIT) {
       if (run == 0) {
         // The leader moves a point along a path; the run reads X, Y, radius.
-        s.phase2 += rate * 0.25f / kSampleRate;
+        s.phase2 += rate * (0.25f * kInvSampleRate);
         if (s.phase2 >= 1.0f) {
           s.phase2 -= 1.0f;
           s.event = 1;
@@ -345,7 +419,7 @@ void Engine::ProcessRandom(
         y = py[0] + (py[1] - py[0]) * f;
         run_x_[i][n] = x;
         run_y_[i][n] = y;
-        run_z_[i][n] = sqrtf(x * x + y * y);
+        run_z_[i][n] = x * x + y * y;  // radius squared (no sqrt needed)
         s.value = x * 0.5f + 0.5f;
       } else {
         const int leader = i - run;
@@ -406,13 +480,10 @@ void Engine::ProcessRandom(
             break;
         }
       }
-      // slew: the pot, as a fraction of the time between new values
-      const float slew_b = s.flavour == RANDOM_KIN ? 0.2f : b;
-      const float tau = slew_b * slew_b * s.period;
-      if (tau < 0.5f) {
+      if (slew == 1.0f) {
         s.lp = s.target;  // no slew: a clean step
       } else {
-        s.lp += (s.target - s.lp) / (1.0f + tau);
+        s.lp += (s.target - s.lp) * slew;
       }
       s.value = s.lp;
     }
@@ -446,6 +517,8 @@ void Engine::ProcessChaos(
   const bool bipolar = c.alt(i);
   const int run = RunPosition(i, c);
   const int leader = i - run;
+  const float dust_chance = ExpMap(Clamp(in.cv_slider, 0.0f, 1.2f), 0.1f, 50.0f) *
+      kInvSampleRate;
 
   for (size_t n = 0; n < size; ++n) {
     float v = s.value;
@@ -498,9 +571,9 @@ void Engine::ProcessChaos(
             x = 0.1f; y = 0.0f; z = 0.0f;
           }
           s.x = x; s.y = y; s.z = z;
-          run_x_[i][n] = Clamp((x + 25.0f) / 50.0f, 0.0f, 1.0f);
-          run_y_[i][n] = Clamp((y + 30.0f) / 60.0f, 0.0f, 1.0f);
-          run_z_[i][n] = Clamp(z / 60.0f, 0.0f, 1.0f);
+          run_x_[i][n] = Clamp((x + 25.0f) * 0.02f, 0.0f, 1.0f);
+          run_y_[i][n] = Clamp((y + 30.0f) * (1.0f / 60.0f), 0.0f, 1.0f);
+          run_z_[i][n] = Clamp(z * (1.0f / 60.0f), 0.0f, 1.0f);
           v = run_x_[i][n];
         } else {
           const int axis = run % 3;
@@ -537,9 +610,9 @@ void Engine::ProcessChaos(
             s.cells = next;
           }
           run_cells_[i][n] = s.cells;
-          v = static_cast<float>(s.cells & 0xff) / 255.0f;
+          v = static_cast<float>(s.cells & 0xff) * kInv255;
         } else {
-          v = static_cast<float>((run_cells_[leader][n] >> (8 * run)) & 0xff) / 255.0f;
+          v = static_cast<float>((run_cells_[leader][n] >> (8 * run)) & 0xff) * kInv255;
         }
         break;
 
@@ -559,8 +632,7 @@ void Engine::ProcessChaos(
 
       case CHAOS_DUST: {
           // Triggers at random moments, no clock. Slider = density.
-          const float density = ExpMap(Clamp(in.cv_slider, 0.0f, 1.2f), 0.1f, 50.0f);
-          if (Random::GetFloat() < density / kSampleRate) {
+          if (Random::GetFloat() < dust_chance) {
             s.event = 1;
             s.gate_samples = 160;  // 5 ms
             s.target = 1.0f - b * Random::GetFloat();
@@ -593,12 +665,12 @@ void Engine::ProcessEnvelope(
     int i, const Config& c, const Input& in, float* out, size_t size) {
   Segment& s = segment_[i];
   // CV jack: both times, 1 V = half as long.
-  const float scale = exp2f(-in.cv * 8.0f);
+  const float scale = Exp2(-in.cv * 8.0f);
   const float attack = ExpMap(Clamp(in.slider, 0.0f, 1.0f), 0.001f, 10.0f) * scale;
   const float decay = ExpMap(Clamp(in.pot, 0.0f, 1.0f), 0.001f, 10.0f) * scale;
   const float attack_inc = 1.0f / (attack * kSampleRate);
   const float decay_inc = 1.0f / (decay * kSampleRate);
-  const float shape = c.aux(i);
+  const float shape = CurveK(c.aux(i));
   const bool loop = c.alt(i);
   const int repeats = s.flavour;  // 0 = once, 1-3 = extra hits
 
@@ -670,9 +742,24 @@ void Engine::ProcessOscillator(
   // Slider: C1 to C7. CV: 1 V/oct. Hold + pot: fine tune, +/- 1 semitone.
   const float note = 24.0f + Clamp(in.slider, 0.0f, 1.0f) * 72.0f +
       in.cv * 96.0f + (c.aux(i) - 0.5f) * 2.0f;
-  float f = 440.0f * exp2f((note - 69.0f) / 12.0f);
+  float f = 440.0f * Exp2((note - 69.0f) / 12.0f);
   f = Clamp(f, 0.5f, 12000.0f);
-  const float dt = f / kSampleRate;
+  const float dt = f * kInvSampleRate;
+  const float inv_dt = 1.0f / dt;
+  // additive: whole harmonics, the fading last one, none above 14 kHz
+  const float harmonics = 1.0f + b_for_additive(in.pot) * 15.0f;
+  int top = static_cast<int>(14000.0f / f);
+  if (top > 16) top = 16;
+  if (top < 1) top = 1;
+  int whole = static_cast<int>(harmonics);
+  float last_weight = harmonics - whole;
+  if (whole >= top) {
+    whole = top;
+    last_weight = 0.0f;
+  }
+  // rider: one full table every 0.05-10 s
+  const float rider_inc = kRiderLength * kInvSampleRate /
+      ExpMap(Clamp(in.pot, 0.0f, 1.0f), 0.05f, 10.0f);
   const float b = Clamp(in.pot, 0.0f, 1.0f);
   const bool voice = c.alt(i);
   const float attack_coef = OnePoleCoefficient(0.002f);
@@ -705,16 +792,16 @@ void Engine::ProcessOscillator(
             switch (k + j) {
               case 0: w[j] = Sin(p); break;
               case 1: w[j] = 1.0f - 4.0f * fabsf(Wrap(p + 0.25f) - 0.5f); break;
-              case 2: w[j] = 2.0f * p - 1.0f - Blep(p, dt); break;
+              case 2: w[j] = 2.0f * p - 1.0f - Blep(p, dt, inv_dt); break;
               case 3: {
                   const float q = Wrap(p + 0.5f);
-                  w[j] = (p < 0.5f ? 1.0f : -1.0f) + Blep(p, dt) - Blep(q, dt);
+                  w[j] = (p < 0.5f ? 1.0f : -1.0f) + Blep(p, dt, inv_dt) - Blep(q, dt, inv_dt);
                 }
                 break;
               default: {
                   const float pw = 0.5f - 0.42f * frac;
                   const float q = Wrap(p + 1.0f - pw);
-                  w[j] = (p < pw ? 1.0f : -1.0f) + Blep(p, dt) - Blep(q, dt);
+                  w[j] = (p < pw ? 1.0f : -1.0f) + Blep(p, dt, inv_dt) - Blep(q, dt, inv_dt);
                 }
                 break;
             }
@@ -737,28 +824,25 @@ void Engine::ProcessOscillator(
           const int16_t* t1 = memory_->bank[k + 1];
           const float a0 = t0[j] + (t0[j2] - t0[j]) * fx;
           const float a1 = t1[j] + (t1[j2] - t1[j]) * fx;
-          y = (a0 + (a1 - a0) * frac) / 32000.0f;
+          y = (a0 + (a1 - a0) * frac) * kInv32000;
         }
         break;
 
       case OSC_ADDITIVE: {
-          // 1 to 16 harmonics at 1/k, none above 14 kHz.
-          const float harmonics = 1.0f + b * 15.0f;
-          const float sn = Sin(p);
-          const float cs = Cos(p);
+          // 1 to 16 harmonics at 1/k (Chebyshev recurrence: sin(k p) from
+          // sin and cos of p), none above 14 kHz.
+          const float cs2 = 2.0f * Cos(p);
           float s_prev = 0.0f;
-          float s_k = sn;
+          float s_k = Sin(p);
           float sum = 0.0f;
-          for (int k = 1; k <= 16; ++k) {
-            if (k * f > 14000.0f) break;
-            const float weight = k <= harmonics ? 1.0f
-                : (k - 1 < harmonics ? harmonics - (k - 1) : 0.0f);
-            if (weight <= 0.0f) break;
-            sum += s_k * weight / k;
-            const float s_next = 2.0f * cs * s_k - s_prev;
+          int k = 1;
+          for (; k <= whole; ++k) {
+            sum += s_k * kHarmonicWeight[k];
+            const float s_next = cs2 * s_k - s_prev;
             s_prev = s_k;
             s_k = s_next;
           }
+          sum += s_k * kHarmonicWeight[k] * last_weight;
           y = sum * 0.6f;
         }
         break;
@@ -779,7 +863,7 @@ void Engine::ProcessOscillator(
       case OSC_FM: {
           // The left neighbour is the modulator (an oscillator for FM, a
           // random or envelope for slow phase bending); pot = depth.
-          const float m = i > 0 ? block_out_[i - 1][n] / kAudioPeak : 0.0f;
+          const float m = i > 0 ? block_out_[i - 1][n] * kInvAudioPeak : 0.0f;
           y = Sin(Wrap(p + b * 2.0f * m));
         }
         break;
@@ -789,7 +873,7 @@ void Engine::ProcessOscillator(
           // heights and spacing take a random walk; pot = how far.
           const int k = s.gendy_index;
           const int k2 = (k + 1) % 12;
-          s.phase2 += dt * s.gendy_sum / s.gendy_dur[k];
+          s.phase2 += dt * s.gendy_sum * s.gendy_inv;
           if (s.phase2 >= 1.0f) {
             s.phase2 -= 1.0f;
             s.gendy_index = k2;
@@ -802,6 +886,7 @@ void Engine::ProcessOscillator(
             d = Clamp(d, 0.4f, 2.5f);
             s.gendy_sum += d - s.gendy_dur[k2];
             s.gendy_dur[k2] = d;
+            s.gendy_inv = 1.0f / d;  // the next segment's length
             if (k2 == 0) s.event = 1;
           }
           const int a = s.gendy_index;
@@ -818,11 +903,10 @@ void Engine::ProcessOscillator(
           const bool freeze = in.patched && (in.gate[n] & GATE_FLAG_HIGH);
           if (!freeze) {
             const float source = i > 0 ? block_out_[i - 1][n] : in.cv_raw;
-            const float seconds = ExpMap(b, 0.05f, 10.0f);
             const int w = static_cast<int>(s.rider_write);
             memory_->rider[i][w] = static_cast<int16_t>(
                 Clamp(source, -1.0f, 1.0f) * 32767.0f);
-            s.rider_write += kRiderLength / (seconds * kSampleRate);
+            s.rider_write += rider_inc;
             if (s.rider_write >= kRiderLength) {
               s.rider_write -= kRiderLength;
               s.event = 1;
@@ -832,7 +916,7 @@ void Engine::ProcessOscillator(
           const int j = static_cast<int>(x);
           const float fx = x - j;
           const int16_t* t = memory_->rider[i];
-          const float v = (t[j] + (t[(j + 1) & (kRiderLength - 1)] - t[j]) * fx) / 32767.0f;
+          const float v = (t[j] + (t[(j + 1) & (kRiderLength - 1)] - t[j]) * fx) * kInv32767;
           s.dc += (v - s.dc) * 0.0002f;
           y = Clamp(v - s.dc, -1.0f, 1.0f);
           already_scaled = true;  // already in output units (1.0 = 8 V)
@@ -844,7 +928,7 @@ void Engine::ProcessOscillator(
     if (s.phase >= 1.0f) s.phase -= 1.0f;
     const float o = (already_scaled ? y : y * kAudioPeak) * s.voice;
     out[n] = o;
-    block_norm_[i][n] = 0.5f + 0.5f * Clamp(o / kAudioPeak, -1.0f, 1.0f);
+    block_norm_[i][n] = 0.5f + 0.5f * Clamp(o * kInvAudioPeak, -1.0f, 1.0f);
   }
   s.norm = voice ? s.voice : 1.0f;
 }
@@ -865,12 +949,12 @@ void Engine::ProcessProcessor(
     case PROC_FOLLOW: {
         // The BRIBESTAGES follower: slider = release, pot = attack,
         // hold + pot = gain x1-x8, long press = invert, gate = freeze.
-        const float gain = 1.0f + aux * 7.0f;
+        const float gain = (1.0f + aux * 7.0f) * kInvAudioPeak;
         const float release = OnePoleCoefficient(ExpMap(slider, 0.005f, 5.0f));
         const float attack = OnePoleCoefficient(b * 0.25f);
         for (size_t n = 0; n < size; ++n) {
           s.f_dc += (x - s.f_dc) * 0.001f;
-          const float rect = fabsf(x - s.f_dc) * gain / kAudioPeak;
+          const float rect = fabsf(x - s.f_dc) * gain;
           const bool freeze = in.patched && (in.gate[n] & GATE_FLAG_HIGH);
           if (!freeze) {
             s.f_env += (rect - s.f_env) * (rect > s.f_env ? attack : release);
@@ -886,7 +970,7 @@ void Engine::ProcessProcessor(
     case PROC_TRANSIENT: {
         // A 5 V trigger when the input jumps: slider = threshold,
         // pot = trigger length 2-100 ms, hold + pot = input gain.
-        const float gain = 1.0f + aux * 7.0f;
+        const float gain = (1.0f + aux * 7.0f) * kInvAudioPeak;
         const float threshold = 0.02f + slider * slider * 0.6f;
         const uint32_t length = static_cast<uint32_t>(
             ExpMap(b, 0.002f, 0.1f) * kSampleRate);
@@ -895,7 +979,7 @@ void Engine::ProcessProcessor(
         const float slow = OnePoleCoefficient(0.1f);
         for (size_t n = 0; n < size; ++n) {
           s.f_dc += (x - s.f_dc) * 0.001f;
-          const float rect = fabsf(x - s.f_dc) * gain / kAudioPeak;
+          const float rect = fabsf(x - s.f_dc) * gain;
           s.f_env += (rect - s.f_env) * (rect > s.f_env ? fast_up : fast_down);
           s.f_slow += (rect - s.f_slow) * slow;
           if (s.refractory) --s.refractory;
@@ -943,7 +1027,7 @@ void Engine::ProcessProcessor(
           if (++s.hold_blocks >= hold) {
             s.hold_blocks = 0;
             s.f_dc += (x - s.f_dc) * 0.01f;
-            s.held = Fold((x - s.f_dc) / kAudioPeak * (1.0f + slider * 7.0f));
+            s.held = Fold((x - s.f_dc) * kInvAudioPeak * (1.0f + slider * 7.0f));
           }
         }
         const float level = 0.25f + aux * 1.75f;
@@ -960,7 +1044,7 @@ void Engine::ProcessProcessor(
         // Gate high records the CV jack (64 times a second, up to 12 s);
         // gate low loops it. Slider = speed 1/4x-4x (noon 1x), pot = smoothing,
         // long press = backwards.
-        const float speed = exp2f((slider - 0.5f) * 4.0f);
+        const float speed = Exp2((slider - 0.5f) * 4.0f);
         const float smooth = OnePoleCoefficient(b * b * 0.5f);
         int16_t* buffer = memory_->looper[i];
         for (size_t n = 0; n < size; ++n) {
@@ -991,14 +1075,14 @@ void Engine::ProcessProcessor(
             v = in.cv;  // nothing to loop yet: pass the CV through
           } else {
             const float len = static_cast<float>(s.loop_length);
-            s.play += (alt ? -speed : speed) * 64.0f / kSampleRate;
+            s.play += (alt ? -speed : speed) * (64.0f * kInvSampleRate);
             while (s.play >= len) s.play -= len;
             while (s.play < 0.0f) s.play += len;
             const int j = static_cast<int>(s.play);
             const float fx = s.play - j;
             const int j2 = (j + 1) % s.loop_length;
-            v = (buffer[j] + (buffer[j2] - buffer[j]) * fx) / 32767.0f;
-            if (j == 0 && fx < 64.0f / kSampleRate * speed) s.event = 1;
+            v = (buffer[j] + (buffer[j2] - buffer[j]) * fx) * kInv32767;
+            if (j == 0 && fx < (64.0f * kInvSampleRate) * speed) s.event = 1;
           }
           s.lp += (v - s.lp) * smooth;
           out[n] = s.lp;

@@ -150,6 +150,7 @@ struct Segment {
   float gendy_amp[12];
   float gendy_dur[12];
   float gendy_sum;
+  float gendy_inv;  // 1 / length of the breakpoint segment playing
   uint8_t gendy_index;
   float rider_write;
 

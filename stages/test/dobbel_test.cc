@@ -323,7 +323,7 @@ static void TestRandom() {
   bool whole = true;
   for (float x : qv) {
     const float semis = x * 96.0f;
-    if (fabsf(semis - roundf(semis)) > 0.01f) whole = false;
+    if (fabsf(semis - roundf(semis)) > 0.01f) { if (whole) printf("  off-grid %.5f\n", semis); whole = false; }
   }
   CHECK(whole, "quantised random is not on semitones");
 

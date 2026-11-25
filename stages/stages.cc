@@ -40,6 +40,8 @@
 #include "stages/oscillator.h"
 #include "stages/resources.h"
 #include "stages/envelope.h"
+#include "stages/dobbel.h"
+#include <new>
 #include "stages/segment_generator.h"
 #include "stages/settings.h"
 #include "stages/ui.h"
@@ -417,6 +419,66 @@ void ProcessTest(IOBuffer::Block* block, size_t size) {
 
 }
 
+// ---------------------------------------------------------------------------
+// Dobbeltrap
+//
+// The engine and its buffers live in the memory of the six segment
+// generators, which are idle in this mode (RAM is otherwise full). Entering
+// the mode builds the engine there; leaving it re-initialises the generators
+// before anything else runs them.
+
+namespace {
+
+const size_t kDobbelEngineBytes = (sizeof(dobbel::Engine) + 7) & ~7;
+static_assert(
+    kDobbelEngineBytes + sizeof(dobbel::Memory) <= sizeof(segment_generator),
+    "Dobbeltrap does not fit in the segment generators' memory");
+
+dobbel::Engine* dobbel_engine = NULL;
+bool dobbel_active = false;
+dobbel::Input dobbel_input[kNumChannels];
+float dobbel_out[kNumChannels][kBlockSize];
+
+void EnterDobbel() {
+  uint8_t* base = reinterpret_cast<uint8_t*>(&segment_generator[0]);
+  dobbel_engine = new (base) dobbel::Engine();
+  dobbel::Memory* memory = reinterpret_cast<dobbel::Memory*>(base + kDobbelEngineBytes);
+  dobbel_engine->Init(memory);
+  dobbel_active = true;
+}
+
+void LeaveDobbel() {
+  dobbel_active = false;
+  dobbel_engine = NULL;
+  for (size_t i = 0; i < kNumChannels; ++i) {
+    new (&segment_generator[i]) SegmentGenerator();
+    segment_generator[i].Init(
+        (MultiMode) settings.state().multimode, &note_quantizer[i]);
+  }
+}
+
+}  // namespace
+
+void ProcessDobbel(IOBuffer::Block* block, size_t size) {
+  for (size_t ch = 0; ch < kNumChannels; ++ch) {
+    dobbel::Input& in = dobbel_input[ch];
+    in.slider = block->slider[ch];
+    in.pot = block->pot[ch];
+    in.cv = block->cv[ch];
+    in.cv_raw = block->cv_raw[ch];
+    in.cv_slider = block->cv_slider[ch];
+    in.patched = block->input_patched[ch];
+    in.gate = block->input_patched[ch] ? block->input[ch] : no_gate;
+  }
+  dobbel_engine->Process(settings.dobbel(), dobbel_input, dobbel_out, size);
+  for (size_t ch = 0; ch < kNumChannels; ++ch) {
+    ui.set_dobbel(ch, dobbel_engine->level(ch), dobbel_engine->take_event(ch));
+    for (size_t i = 0; i < size; ++i) {
+      block->output[ch][i] = settings.dac_code(ch, dobbel_out[ch][i]);
+    }
+  }
+}
+
 void Init() {
   System sys;
   sys.Init(true);
@@ -460,9 +522,19 @@ int main(void) {
     } else if (
         chain_state.status() == stages::ChainState::CHAIN_DISCOVERING_NEIGHBORS
         || chain_state.status() == stages::ChainState::CHAIN_REINITIALIZING) {
+      if (dobbel_active) LeaveDobbel();
       io_buffer.Process(&Process); // Still discovering neighbors, dont't process alternative multi-modes
     } else {
-      switch ((MultiMode) settings.state().multimode) {
+      const MultiMode mode = (MultiMode) settings.state().multimode;
+      if (mode == MULTI_MODE_DOBBEL) {
+        if (!dobbel_active) EnterDobbel();
+      } else if (dobbel_active) {
+        LeaveDobbel();
+      }
+      switch (mode) {
+        case MULTI_MODE_DOBBEL:
+          io_buffer.Process(&ProcessDobbel);
+          break;
         case MULTI_MODE_SIX_EG:
           io_buffer.Process(&ProcessSixEg);
           break;

@@ -48,8 +48,8 @@ const MultiMode Ui::multimodes_[6] = {
   MULTI_MODE_STAGES_ADVANCED,
   MULTI_MODE_STAGES_SLOW_LFO,
   MULTI_MODE_SIX_EG,
-  MULTI_MODE_OUROBOROS,
-  MULTI_MODE_OUROBOROS_ALTERNATE, // Mode enabled by long pressing the right-most button
+  MULTI_MODE_OUROBOROS,  // hold again while in Ouroboros: Ouroboros alternate
+  MULTI_MODE_DOBBEL, // Dobbeltrap: long press the right-most button
 };
 
 /* static */
@@ -92,6 +92,12 @@ void Ui::Init(Settings* settings, ChainState* chain_state, CvReader* cv_reader) 
   fill(&sync_level_[0], &sync_level_[kNumChannels], 0);
   fill(&sync_class_[0], &sync_class_[kNumChannels], 0);
   for (size_t i = 0; i < kNumChannels; ++i) sync_flash_[i] = 0;
+  for (size_t i = 0; i < kNumChannels; ++i) {
+    dobbel_level_[i] = 0;
+    dobbel_flash_[i] = 0;
+  }
+  dobbel_changed_ = 0;
+  dobbel_dirty_ = false;
 }
 
 void Ui::Poll() {
@@ -117,7 +123,9 @@ void Ui::Poll() {
   // TODO: This is gross. Each mode should have its own UI handler, with a
   // generic system for changing segment properties that each can leverage.
   bool changing_prop = false;
-  if (pressed || //changing_pot_prop_ || changing_slider_prop_ ||
+  if (settings_->in_dobbel_mode()) {
+    changing_prop = PollDobbel(pressed);
+  } else if (pressed || //changing_pot_prop_ || changing_slider_prop_ ||
       cv_reader_->any_locked()) {
     uint16_t* seg_config = settings_->mutable_state()->segment_configuration;
     for (uint8_t i = 0; i < kNumChannels; ++i) {
@@ -333,12 +341,19 @@ void Ui::MultiModeToggle(const uint8_t i) {
 
   // Save the toggle value into permanent settings (if necessary)
   State* state = settings_->mutable_state();
-  if (state->multimode != (uint8_t) multimodes_[i]) {
+  uint8_t target = (uint8_t) multimodes_[i];
+  // Ouroboros alternate gave its button to Dobbeltrap: holding the Ouroboros
+  // button again while in Ouroboros switches to the alternate, and back.
+  if (multimodes_[i] == MULTI_MODE_OUROBOROS &&
+      state->multimode == MULTI_MODE_OUROBOROS) {
+    target = MULTI_MODE_OUROBOROS_ALTERNATE;
+  }
+  if (state->multimode != target) {
     for (int j = 0; j < kNumSwitches; ++j) {
       press_time_[j] = -1; // Don't consider Ouroboros button presses while changing mode
     }
     chain_state_->SuspendSwitches(); // Don't consider chain button presses while changing mode
-    state->multimode = (uint8_t) multimodes_[i];
+    state->multimode = target;
     settings_->SaveState();
     chain_state_->start_reinit();
   }
@@ -538,6 +553,10 @@ void Ui::UpdateLEDs() {
         }
       }
 
+    } else if (multimode == MULTI_MODE_DOBBEL) {
+
+      UpdateDobbelLEDs(ms);
+
     } else if (multimode == MULTI_MODE_SIX_EG) {
 
       // LEDs update for 6EG mode
@@ -630,6 +649,152 @@ void Ui::UpdateLEDs() {
   }
   leds_.Write();
 
+}
+
+// ---------------------------------------------------------------------------
+// Dobbeltrap UI
+//
+// Tap: next type (Random, Chaos, Envelope, Oscillator, Processor).
+// Hold + slider: flavour (zones). Hold + pot: aux, per type.
+// Hold 0.5-5 s and release: alt (bipolar / loop / voice / invert).
+// Hold 5 s: mode change, as everywhere.
+// While a button is held its slider and pot are locked, so moving them sets
+// the hidden settings without changing the sound; they unlock slowly after.
+
+bool Ui::PollDobbel(uint8_t pressed) {
+  dobbel::Config* config = settings_->mutable_dobbel();
+  for (uint8_t i = 0; i < kNumChannels; ++i) {
+    dobbel::SegmentConfig& seg = config->segment[i];
+    if (switches_.pressed(i)) {
+      cv_reader_->Lock(i);
+      const float slider = cv_reader_->lp_slider(i);
+      const float pot = cv_reader_->lp_pot(i);
+      const uint8_t bit = 1 << i;
+      if ((changing_slider_prop_ & bit) ||
+          fabsf(slider - cv_reader_->locked_slider(i)) > 0.05f) {
+        changing_slider_prop_ |= bit;
+        const int n = dobbel::kNumFlavours[seg.type];
+        int f = static_cast<int>(slider * n);
+        if (f >= n) f = n - 1;
+        if (f < 0) f = 0;
+        if (seg.flavour[seg.type] != f) {
+          seg.flavour[seg.type] = f;
+          dobbel_dirty_ = true;
+        }
+      }
+      if ((changing_pot_prop_ & bit) ||
+          fabsf(pot - cv_reader_->locked_pot(i)) > 0.05f) {
+        changing_pot_prop_ |= bit;
+        float p = pot < 0.0f ? 0.0f : (pot > 1.0f ? 1.0f : pot);
+        const uint8_t aux = static_cast<uint8_t>(p * 255.0f + 0.5f);
+        if (seg.aux[seg.type] != aux) {
+          seg.aux[seg.type] = aux;
+          dobbel_dirty_ = true;
+        }
+      }
+      if ((changing_slider_prop_ | changing_pot_prop_) & bit) {
+        press_time_[i] = -1;  // this hold set something: no tap, no alt
+      } else if (press_time_[i] != -1) {
+        ++press_time_[i];
+      }
+    } else {
+      if (press_time_[i] > 0) {
+        if (press_time_[i] >= kLongPressDuration) {
+          if (press_time_[i] < kLongPressDurationForMultiModeToggle) {
+            seg.alt ^= 1 << seg.type;
+          }
+        } else {
+          seg.type = (seg.type + 1) % dobbel::TYPE_LAST;
+        }
+        dobbel_dirty_ = true;
+      }
+      press_time_[i] = 0;
+      changing_slider_prop_ &= ~(1 << i);
+      changing_pot_prop_ &= ~(1 << i);
+      if (cv_reader_->is_locked(i)) {
+        // glide the locked values back to the real ones, then unlock
+        const float locked_slider = cv_reader_->locked_slider(i);
+        const float slider = cv_reader_->lp_slider(i);
+        const float locked_pot = cv_reader_->locked_pot(i);
+        const float pot = cv_reader_->lp_pot(i);
+        bool unlock = true;
+        if (fabsf(locked_slider - slider) > 0.01f) {
+          unlock = false;
+          cv_reader_->set_locked_slider(
+              i, locked_slider + 0.001f * (2.0f * (locked_slider < slider) - 1.0f));
+        }
+        if (fabsf(locked_pot - pot) > 0.01f) {
+          unlock = false;
+          cv_reader_->set_locked_pot(
+              i, locked_pot + 0.001f * (2.0f * (locked_pot < pot) - 1.0f));
+        }
+        if (unlock) cv_reader_->Unlock(i);
+      }
+    }
+  }
+  if (!pressed && dobbel_dirty_) {
+    dobbel_dirty_ = false;
+    settings_->SaveDobbel();
+  }
+  return (changing_slider_prop_ | changing_pot_prop_) != 0;
+}
+
+// Button LED: the type's colour (Random green, Chaos yellow, Envelope red,
+// Oscillator green/red, Processor yellow/red), flashing bright on every
+// tick / hit, breathing when alt is on. While a button is held: its flavour
+// (green, yellow, red, then blinking green, yellow, red, then green/red and
+// yellow/red alternating). Slider LED: the output level, or the aux value
+// while hold + pot sets it.
+void Ui::UpdateDobbelLEDs(uint32_t ms) {
+  const uint8_t pwm = ms & 0xf;
+  const bool blink = (ms >> 7) & 1;
+  const dobbel::Config& config = settings_->dobbel();
+  for (size_t i = 0; i < kNumChannels; ++i) {
+    const dobbel::SegmentConfig& seg = config.segment[i];
+    LedColor color = LED_COLOR_OFF;
+    uint8_t brightness = 0x6;
+    if (switches_.pressed(i) && press_time_[i] != 0) {
+      const uint8_t f = seg.flavour[seg.type];
+      const LedColor solid[3] = { LED_COLOR_GREEN, LED_COLOR_YELLOW, LED_COLOR_RED };
+      if (f < 3) {
+        color = solid[f];
+      } else if (f < 6) {
+        color = blink ? solid[f - 3] : LED_COLOR_OFF;
+      } else if (f == 6) {
+        color = blink ? LED_COLOR_GREEN : LED_COLOR_RED;
+      } else {
+        color = blink ? LED_COLOR_YELLOW : LED_COLOR_RED;
+      }
+      brightness = 0xf;
+    } else {
+      const bool phase = (ms >> 8) & 1;
+      switch (seg.type) {
+        case dobbel::TYPE_RANDOM: color = LED_COLOR_GREEN; break;
+        case dobbel::TYPE_CHAOS: color = LED_COLOR_YELLOW; break;
+        case dobbel::TYPE_ENVELOPE: color = LED_COLOR_RED; break;
+        case dobbel::TYPE_OSCILLATOR:
+          color = phase ? LED_COLOR_GREEN : LED_COLOR_RED;
+          break;
+        default:
+          color = phase ? LED_COLOR_YELLOW : LED_COLOR_RED;
+          break;
+      }
+      if ((seg.alt >> seg.type) & 1) {
+        brightness = 0x2 + (FadePattern(5, 0) >> 1);
+      }
+      if (dobbel_flash_[i]) {
+        dobbel_flash_[i] = dobbel_flash_[i] - 1;
+        brightness = 0xf;
+      }
+    }
+    leds_.set(LED_GROUP_UI + i,
+              (brightness > pwm && brightness != 0) ? color : LED_COLOR_OFF);
+    uint8_t level = dobbel_level_[i];
+    if (switches_.pressed(i) && (changing_pot_prop_ & (1 << i))) {
+      level = seg.aux[seg.type] >> 4;
+    }
+    leds_.set(LED_GROUP_SLIDER + i, level > pwm ? LED_COLOR_GREEN : LED_COLOR_OFF);
+  }
 }
 
 }  // namespace stages

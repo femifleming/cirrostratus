@@ -86,6 +86,13 @@ class Ui {
     follow_output_[i] = static_cast<uint8_t>(fabsf(output) * 15.0f + 0.5f);
   }
 
+  // Dobbeltrap: output level (0-1) and a tick / hit, for the LEDs.
+  void set_dobbel(int i, float level, bool event) {
+    const float l = level < 0.0f ? 0.0f : (level > 1.0f ? 1.0f : level);
+    dobbel_level_[i] = static_cast<uint8_t>(l * 15.0f + 0.5f);
+    if (event) dobbel_flash_[i] = kDobbelFlashDuration;
+  }
+
   void set_discrete_change(int segment) {
     discrete_change_time_[segment] = stmlib::system_clock.milliseconds();
   }
@@ -101,6 +108,8 @@ class Ui {
   void OnSwitchReleased(const stmlib::Event& e);
 
   void MultiModeToggle(const uint8_t i);
+  bool PollDobbel(uint8_t pressed);
+  void UpdateDobbelLEDs(uint32_t ms);
 
   void UpdateLEDs();
   uint8_t FadePattern(uint8_t shift, uint8_t phase) const;
@@ -108,7 +117,9 @@ class Ui {
 
   void show_mode() {
     for (size_t i = 0; i < kNumChannels; ++i) {
-      if (multimodes_[i] == settings_->state().multimode) {
+      const uint8_t m = settings_->state().multimode == MULTI_MODE_OUROBOROS_ALTERNATE
+          ? (uint8_t) MULTI_MODE_OUROBOROS : settings_->state().multimode;
+      if (multimodes_[i] == m) {
         leds_.set(i, LED_COLOR_RED);
       }
     }
@@ -135,6 +146,12 @@ class Ui {
   uint8_t sync_level_[kNumChannels];
   int8_t sync_class_[kNumChannels];
   volatile uint8_t sync_flash_[kNumChannels];
+
+  static const uint8_t kDobbelFlashDuration = 30;  // ms
+  uint8_t dobbel_level_[kNumChannels];
+  volatile uint8_t dobbel_flash_[kNumChannels];
+  uint8_t dobbel_changed_;   // bit per segment: hold + slider/pot used
+  bool dobbel_dirty_;
 
   Settings* settings_;
   ChainState* chain_state_;

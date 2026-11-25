@@ -62,6 +62,12 @@ bool Settings::Init() {
   state_.multimode = (uint8_t) MULTI_MODE_STAGES;
   
   bool success = chunk_storage_.Init(&persistent_data_, &state_);
+
+  // Dobbeltrap: defaults first (a blank page is formatted with them).
+  dobbel_marker_.magic = 0x444f4242;
+  dobbel_.Init();
+  dobbel_storage_.Init(&dobbel_marker_, &dobbel_);
+  dobbel_.Sanitize();
   
   // Sanitize settings read from flash.
   if (success) {
@@ -85,6 +91,10 @@ void Settings::SavePersistentData() {
 
 void Settings::SaveState() {
   chunk_storage_.SaveState();
+}
+
+void Settings::SaveDobbel() {
+  dobbel_storage_.SaveState();
 }
 
 }  // namespace stages

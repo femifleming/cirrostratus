@@ -34,6 +34,7 @@
 
 #include "stages/io_buffer.h"
 #include "stages/modes.h"
+#include "stages/dobbel.h"
 
 namespace stages {
 
@@ -97,6 +98,12 @@ struct State {
   enum { tag = 0x54415453 };  // STAT
 };
 
+// The last two 2 KB pages of the 256 KB flash. The audio bootloader only
+// erases the pages it writes, so these survive firmware updates as long as the
+// application stays below kDobbelStorageStart (checked by tools/dobbel_check.sh).
+const uint32_t kDobbelStorageStart = 0x0803F000;
+const uint32_t kDobbelStorageEnd = 0x08040000;
+
 class Settings {
  public:
   Settings() { }
@@ -129,6 +136,17 @@ class Settings {
       || state_.multimode == MULTI_MODE_STAGES_SLOW_LFO;
   }
 
+  inline bool in_dobbel_mode() const {
+    return state_.multimode == MULTI_MODE_DOBBEL;
+  }
+
+  // Dobbeltrap's own settings live in their own flash pages (the last 4 KB),
+  // so the State chunk above never changes size: a size change would format
+  // the settings and start the factory test.
+  inline const dobbel::Config& dobbel() const { return dobbel_; }
+  inline dobbel::Config* mutable_dobbel() { return &dobbel_; }
+  void SaveDobbel();
+
   inline bool in_ouroboros_mode() const {
     return state_.multimode == MULTI_MODE_OUROBOROS
       || state_.multimode == MULTI_MODE_OUROBOROS_ALTERNATE;
@@ -148,6 +166,18 @@ class Settings {
       0x08008000,
       PersistentData,
       State> chunk_storage_;
+
+  struct DobbelMarker {
+    uint32_t magic;
+    enum { tag = 0x4B52414D };  // MARK
+  };
+  DobbelMarker dobbel_marker_;
+  dobbel::Config dobbel_;
+  stmlib::ChunkStorage<
+      kDobbelStorageStart,
+      kDobbelStorageEnd,
+      DobbelMarker,
+      dobbel::Config> dobbel_storage_;
 
   DISALLOW_COPY_AND_ASSIGN(Settings);
 };
