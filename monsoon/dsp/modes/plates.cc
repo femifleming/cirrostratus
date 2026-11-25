@@ -1,6 +1,7 @@
 // Mode 13 - PLATES (see plates.h and docs/DESIGN.md).
 
 #include "monsoon/dsp/modes/plates.h"
+#include "monsoon/dsp/modes/knob_fx.h"
 #include "monsoon/dsp/modes/cold_code.h"
 
 namespace monsoon {
@@ -19,6 +20,8 @@ static inline float PlateRatio(int m, int n, float a) {
 MONSOON_COLD bool PlatesMode::Init(Arena* arena) {
   modes_ = arena->Allocate<Resonator>(kNumModes);
   if (!modes_) return false;
+  bal_used_ = 0.0f;
+  selected_size_ = -1.0f;
   for (int i = 0; i < 7; ++i) cache_[i] = -1.0f;
   energy_ = 0.0f;
   bend_ = 0.0f;
@@ -73,16 +76,11 @@ void PlatesMode::UpdateCoefficients(const Controls& c) {
                          frozen_ ? 1.0f : 0.0f, bal_ };
   // Retunes while BAL is (or was) in use keep each mode's amplitude.
   const bool keep = bal_ != 0.0f || cache_[6] != 0.0f;
-  bool same = !first_block_;
-  bool size_changed = first_block_;
-  for (int i = 0; i < 7; ++i) {
-    if (fabsf(key[i] - cache_[i]) > 1e-4f) {
-      same = false;
-      if (i == 1) size_changed = true;
-    }
-    cache_[i] = key[i];
-  }
-  if (same) return;
+  static const float band[7] = { kBandPitch, kBandPot, kBandPot, kBandPot,
+                                 kBandPot, kBandSwitch, 0.0f };
+  if (!KnobsMoved(key, cache_, band, 7, first_block_)) return;
+  const bool size_changed = first_block_ || fabsf(c.size - selected_size_) > kBandPot;
+  if (size_changed) selected_size_ = c.size;
 
   // SIZE: square plate (a = 1) -> long bar (a = 0.22).
   const float aspect = 1.0f - 0.78f * Clamp(c.size, 0.0f, 1.0f);
@@ -179,7 +177,10 @@ void PlatesMode::Process(const Controls& c, const FloatFrame* in,
                          FloatFrame* out, size_t n) {
   frozen_ = c.freeze;
   // BAL glides (~10 ms) so CV does not jump the tuning.
-  const float bal_target = KnobBipolar(c.bal);
+  // (a target that only moves past the knob's noise, so the glide settles)
+  const float bal_knob = KnobBipolar(c.bal);
+  if (first_block_ || fabsf(bal_knob - bal_used_) > 2.0f * kBandPot) bal_used_ = bal_knob;
+  const float bal_target = bal_used_;
   bal_ += 0.1f * (bal_target - bal_);
   if (fabsf(bal_target - bal_) < 1e-3f) bal_ = bal_target;
   UpdateCoefficients(c);

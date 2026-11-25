@@ -77,6 +77,12 @@ class Engine {
   ModeId mode() const { return requested_mode_; }
   uint8_t option() const { return requested_option_; }
   bool switching() const { return state_ != STATE_RUNNING; }
+  // The audio interrupt ran past its share of the CPU: the next block
+  // skips the mode (its wet is silent for that block, the fades, the dry
+  // path and the output section go on), which leaves the main loop the
+  // time to read the panel and change modes. A mode that is too heavy is
+  // heard to drop out, never locks the module.
+  void set_shed(bool shed) { shed_ = shed; }
   Mode* mode_instance(ModeId id);
   static const char* mode_name(ModeId id);
   uint8_t num_options(ModeId id);
@@ -139,6 +145,7 @@ class Engine {
   float fade_;
   bool silence_;
   bool init_failed_;
+  bool shed_;
   volatile uint8_t buffer_quality_;
 
   const uint8_t* pending_load_data_;

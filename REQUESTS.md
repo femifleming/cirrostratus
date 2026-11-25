@@ -31,3 +31,7 @@ What was asked for, in order (2026-11-23 → 24).
 > make a new video manual when your done, and make the msuic sliglty quaiter in this new one.
 > the manual needs to be visual and show me the module like the video
 > when the slider is all the way down the lights show binary 2 instead of 1, i think its skipping the first one on both sets of effects.
+
+> also in the monsoon firmware, some audio modes like the resonator sound glitchy and prevent me from changing modes, it gets stuck in that mode, can you run more tests for the modes? also can you make the spectral smear sound as good as the one for wingie does? its not that high qual right now on the monsoon.
+
+1.3.0. RESONATOR, PLATES and GAMELAN retuned on every twitch of the knobs (ADC noise), which the bench never saw because it holds the knobs still: up to a third more CPU, enough to glitch and starve the main loop, where mode changes happen. They now retune only past the knobs' noise; RESONATOR spreads its retune over four blocks. Any block that runs late now makes the next skip the mode, so mode changes always go through. New tests (host/tests_hardware.cc): knob noise must not change those modes' sound, every mode switches away while blocks are being shed, a minute of every mode at heavy settings with noisy knobs; the bench has BENCH_JITTER. SPECTRAL option 2 = SMEAR, the Wingie's spectral smear ported (same algorithm; spectrum within 1 dB of the Wingie's at every blur), mono, 1644 insns/frame.

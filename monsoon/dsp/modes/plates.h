@@ -58,6 +58,8 @@ class PlatesMode : public Mode {
   void ApplyTension(float bend, bool rescale);
 
   float cache_[7];
+  float bal_used_;   // BAL's target, past the knob's noise
+  float selected_size_;  // the SIZE the plate's modes were chosen for
   float energy_;     // sum of the modes' energy after the last block
   float bend_;       // FBK: relative pitch offset applied to a1
   float bal_;        // BAL, bipolar and smoothed

@@ -1,5 +1,9 @@
 # CPU per mode
 
+**1.3.0: knob noise.** The table below holds every knob perfectly still. A module's knobs never are: after smoothing, the ADC still moves each pot by ~0.001 and PITCH (through V/OCT) by ~0.03 semitone. `BENCH_DEFS="-DBENCH_JITTER" tools/bench/run.sh` adds that noise. In 1.2 three modes retuned from their knobs on every twitch: PLATES 1362 → 2223, GAMELAN 1842 → 2090, RESONATOR 1846 → 2029 (worst block 2148; on a module it glitched and the mode menu stopped answering). In 1.3 they retune only once a knob moves past its noise (5 cents on PITCH, 0.002 on the pots) and RESONATOR retunes two strings a block: with the noise, PLATES 1364, GAMELAN 1844, RESONATOR 1852 (worst block 1970). And whatever a mode costs, a block that runs past 85 % of its time now makes the next block skip the mode, so the panel and the mode menu always answer.
+
+**1.3.0: SPECTRAL option 2, SMEAR** (`BENCH_DEFS="-DBENCH_OPTION=1"`): 1644 per frame typical (ISR 764 with the FDN reverb at RVB 0.5, background 879).
+
 Measured with `tools/bench/run.sh` (QEMU STM32F405 model, instruction counts per stereo frame, engine + output section included, Process + Prepare averaged). Budget ≈ 2400; real cycles are roughly 1.0–1.3× these numbers.
 
 Bench knob settings: typical = sliders 0.4–0.6, PITCH +7, WET 0.7, BAL 0.6, FBK 0.4, RVB 0.5; heavy = DENSITY 1, SIZE 0.95, TEXTURE 0.9, FBK 0.9, RVB 0.9, PITCH −12.

@@ -39,7 +39,21 @@ lower buffer quality (3.7).
 | BAL | noon = as before. Turning it shifts every partial by the same number of Hz (not a ratio), so harmonic sounds go inharmonic. Left shifts down, right shifts up, exponential: a few Hz near noon, ±1 kHz at the ends |
 | FBK | regeneration: the last output spectrum comes back as a floor under the next frame (held 0.1 → 8 s). On its own it sustains; with BAL or PITCH set every pass moves the partials again, so they spiral up or down |
 | RVB | phase diffusion: random phases blend in, coherent → a whispered wash in the same colours |
-| Keeps / morph | the frozen spectrum / yes |
+| Options | 1 as above · 2 SMEAR (below) |
+| Keeps / morph | the frozen spectrum / yes (option 1) |
+
+**Option 2 · SMEAR** — *a photograph left out in the rain.* The spectral
+smear from Sleepcousonique's Wingie mode, the same sound: the spectrum is
+blurred in time and a little across frequency, and its partials carry on.
+512-point transform, 4× overlap, 16 ms latency. Mono, like the Wingie's: the
+mid (L+R) is smeared and comes out of both sides.
+
+| Control | |
+|---|---|
+| DENSITY | blur: none (the sound as it is) → seconds; long blurs beat and shimmer |
+| FREEZE | hold: the blur stops where it is |
+| RVB | reverb (the module's FDN reverb: SMEAR's space) |
+| Keeps / morph | nothing / no |
 
 #### 3 · CONVOLVE — freeze captures the impulse response
 *Forecast: the room you're standing in is whatever you just played.*

@@ -36,6 +36,9 @@ static const float kToBins =
     static_cast<float>(SpectralMode::kFftSize) / SpectralMode::kHop;
 
 bool SpectralMode::Init(Arena* arena) {
+  smear_on_ = init_option_ == 1;
+  frozen_ = false;
+  if (smear_on_) return smear_.Init(arena);
   if (!stft_.Init(arena, LeanStft::PER_CHANNEL, this)) return false;
   for (int ch = 0; ch < 2; ++ch) {
     prev_[ch] = Grab<float>(arena, kFftSize);
@@ -77,6 +80,11 @@ bool SpectralMode::Init(Arena* arena) {
 
 void SpectralMode::Process(const Controls& c, const FloatFrame* in,
                            FloatFrame* out, size_t n) {
+  if (smear_on_) {
+    frozen_ = c.freeze;
+    smear_.Process(c, in, out, n);
+    return;
+  }
   ctl_ = c;
   if (c.freeze != prev_freeze_) {
     hold_loaded_ = false;
@@ -394,6 +402,7 @@ void SpectralMode::Diffuse(float* s, float amount) {
 }
 
 size_t SpectralMode::GetPersistentData(PersistentChunk* chunks) {
+  if (smear_on_) return 0;
   chunks[0].data = mag_[0]; chunks[0].size = kBins * sizeof(float);
   chunks[1].data = mag_[1]; chunks[1].size = kBins * sizeof(float);
   chunks[2].data = freq_[0]; chunks[2].size = kBins * sizeof(float);
@@ -402,6 +411,7 @@ size_t SpectralMode::GetPersistentData(PersistentChunk* chunks) {
 }
 
 bool SpectralMode::LoadPersistentData(const uint8_t* data, size_t size) {
+  if (smear_on_) return false;
   if (size < kPersistentFloats * sizeof(float)) return false;
   const size_t bytes = kBins * sizeof(float);
   memcpy(mag_[0], data, bytes);
@@ -414,6 +424,7 @@ bool SpectralMode::LoadPersistentData(const uint8_t* data, size_t size) {
 }
 
 void SpectralMode::SetMorphSource(const uint8_t* data, size_t size) {
+  if (smear_on_) return;
   if (!data || size < kPersistentFloats * sizeof(float)) {
     morph_mag_[0] = morph_mag_[1] = NULL;
     morph_freq_[0] = morph_freq_[1] = NULL;

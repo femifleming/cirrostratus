@@ -24,6 +24,27 @@ namespace monsoon {
 // copy.
 inline KNOB_FX_FLAT float KnobBal(float k) { return KnobBipolar(k); }
 
+// The controls a mode retunes from, against the values it last retuned at:
+// true (and those become the values) once any of them has moved past its
+// band, or when `force`. A module's knobs are never quite still (ADC noise
+// after the smoothing), and a mode that retuned on every twitch spent up to
+// a third of the audio budget doing it while nobody touched anything.
+inline KNOB_FX bool KnobsMoved(const float* key, float* used,
+                               const float* band, int n, bool force) {
+  bool moved = force;
+  for (int i = 0; i < n && !moved; ++i) {
+    float d = key[i] - used[i];
+    if (d > band[i] || d < -band[i]) moved = true;
+  }
+  if (moved) for (int i = 0; i < n; ++i) used[i] = key[i];
+  return moved;
+}
+
+// Bands: PITCH in semitones (5 cents: V/OCT noise reads ~3), the pots, on/off settings.
+static const float kBandPitch = 0.05f;
+static const float kBandPot = 0.002f;
+static const float kBandSwitch = 0.5f;
+
 }  // namespace monsoon
 
 #endif  // MONSOON_DSP_MODES_KNOB_FX_H_

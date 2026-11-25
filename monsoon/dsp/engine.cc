@@ -111,6 +111,7 @@ uint8_t Engine::num_options(ModeId id) { return kModes[id]->num_options(); }
 
 bool Engine::Init(void* main_mem, size_t main_size,
                   void* ccm_mem, size_t ccm_size) {
+  shed_ = false;
   SharedFft();
   size_t reverb_bytes = Fdn::MemoryBytes() + 64;
   if (ccm_size < reverb_bytes) return false;
@@ -298,7 +299,7 @@ void Engine::ProcessFloat(const Controls& raw, const FloatFrame* in,
 
   // Only touch the mode while it is running (Prepare may be re-initialising
   // another one during a switch).
-  const bool run_mode = !init_failed_ &&
+  const bool run_mode = !init_failed_ && !shed_ &&
       (state_ == STATE_RUNNING || state_ == STATE_FADING_IN ||
        state_ == STATE_FADING_OUT);
 

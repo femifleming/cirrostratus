@@ -46,6 +46,7 @@ class ResonatorMode : public Mode {
   struct String {
     float delay;        // current loop delay in samples (smoothed)
     float lp;           // loop filter state
+    float a;            // its coefficient (changes with this string's gain)
     float last;         // last output (drives the jawari)
     float env;          // slow amplitude envelope (scales the bridge)
     float rattle_lp;    // state of the rattle high-pass
@@ -53,6 +54,7 @@ class ResonatorMode : public Mode {
   };
 
   void ComputeTargets(const Controls& c);
+  void UpdateStrings(int count);
   void Body(float rvb, FloatFrame* out, size_t n) __attribute__((noinline));
 
   float* line_[kNumStrings];
@@ -68,6 +70,12 @@ class ResonatorMode : public Mode {
   bool frozen_;
   bool first_block_;
   float cache_[6];
+  // What ComputeTargets worked out for UpdateStrings, and the strings still
+  // to retune (a bit each).
+  float tune_root_, tune_frac_, tune_t60_, tune_detune_, tune_stretch_,
+      tune_bal_;
+  int tune_k_;
+  uint32_t pending_;
   Random rng_;
   DcBlocker dc_[2];
 

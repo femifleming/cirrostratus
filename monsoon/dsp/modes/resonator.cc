@@ -1,6 +1,7 @@
 // Mode 4 - RESONATOR (see resonator.h and docs/DESIGN.md).
 
 #include "monsoon/dsp/modes/resonator.h"
+#include "monsoon/dsp/modes/knob_fx.h"
 
 namespace monsoon {
 
@@ -47,6 +48,7 @@ bool ResonatorMode::Init(Arena* arena) {
     if (!line_[i]) return false;
     string_[i].delay = 100.0f;
     string_[i].lp = 0.0f;
+    string_[i].a = 0.5f;
     string_[i].last = 0.0f;
     string_[i].env = 0.0f;
     string_[i].rattle_lp = 0.0f;
@@ -56,6 +58,7 @@ bool ResonatorMode::Init(Arena* arena) {
     gain_[i] = 0.99f;
   }
   write_ = 0;
+  pending_ = 0;
   lp_coef_ = 0.5f;
   pickup_ = 0.3f;
   jawari_ = 0.0f;
@@ -82,15 +85,14 @@ static const float kDetune[ResonatorMode::kNumStrings] = {
 };
 
 void ResonatorMode::ComputeTargets(const Controls& c) {
-  // Skip the (libm-heavy) recomputation while the controls sit still.
+  // Skip the (libm-heavy) recomputation while the controls sit still, and
+  // spread it while they move: the shared values now, the strings two a
+  // block (UpdateStrings), all eight within four blocks (2.7 ms).
   const float key[6] = { c.pitch, c.size, c.position, c.density,
                          frozen_ ? 1.0f : 0.0f, c.bal };
-  bool same = !first_block_;
-  for (int i = 0; i < 6; ++i) {
-    if (fabsf(key[i] - cache_[i]) > 1e-4f) same = false;
-    cache_[i] = key[i];
-  }
-  if (same) return;
+  static const float band[6] = { kBandPitch, kBandPot, kBandPot, kBandPot,
+                                 kBandSwitch, kBandPot };
+  if (!KnobsMoved(key, cache_, band, 6, first_block_)) return;
   float root = 65.41f * SemitonesToRatio(c.pitch);
   root = Clamp(root, 25.0f, 1500.0f);
 
@@ -104,7 +106,6 @@ void ResonatorMode::ComputeTargets(const Controls& c) {
   float pos = Clamp(c.position, 0.0f, 1.0f);
   lp_coef_ = 0.12f + 0.86f * pos * pos;
   pickup_ = 0.5f - 0.42f * pos;
-  const float b = 1.0f - lp_coef_;
 
   // DENSITY: decay 0.2 s -> 20 s.
   const float t60 = 0.2f * powf(100.0f, Clamp(c.density, 0.0f, 1.0f));
@@ -113,7 +114,25 @@ void ResonatorMode::ComputeTargets(const Controls& c) {
   const float detune = bal < 0.0f ? -bal * (1.0f / 1200.0f) : 0.0f;
   const float stretch = bal > 0.0f ? 1.0f + 0.1f * bal : 1.0f;
 
-  for (int i = 0; i < kNumStrings; ++i) {
+  tune_root_ = root;
+  tune_k_ = k;
+  tune_frac_ = frac;
+  tune_t60_ = t60;
+  tune_detune_ = detune;
+  tune_stretch_ = stretch;
+  tune_bal_ = bal;
+  pending_ = (1u << kNumStrings) - 1;
+}
+
+void ResonatorMode::UpdateStrings(int count) {
+  const float b = 1.0f - lp_coef_;
+  const int k = tune_k_;
+  const float frac = tune_frac_, root = tune_root_, t60 = tune_t60_;
+  const float detune = tune_detune_, stretch = tune_stretch_, bal = tune_bal_;
+  for (int i = 0; i < kNumStrings && count > 0; ++i) {
+    if (!(pending_ & (1u << i))) continue;
+    pending_ &= ~(1u << i);
+    --count;
     float l0 = log2f(kTunings[k][i]);
     float l1 = log2f(kTunings[k + 1][i]);
     float l = l0 + (l1 - l0) * frac;
@@ -121,6 +140,7 @@ void ResonatorMode::ComputeTargets(const Controls& c) {
     float f = root * exp2f(l);
     if (f > 10000.0f) f = 10000.0f;
     frequency_[i] = f;
+    string_[i].a = lp_coef_;
     // Phase delay and gain of the one-pole loop filter at f.
     const float w = kTwoPi * f / kSampleRate;
     const float re = 1.0f - b * cosf(w);
@@ -145,6 +165,7 @@ void ResonatorMode::Process(const Controls& c, const FloatFrame* in,
   frozen_ = c.freeze;
   jawari_ = Clamp(c.texture, 0.0f, 1.0f);
   ComputeTargets(c);
+  UpdateStrings(first_block_ ? kNumStrings : 2);
 
   if (c.trigger) {
     for (int i = 0; i < kNumStrings; ++i) {
@@ -160,7 +181,6 @@ void ResonatorMode::Process(const Controls& c, const FloatFrame* in,
   first_block_ = false;
 
   const float in_gain = frozen_ ? 0.0f : input_gain_;
-  const float a = lp_coef_;
   const float jaw = jawari_ * jawari_;
   // FBK: sympathetic coupling. Every sample the strings' outputs pass two
   // stages of pairwise rotations (pairs 01 23 45 67, then 12 34 56 70):
@@ -222,7 +242,7 @@ void ResonatorMode::Process(const Controls& c, const FloatFrame* in,
         rattle = jaw * st.env * 1.5f;
       }
       st.rattle_lp = hit;
-      st.lp += a * (y - st.lp);
+      st.lp += st.a * (y - st.lp);
       // The click re-enters the string scaled by period so that short
       // (high) strings never gain energy from it.
       float re_enter = st.delay * (1.0f / 2000.0f);

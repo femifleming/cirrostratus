@@ -1,6 +1,7 @@
 // Mode 28 - GAMELAN (see gamelan.h).
 
 #include "monsoon/dsp/modes/gamelan.h"
+#include "monsoon/dsp/modes/knob_fx.h"
 
 #include "monsoon/dsp/modes/bal_knob.h"
 
@@ -57,13 +58,11 @@ void GamelanMode::Update(const Controls& c) {
   const float key[6] = { c.pitch, c.size, c.density, c.texture,
                          static_cast<float>(c.option & 1),
                          frozen_ ? 1.0f : 0.0f };
-  bool same = !first_;
-  for (int i = 0; i < 6; ++i) {
-    if (fabsf(key[i] - cache_[i]) > 1e-4f) same = false;
-    cache_[i] = key[i];
-  }
+  static const float band[6] = { kBandPitch, kBandPot, kBandPot, kBandPot,
+                                 kBandSwitch, kBandSwitch };
+  const bool moved = KnobsMoved(key, cache_, band, 6, first_);
   first_ = false;
-  if (same) return;
+  if (!moved) return;
 
   const float t = Clamp(c.texture, 0.0f, 1.0f) * (kInstruments - 1);
   int i0 = static_cast<int>(t);

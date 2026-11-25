@@ -158,7 +158,12 @@ int main() {
 #ifdef BENCH_QUALITY
       if (!engine.mode_instance((ModeId)m)->uses_buffer_quality()) continue;
 #endif
-      engine.RequestMode((ModeId)m, 0);
+#ifndef BENCH_OPTION
+#define BENCH_OPTION 0
+#endif
+      // BENCH_DEFS="-DBENCH_OPTION=1": every mode at its 2nd option (modes
+      // with one option run that one); SPECTRAL's 2nd is SMEAR.
+      engine.RequestMode((ModeId)m, BENCH_OPTION);
       memset(&c, 0, sizeof(c));
       for (int k = 0; k < 400 && engine.switching(); ++k) {
         engine.Process(c, in, out, kBlockSize);
@@ -185,6 +190,18 @@ int main() {
         for (size_t i = 0; i < kBlockSize; ++i) { in[i].l = Noise(); in[i].r = Noise(); }
         c.trigger = (b % 300) == 0;
         c.gate = (b % 300) < 150;
+#ifdef BENCH_JITTER
+        // BENCH_DEFS="-DBENCH_JITTER" tools/bench/run.sh: the controls as a
+        // real module reads them, never quite still (ADC noise after the
+        // smoothing: ~0.001 on the pots, ~0.03 semitone on PITCH via V/OCT)
+        {
+          const float j = (b & 1) ? 0.001f : -0.001f;
+          c.position += j; c.size += j; c.density += j; c.texture += j;
+          c.bal += j; c.fbk += j; c.rvb += j; c.blend += j;
+          c.pitch += (b & 1) ? 0.03f : -0.03f;
+        }
+#endif
+        c.option = BENCH_OPTION;
         uint64_t a = Ticks();
         engine.Process(c, in, out, kBlockSize);
         uint64_t bb = Ticks();

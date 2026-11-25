@@ -4,6 +4,8 @@
 // Audio runs at 48 kHz in blocks of 32 frames from the codec DMA interrupt;
 // the main loop runs the UI and the modes' background work (FFTs etc).
 
+#include <stm32f4xx_conf.h>
+
 #include "monsoon/cv_scaler.h"
 #include "monsoon/drivers/codec.h"
 #include "monsoon/drivers/debug_pin.h"
@@ -55,14 +57,21 @@ void SysTick_Handler() {
 
 }
 
+// The audio interrupt's share of a block (32 frames at 48 kHz = 112,000
+// cycles at 168 MHz): past 85 % the next block skips the mode (see
+// Engine::set_shed), so the panel and mode changes always get their time.
+static const uint32_t kShedCycles = 168000000u / 48000u * kBlockSize * 85u / 100u;
+
 void FillBuffer(Codec::Frame* input, Codec::Frame* output, size_t n) {
 #ifdef PROFILE_INTERRUPT
   TIC
 #endif
+  const uint32_t t0 = DWT->CYCCNT;
   cv_scaler.Read(&controls);
   engine.Process(controls, reinterpret_cast<const ShortFrame*>(input),
                  reinterpret_cast<ShortFrame*>(output), n);
   meter.Process(controls.freeze ? output : input, n);
+  engine.set_shed(DWT->CYCCNT - t0 > kShedCycles);
 #ifdef PROFILE_INTERRUPT
   TOC
 #endif
@@ -90,6 +99,10 @@ void Init() {
   if (!codec.Init(master, 48000)) {
     ui.Panic();
   }
+  // the cycle counter FillBuffer times itself with
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CYCCNT = 0;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
   if (!codec.Start(kBlockSize, &FillBuffer)) {
     ui.Panic();
   }

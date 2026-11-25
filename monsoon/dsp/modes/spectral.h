@@ -19,6 +19,7 @@
 
 #include "monsoon/dsp/mode.h"
 #include "monsoon/dsp/modes/lean_stft.h"
+#include "monsoon/dsp/modes/smear.h"
 
 namespace monsoon {
 
@@ -32,12 +33,22 @@ class SpectralMode : public Mode, public LeanStftClient {
   bool Init(Arena* arena) __attribute__((cold));  // runs once: small
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
-  void Prepare() { stft_.Prepare(); }
+  void Prepare() {
+    if (smear_on_) smear_.Prepare();
+    else stft_.Prepare();
+  }
+  // Option 1 = as always; option 2 = SMEAR (smear.h), Sleepcousonique's
+  // Wingie smear: DENSITY blur, FREEZE hold, RVB the FDN reverb.
+  uint8_t num_options() const { return 2; }
+  bool option_requires_init() const { return true; }
+  float reverb_amount(const Controls& c) const {
+    return smear_on_ ? Clamp(c.rvb, 0.0f, 1.0f) : 0.0f;
+  }
 
   size_t GetPersistentData(PersistentChunk* chunks);
   bool LoadPersistentData(const uint8_t* data, size_t size);
   void SetMorphSource(const uint8_t* data, size_t size);
-  bool supports_morph() const { return true; }
+  bool supports_morph() const { return !smear_on_; }
   bool frozen() const { return frozen_; }
 
   // LeanStftClient.
@@ -52,6 +63,8 @@ class SpectralMode : public Mode, public LeanStftClient {
   void Diffuse(float* spectrum, float amount) __attribute__((noinline));
 
   LeanStft stft_;
+  SmearEngine smear_;
+  bool smear_on_;
   float* mag_[2];        // smoothed / frozen magnitudes
   float* freq_[2];       // instantaneous frequency in bins (peaks; k elsewhere)
   float* prev_[2];       // previous analysis spectrum (CMSIS order)
