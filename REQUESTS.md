@@ -9,3 +9,5 @@
 > continue now, but pause the project right before my tokens run out for the week, so i can resume you later.
 
 > okay, stop at the next checkpoint and ill tell you when to resume
+
+> continue
