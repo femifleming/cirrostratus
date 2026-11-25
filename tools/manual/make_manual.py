@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds docs/Dobbeltrap-Manual.pdf (and docs/img/*.png) from docs/MANUAL.md.
+"""Builds docs/fletchfoorth-manual.pdf (and docs/img/*.png) from docs/MANUAL.md.
 
 A <!-- FIG name --> marker becomes a drawing of the Stages panel (panel.py)
 in the state FIGS[name] describes. Needs Pillow, `markdown` and Chrome."""
@@ -116,22 +116,22 @@ def build():
         return '<img class="panel" src="img/%s.png" width="260" align="right" alt="Stages panel: %s">\n' % (name, name)
 
     text = re.sub(r"<!-- FIG (\w+) -->\n", fig, text)
-    open(os.path.join(DOCS, "Dobbeltrap-Manual.md"), "w").write(text)
+    open(os.path.join(DOCS, "fletchfoorth-manual.md"), "w").write(text)
     body = markdown.markdown(text, extensions=["tables"])
     body = re.sub(r"<h2>(?=(1|2|3|4|5|6|7|8|9|10|11)\. )", '<h2 class="page">', body)
     parts = re.split(r"(?=<h[23][ >])", body)
     body = parts[0] + "".join("<section>%s</section>" % p for p in parts[1:])
-    html = ('<!doctype html><html><head><meta charset="utf-8"><title>Dobbeltrap</title><style>'
+    html = ('<!doctype html><html><head><meta charset="utf-8"><title>fletchfoorth</title><style>'
             + CSS % dict(f=FONTS) + "</style></head><body>" + body + "</body></html>")
     html_path = os.path.join(DOCS, "manual.html")
     open(html_path, "w").write(html)
-    pdf = os.path.join(DOCS, "Dobbeltrap-Manual.pdf")
+    pdf = os.path.join(DOCS, "fletchfoorth-manual.pdf")
     if os.path.exists(pdf):
         os.remove(pdf)
     chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     subprocess.run([chrome, "--headless", "--disable-gpu", "--no-pdf-header-footer",
                     "--allow-file-access-from-files",
-                    "--user-data-dir=" + tempfile.mkdtemp(prefix="dobbel_chrome_"),
+                    "--user-data-dir=" + tempfile.mkdtemp(prefix="fletchfoorth_chrome_"),
                     "--print-to-pdf=" + pdf, "file://" + html_path],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if not os.path.exists(pdf) or os.path.getsize(pdf) < 10000:

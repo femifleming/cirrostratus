@@ -420,7 +420,7 @@ void ProcessTest(IOBuffer::Block* block, size_t size) {
 }
 
 // ---------------------------------------------------------------------------
-// Dobbeltrap
+// fletchfoorth
 //
 // The engine and its buffers live in the memory of the six segment
 // generators, which are idle in this mode (RAM is otherwise full). Entering
@@ -432,7 +432,7 @@ namespace {
 const size_t kDobbelEngineBytes = (sizeof(dobbel::Engine) + 7) & ~7;
 static_assert(
     kDobbelEngineBytes + sizeof(dobbel::Memory) <= sizeof(segment_generator),
-    "Dobbeltrap does not fit in the segment generators' memory");
+    "fletchfoorth does not fit in the segment generators' memory");
 
 dobbel::Engine* dobbel_engine = NULL;
 bool dobbel_active = false;

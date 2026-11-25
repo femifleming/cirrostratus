@@ -63,7 +63,7 @@ bool Settings::Init() {
   
   bool success = chunk_storage_.Init(&persistent_data_, &state_);
 
-  // Dobbeltrap: defaults first (a blank page is formatted with them).
+  // fletchfoorth: defaults first (a blank page is formatted with them).
   dobbel_marker_.magic = 0x444f4242;
   dobbel_.Init();
   dobbel_storage_.Init(&dobbel_marker_, &dobbel_);

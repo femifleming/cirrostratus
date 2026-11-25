@@ -9,7 +9,7 @@ enum MultiMode {
   MULTI_MODE_SIX_EG = 3,
   MULTI_MODE_OUROBOROS = 1,
   MULTI_MODE_OUROBOROS_ALTERNATE = 4,
-  MULTI_MODE_DOBBEL = 6  // Dobbeltrap: every segment its own instrument
+  MULTI_MODE_DOBBEL = 6  // fletchfoorth: every segment its own instrument
 };
 }
 

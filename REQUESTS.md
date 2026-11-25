@@ -11,3 +11,7 @@
 > okay, stop at the next checkpoint and ill tell you when to resume
 
 > continue
+
+> Call it Fletchfoorth
+
+> lowercase

@@ -1,4 +1,4 @@
-// Dobbeltrap engine. See dobbel.h.
+// fletchfoorth engine. See dobbel.h.
 
 #include "stages/dobbel.h"
 

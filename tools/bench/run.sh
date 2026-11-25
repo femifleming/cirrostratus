@@ -1,5 +1,5 @@
 #!/bin/sh
-# Dobbeltrap CPU benchmark on QEMU's Cortex-M4F (netduinoplus2 model).
+# fletchfoorth CPU benchmark on QEMU's Cortex-M4F (netduinoplus2 model).
 set -e
 cd "$(dirname "$0")/../.."
 OUT=build/bench

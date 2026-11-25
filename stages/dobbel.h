@@ -1,4 +1,4 @@
-// Dobbeltrap: a Stages mode where every segment is its own instrument.
+// fletchfoorth: a Stages mode where every segment is its own instrument.
 //
 // Five segment types, each with its own flavours:
 //   RANDOM     - slewed random voltages, seven kinds

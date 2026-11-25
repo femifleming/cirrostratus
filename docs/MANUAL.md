@@ -1,17 +1,16 @@
-# Dobbeltrap
+# fletchfoorth
 
-### *a staircase of dice for Stages*
+### *every segment its own instrument, for Stages*
 
 **Version 1.0**
 
 <!-- FIG overview -->
 
-**Dobbeltrap** (Dutch: *dobbel* = dice, *trap* = staircase) is a new mode for
-Mutable Instruments **Stages**, built on [BRIBESTAGES](https://github.com/thisisbribery/bribestages)
-(qiemem's bipolar firmware plus segment linking, envelope followers and sync
-LFOs).
+**fletchfoorth** is a new mode for Mutable Instruments **Stages**, built on
+[BRIBESTAGES](https://github.com/thisisbribery/bribestages) (qiemem's bipolar
+firmware plus segment linking, envelope followers and sync LFOs).
 
-In Dobbeltrap every one of the six segments is its own instrument. Tap a
+In fletchfoorth every one of the six segments is its own instrument. Tap a
 segment's button and it becomes the next type:
 
 | Light | Type | What it is |
@@ -25,7 +24,7 @@ segment's button and it becomes the next type:
 Every type has several **flavours**, and every segment remembers its own
 flavour, settings and extra options for each type.
 
-Everything BRIBESTAGES does still works in its own modes. Dobbeltrap is one
+Everything BRIBESTAGES does still works in its own modes. fletchfoorth is one
 more mode next to them.
 
 ---
@@ -37,7 +36,7 @@ damaged by a failed attempt, so you can always try again.
 
 **You need:** a computer or phone with a headphone jack (a wired USB headphone
 adapter works, Bluetooth doesn't), a 3.5 mm patch cable, and
-`dobbeltrap-v1.0.wav` (or `dobbeltrap-v1.0-flipped.wav` for a module mounted
+`fletchfoorth-v1.0.wav` (or `fletchfoorth-v1.0-flipped.wav` for a module mounted
 upside down).
 
 <!-- FIG install -->
@@ -58,18 +57,18 @@ upside down).
 out. Press button 6, raise slider 6, and play the file again from the start.
 
 **Your settings:** BRIBESTAGES and qiemem settings (segment types, links,
-mode) are kept. Dobbeltrap keeps its own settings in a separate corner of
+mode) are kept. fletchfoorth keeps its own settings in a separate corner of
 the memory, so switching modes never disturbs either. To go back, flash
 BRIBESTAGES or qiemem the same way.
 
 ---
 
-## 2. Getting into Dobbeltrap
+## 2. Getting into fletchfoorth
 
 <!-- FIG enter -->
 
 **Hold button 6 for 5 seconds.** The lights show the mode, and the module
-starts in Dobbeltrap. It remembers the mode through power cycles.
+starts in fletchfoorth. It remembers the mode through power cycles.
 
 The first time, the segments are what you probably want anyway: **1–4 Random,
 5 Envelope, 6 Oscillator**.
@@ -83,12 +82,12 @@ The first time, the segments are what you probably want anyway: **1–4 Random,
 | button 3 | Slow LFO |
 | button 4 | 6EG |
 | button 5 | Ouroboros. **Hold button 5 again** while in Ouroboros: Ouroboros alternate (and back) |
-| button 6 | **Dobbeltrap** |
+| button 6 | **fletchfoorth** |
 
 Ouroboros alternate used to have button 6; it is now behind a second hold of
 button 5, so no mode was lost.
 
-When you leave Dobbeltrap, the other modes start fresh (their settings are
+When you leave fletchfoorth, the other modes start fresh (their settings are
 kept; a running loop or LFO simply restarts).
 
 ---
@@ -344,12 +343,12 @@ go: your gesture loops.
 | Output | 1.0 = 8 V; randoms 0 to 8 V or ±5 V; oscillators ±5 V; gates 8 V (times the amplitude) |
 | Processing | 31,250 samples a second per segment; CV and knobs read 3,906 times a second |
 | CPU | measured on an emulated Cortex-M4: 588 instructions per sample for the default set, 1,125 for the heaviest (six additive oscillators); the chip has 2,304 cycles per sample |
-| Memory | Dobbeltrap uses the memory the normal Stages engines use; they rest while it runs |
+| Memory | fletchfoorth uses the memory the normal Stages engines use; they rest while it runs |
 | Settings | stored in their own flash pages (the last 4 KB), untouched by firmware updates and by the other modes |
-| Chaining | each module runs its own six segments; Dobbeltrap doesn't chain |
+| Chaining | each module runs its own six segments; fletchfoorth doesn't chain |
 | Tests | 111 host tests on the real engine code (pitch, V/oct, envelope times, rates, ranges, every flavour) and a check that the update file decodes to exactly the firmware |
 
-Dobbeltrap has so far been tested on the computer and an emulated
+fletchfoorth has so far been tested on the computer and an emulated
 processor, not yet on a real Stages.
 
 ---
@@ -364,4 +363,4 @@ processor, not yet on a real Stages.
   and the wave-rider.
 - **Iannis Xenakis**: the random walk and Gendy.
 
-Dobbeltrap is MIT-licensed.
+fletchfoorth is MIT-licensed.

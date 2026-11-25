@@ -1,4 +1,4 @@
-// Dobbeltrap CPU benchmark: instructions per sample for the whole engine
+// fletchfoorth CPU benchmark: instructions per sample for the whole engine
 // (six segments) on QEMU's Cortex-M4F model (-icount: one virtual nanosecond
 // per instruction; SysTick counts that time at 168 MHz). Stages runs at
 // 31250 Hz on a 72 MHz M4: 2304 cycles per sample for everything.
