@@ -30,3 +30,4 @@ What was asked for, in order (2026-11-23 → 24).
 > give a list of the new timings per buffer for each resoultion setting as well.
 > make a new video manual when your done, and make the msuic sliglty quaiter in this new one.
 > the manual needs to be visual and show me the module like the video
+> when the slider is all the way down the lights show binary 2 instead of 1, i think its skipping the first one on both sets of effects.

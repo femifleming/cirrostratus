@@ -107,6 +107,9 @@ class Ui {
   uint8_t menu_bank_;
   bool menu_follow_;     // POSITION has moved since the menu opened
   float menu_pos0_;
+  // The POSITION range the menu has seen (see ModeFromPosition).
+  float menu_lo_;
+  float menu_hi_;
   uint8_t menu_option_;
   uint8_t slot_;
   int8_t morph_slot_;

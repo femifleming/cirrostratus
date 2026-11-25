@@ -16,6 +16,8 @@ const uint32_t kLongPress = 1000;
 const uint32_t kPageTimeout = 6000;
 const uint32_t kSplashDuration = 3300;
 const int kModesPerBank = 15;
+const float kMenuLo = 0.12f;
+const float kMenuHi = 0.88f;
 
 void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
               Meter* meter) {
@@ -42,6 +44,8 @@ void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
   settings_dirty_ = false;
   panic_until_ = 0;
   mono_bass_until_ = 0;
+  menu_lo_ = kMenuLo;
+  menu_hi_ = kMenuHi;
 
   const SettingsData& d = settings_->data();
   menu_mode_ = d.mode;
@@ -277,9 +281,14 @@ void Ui::OnRelease(uint8_t id, uint32_t duration) {
 }
 
 uint8_t Ui::ModeFromPosition() const {
-  // POSITION spans the 15 modes of the current bank.
+  // POSITION spans the 15 modes of the current bank. A real slider doesn't
+  // read exactly 0..1 (pot + CV summing and the imported offset calibration
+  // put the bottom around 0.05-0.1, which used to land in zone 2), so the
+  // zones span the range the menu has actually seen: at least
+  // kMenuLo..kMenuHi, widened whenever the slider goes further.
   float p = cv_scaler_->raw_position();
-  int zone = static_cast<int>(p * kModesPerBank);
+  float q = (p - menu_lo_) / (menu_hi_ - menu_lo_);
+  int zone = static_cast<int>(q * kModesPerBank);
   if (zone < 0) zone = 0;
   if (zone >= kModesPerBank) zone = kModesPerBank - 1;
   int m = menu_bank_ * kModesPerBank + zone;
@@ -326,6 +335,14 @@ void Ui::DoEvents() {
     if (!menu_follow_ && fabsf(cv_scaler_->raw_position() - menu_pos0_) > 0.03f) {
       menu_follow_ = true;
     }
+  }
+  if (page_ == UI_PAGE_MODE_MENU) {
+    // Learn the slider's real ends while the menu is open (a hand on the
+    // slider, so a CV swing in the patch can't stretch it).
+    float p = cv_scaler_->raw_position();
+    p = p < 0.0f ? 0.0f : (p > 1.0f ? 1.0f : p);
+    if (p < menu_lo_) menu_lo_ = p;
+    if (p > menu_hi_) menu_hi_ = p;
   }
   if (page_ == UI_PAGE_MODE_MENU && menu_follow_) {
     uint8_t m = ModeFromPosition();
