@@ -443,6 +443,14 @@ float dobbel_out[kNumChannels][kBlockSize];
 // (its set-up may miss one; that isn't the engine running out of time).
 uint32_t dobbel_underruns = 0;
 uint32_t dobbel_grace = 0;
+uint32_t dobbel_saves = 0;
+
+// Load meter: the chip's own cycle counter around every render (interrupts
+// that land in it included), over 256 blocks; 18432 cycles per block of 8
+// samples at 72 MHz.
+uint32_t load_cycles = 0;
+uint32_t load_blocks = 0;
+const uint32_t kCyclesPerBlock = 72000000 / 31250 * kBlockSize;
 
 void EnterDobbel() {
   uint8_t* base = reinterpret_cast<uint8_t*>(&segment_generator[0]);
@@ -451,6 +459,10 @@ void EnterDobbel() {
   dobbel_engine->Init(memory);
   dobbel_active = true;
   dobbel_grace = 2000;  // half a second
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CYCCNT = 0;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+  load_cycles = load_blocks = 0;
 }
 
 void LeaveDobbel() {
@@ -466,6 +478,14 @@ void LeaveDobbel() {
 }  // namespace
 
 void ProcessDobbel(IOBuffer::Block* block, size_t size) {
+  const uint32_t start = DWT->CYCCNT;
+  // A settings save (every change, when the button is let go) stalls the
+  // chip while it writes flash: that miss isn't the engine running out of
+  // time, so the overload light ignores the next quarter second.
+  if (settings.saves() != dobbel_saves) {
+    dobbel_saves = settings.saves();
+    dobbel_grace = 1000;
+  }
   if (io_buffer.underruns() != dobbel_underruns) {
     dobbel_underruns = io_buffer.underruns();
     if (!dobbel_grace) ui.set_dobbel_overrun();
@@ -487,6 +507,13 @@ void ProcessDobbel(IOBuffer::Block* block, size_t size) {
     for (size_t i = 0; i < size; ++i) {
       block->output[ch][i] = settings.dac_code(ch, dobbel_out[ch][i]);
     }
+  }
+  load_cycles += DWT->CYCCNT - start;
+  if (++load_blocks == 256) {
+    // 96 = the whole time; 255 = more than 2.6 times it
+    uint32_t load = load_cycles / (kCyclesPerBlock * 256 / 96);
+    ui.set_dobbel_load(load > 255 ? 255 : load);
+    load_cycles = load_blocks = 0;
   }
 }
 

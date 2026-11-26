@@ -86,14 +86,17 @@ bool Settings::Init() {
 }
 
 void Settings::SavePersistentData() {
+  ++saves_;  // (before: the flash write stalls the chip)
   chunk_storage_.SavePersistentData();
 }
 
 void Settings::SaveState() {
+  ++saves_;  // (before: the flash write stalls the chip)
   chunk_storage_.SaveState();
 }
 
 void Settings::SaveDobbel() {
+  ++saves_;  // (before: the flash write stalls the chip)
   dobbel_storage_.SaveState();
 }
 

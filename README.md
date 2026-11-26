@@ -23,7 +23,7 @@ It is built on [BRIBESTAGES](https://github.com/thisisbribery/bribestages) (qiem
 
 ## Download
 
-[`firmware/fletchfoorth-v1.3.wav`](firmware/fletchfoorth-v1.3.wav) for a module mounted normally, [`firmware/fletchfoorth-v1.3-flipped.wav`](firmware/fletchfoorth-v1.3-flipped.wav) upside down (SHA-256 in `firmware/SHA256SUMS.txt`). Also on the [releases page](../../releases).
+[`firmware/fletchfoorth-v1.3.1.wav`](firmware/fletchfoorth-v1.3.1.wav) for a module mounted normally, [`firmware/fletchfoorth-v1.3.1-flipped.wav`](firmware/fletchfoorth-v1.3.1-flipped.wav) upside down (SHA-256 in `firmware/SHA256SUMS.txt`). Also on the [releases page](../../releases).
 
 ## Install
 
@@ -39,7 +39,7 @@ The module updates from an audio file; the updater can't be damaged by a failed 
 
 All six button lights blinking red: press button 6, raise slider 6, play again from the start. Upside-down module: use the `-flipped` file, mirrored (leftmost segment). Then **hold button 6 for 5 seconds** to enter fletchfoorth.
 
-Your BRIBESTAGES / qiemem settings are kept; fletchfoorth stores its own settings separately, in the last 4 KB of flash. (Coming from fletchfoorth 1.0: its settings start fresh once, they grew. 1.1 → 1.3 keeps them.)
+Your BRIBESTAGES / qiemem settings are kept; fletchfoorth stores its own settings separately, in the last 4 KB of flash. (Coming from fletchfoorth 1.0: its settings start fresh once, they grew. 1.1 → 1.3.1 keeps them.)
 
 ## Build
 
@@ -56,7 +56,7 @@ Add `FLIPPED=1` for the upside-down build.
 
 **Tests** (no hardware): `make -f stages/test/dobbel.mk test` runs the engine on the computer with sanitizers (713 checks): pitch and 1 V/oct, envelope times, ratchets, loop, random rates, ranges and clocked chance, orbit, kin, Turing, logistic, Lorenz, coin, dust, cellular, follower, transient, slew, looper, crush, FM, rider, the wave bank and the oscillators' alias levels; the scales to the cent, hold, comparator, filter, VCA, ring, comb pitch, echo time, every cord, the stair, the weather, Gendy rows, dream drift, and a storm of every type, flavour and option with cords on and the controls thrown.
 
-**CPU:** `tools/bench/run.sh` runs the engine on QEMU's Cortex-M4F and prints instructions per sample for six segments of every flavour (worst 1156, default layout 651; Stages has 2304 cycles per sample, and from flash it needs more than one per instruction: if the module ever misses a block, its button lights flicker red).
+**CPU:** `tools/bench/run.sh` runs the engine on QEMU's Cortex-M4F and prints instructions per sample for six segments of every flavour (worst 1156, default layout 651; Stages has 2304 cycles per sample, and from flash it needs more than one per instruction: if the module ever misses a block, its button lights flicker red; hold buttons 5 and 6 for 1 s and the slider lights show the real load, from the chip's cycle counter). `BENCH_DEFS=-DBENCH_JITTER=0.004f` adds ADC-like noise to every control; each line also shows the worst block.
 
 **Wave bank:** `python3 tools/make_bank.py` writes `stages/dobbel_bank.cc` (16 waves, band-limited per octave, 8 to 16 points per harmonic, in flash).
 

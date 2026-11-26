@@ -2,7 +2,7 @@
 
 ### *every segment its own instrument, for Stages*
 
-**Version 1.3**
+**Version 1.3.1**
 
 <!-- FIG overview -->
 
@@ -28,6 +28,16 @@ flavour, settings and extra options for each type.
 Segments can also take each other's outputs through **cords**, the same
 kinds as in Sleepcousonique (section 10), and the whole panel can **dream**
 when you leave it alone (section 11).
+
+**New in 1.3.1:** the overload light fired on the module, so this version
+gives the engine more room and lets you see how busy the chip is. The audio
+now runs up to three blocks ahead instead of one (0.8 ms instead of 0.26 ms),
+so a block that runs long borrows time from the others; a block is only
+missed when the chip is out of time on average. And there is a **load meter**:
+hold buttons 5 and 6 together for a second and the slider lights show how
+much of the chip's time the engine uses, read from the chip's own cycle
+counter (section 14). The light no longer flickers when you change a type or a
+flavour: that was the settings save, not the engine. Your settings are kept.
 
 **New in 1.3:** the oscillators are cleaner still, and the whole engine is
 lighter. Morph and the wave bank now keep everything that isn't the note
@@ -62,7 +72,7 @@ damaged by a failed attempt, so you can always try again.
 
 **You need:** a computer or phone with a headphone jack (a wired USB headphone
 adapter works, Bluetooth doesn't), a 3.5 mm patch cable, and
-`fletchfoorth-v1.3.wav` (or `fletchfoorth-v1.3-flipped.wav` for a module mounted
+`fletchfoorth-v1.3.1.wav` (or `fletchfoorth-v1.3.1-flipped.wav` for a module mounted
 upside down).
 
 <!-- FIG install -->
@@ -145,6 +155,7 @@ Each segment works the same way, whatever its type:
 | **Hold + tap the button on its left** | the **cord** into this segment: none → hall → fog → water → door → range → maybe (section 10) |
 | **Hold both + turn this knob** | the cord's **amount**, −1 to +1 |
 | **Buttons 1 and 2 together, 2 s** | **dream drift** on or off (section 11) |
+| **Buttons 5 and 6 together, 1 s** | **load meter** while you hold them: the slider lights fill from slider 1, each a sixth of the chip's time (section 14) |
 
 While you hold a button, its slider and knob are frozen: moving them sets the
 flavour and the hidden setting without changing the sound. When you let go,
@@ -498,7 +509,9 @@ go: your gesture loops.
 | Output | −8 to +8 V at most; randoms 0 to 8 V or ±5 V; oscillators and effects ±5 V; chaos and stair gates 8 V (times the amplitude); transient, compare and quantise triggers 5 V (compare up to 8 V) |
 | Processing | 31,250 samples a second per segment (Effects process their left neighbour at that rate); CV and knobs read 3,906 times a second; cords once per block (3,906 a second) |
 | CPU | measured on an emulated Cortex-M4: 651 instructions per sample for the default set, 1,156 for the heaviest (six Fold or six Morph oscillators), 1,108 for six effects (six choruses); the chip has 2,304 cycles per sample, and running from flash it needs more than one cycle per instruction |
-| Overload light | if the processing ever misses its deadline (the DAC would play a stale block: a gritty, chopped sound), all six **button lights flicker red** for half a second. If you see it, the set of segments is too heavy for the chip: please report which types and flavours were running |
+| Overload light | if the processing ever misses its deadline (the DAC would play a stale block: a gritty, chopped sound), all six **button lights flicker red** for half a second. (Not for the moment after a settings save: every change is saved to flash when you let go of the button, and the chip can't run anything while it writes flash, so a block or two goes missing there, as on stock Stages.) If you see it, the set of segments is too heavy for the chip: please report which types and flavours were running, and what the load meter shows |
+| Load meter | hold buttons 5 and 6 together for 1 s: the slider lights show the share of the chip's time the engine uses (interrupts that land in it included), measured with the chip's own cycle counter over the last 65 ms. Each light is a sixth; the last lit one glows dimmer for a part. All six full = out of time |
+| Buffering | the engine runs up to three blocks of 8 samples ahead of the outputs (0.8 ms), so one slow block doesn't miss its deadline (Stages had one block) |
 | Memory | fletchfoorth uses the memory the normal Stages engines use; they rest while it runs (16.7 KB of their 23.6 KB); the wave bank is in flash: 16 waves × 8 band-limited octave tables, 69 KB |
 | Settings | stored in their own flash pages (the last 4 KB), untouched by firmware updates and by the other modes |
 | Chaining | each module runs its own six segments; fletchfoorth doesn't chain |

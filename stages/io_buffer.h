@@ -36,7 +36,11 @@
 
 namespace stages {
 
-const size_t kNumBlocks = 2;
+// Four blocks of 8 (fletchfoorth 1.3.1; Stages had two): the render runs up
+// to three blocks ahead of the DAC, so a block that takes longer than its
+// 256 us (a 1 kHz UI tick landing in it, a checksum block) borrows from the
+// others. Only running out of time on average misses one. Latency 0.8 ms.
+const size_t kNumBlocks = 4;
 const size_t kBlockSize = 8;
 const size_t kNumChannels = 6;
 
@@ -92,9 +96,12 @@ class IOBuffer {
     io_frame_ += size;
     if (io_frame_ >= kBlockSize) {
       io_frame_ -= kBlockSize;
-      // The next block should be rendered by now (the main loop then waits
-      // on this one): if not, the DAC is about to play a stale block.
-      if (render_block_ != io_block_) ++underruns_;
+      // The next block should be rendered by now: if the render is still
+      // on it, the DAC is about to play a stale block. (render == io: the
+      // render is caught up; render == io + 1: it hasn't finished io + 1.)
+      if ((render_block_ + kNumBlocks - io_block_) % kNumBlocks == 1) {
+        ++underruns_;
+      }
       io_block_ = (io_block_ + 1) % kNumBlocks;
     }
     return s;

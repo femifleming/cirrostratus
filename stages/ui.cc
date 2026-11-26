@@ -102,6 +102,8 @@ void Ui::Init(Settings* settings, ChainState* chain_state, CvReader* cv_reader) 
   drift_flash_ = 0;
   drift_flash_on_ = false;
   overrun_flash_ = 0;
+  dobbel_load_ = 0;
+  load_hold_ = 0;
 }
 
 void Ui::Poll() {
@@ -669,6 +671,8 @@ void Ui::UpdateLEDs() {
 // the cord into the held segment steps none -> hall -> fog -> water -> door
 // -> range -> maybe -> none. Hold both and turn the held segment's knob: the
 // cord's amount (-1 to +1). Dream drift: hold buttons 1 and 2 together for 2 s.
+// Load meter: hold buttons 5 and 6 together for 1 s; the slider lights show
+// how much of the chip's time the engine uses for as long as they are held.
 bool Ui::PollDobbel(uint8_t pressed) {
   dobbel::Config* config = settings_->mutable_dobbel();
   // dream drift on / off
@@ -685,6 +689,14 @@ bool Ui::PollDobbel(uint8_t pressed) {
     drift_hold_ = 0;
   }
   if (drift_flash_ > 0) --drift_flash_;
+  // load meter
+  if ((pressed & 0x30) == 0x30 && !((changing_slider_prop_ | changing_pot_prop_) & 0x30)) {
+    if (load_hold_ < 1000 && ++load_hold_ == 1000) {
+      press_time_[4] = press_time_[5] = -1;  // no tap, no alt on release
+    }
+  } else {
+    load_hold_ = 0;
+  }
 
   for (uint8_t i = 0; i < kNumChannels; ++i) {
     dobbel::SegmentConfig& seg = config->segment[i];
@@ -857,6 +869,11 @@ void Ui::UpdateDobbelLEDs(uint32_t ms) {
     const uint8_t left = (i + kNumChannels - 1) % kNumChannels;
     if (switches_.pressed(i) && (changing_pot_prop_ & (1 << i))) {
       level = switches_.pressed(left) ? seg.cord_amount >> 4 : seg.aux[seg.type] >> 4;
+    }
+    if (load_hold_ >= 1000) {
+      // a bar from slider 1: each light a sixth of the chip's time
+      int v = static_cast<int>(dobbel_load_) - 16 * static_cast<int>(i);
+      level = v < 0 ? 0 : (v > 16 ? 16 : v);
     }
     leds_.set(LED_GROUP_SLIDER + i, level > pwm ? LED_COLOR_GREEN : LED_COLOR_OFF);
   }

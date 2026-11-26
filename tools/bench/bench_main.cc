@@ -50,6 +50,13 @@ static Engine engine;
 static stmlib::GateFlags gates[kNumSegments][kMaxBlockSize];
 static float out[kNumSegments][kMaxBlockSize];
 
+static uint32_t worst_block = 0;
+static uint32_t rng = 1;
+static float Jitter(float amount) {
+  rng = rng * 1664525u + 1013904223u;
+  return amount * ((rng >> 8) * (1.0f / 16777216.0f) - 0.5f);
+}
+
 static uint32_t Measure(const Config& config) {
   Input in[kNumSegments];
   for (int i = 0; i < kNumSegments; ++i) {
@@ -64,9 +71,17 @@ static uint32_t Measure(const Config& config) {
   engine.Init(&memory);
   const int kBlocks = 2000;
   uint64_t total = 0;
+  worst_block = 0;
   for (int b = 0; b < kBlocks; ++b) {
     for (int i = 0; i < kNumSegments; ++i) {
       in[i].cv_raw = (b & 1) ? 0.3f : -0.3f;
+#ifdef BENCH_JITTER
+      // ADC noise as on the module: every value moves a little every block.
+      in[i].slider = 0.55f + 0.05f * i + Jitter(BENCH_JITTER);
+      in[i].pot = 0.6f + Jitter(BENCH_JITTER);
+      in[i].cv = 0.01f + Jitter(BENCH_JITTER);
+      in[i].cv_slider = in[i].slider;
+#endif
       for (size_t n = 0; n < kMaxBlockSize; ++n) {
         const int t = (b * 8 + n) % 1000;
         gates[i][n] = (stmlib::GateFlags)(t < 500 ? (stmlib::GATE_FLAG_HIGH | (t == 0 ? stmlib::GATE_FLAG_RISING : 0))
@@ -75,7 +90,9 @@ static uint32_t Measure(const Config& config) {
     }
     uint64_t a = Ticks();
     engine.Process(config, in, out, kMaxBlockSize);
-    total += Ticks() - a;
+    const uint64_t d = Ticks() - a;
+    total += d;
+    if (b > 8 && d > worst_block) worst_block = (uint32_t)d;
   }
   return (uint32_t)(total * 1000ull / 168ull / (kBlocks * kMaxBlockSize));
 }
@@ -101,11 +118,15 @@ int main() {
       const uint32_t insns = Measure(config);
       if (insns > worst) worst = insns;
       Print("six x "); Print(kTypeNames[t]); Print(" "); PrintNum(f + 1);
-      Print(": "); PrintNum(insns); Print(" insns/sample\n");
+      Print(": "); PrintNum(insns); Print(" insns/sample, worst block ");
+      PrintNum((uint32_t)(worst_block * 1000ull / 168ull / kMaxBlockSize));
+      Print("\n");
     }
   }
   config.Init();  // the default: 4 random, envelope, oscillator
-  Print("default layout: "); PrintNum(Measure(config)); Print(" insns/sample\n");
+  Print("default layout: "); PrintNum(Measure(config)); Print(" insns/sample, worst block ");
+  PrintNum((uint32_t)(worst_block * 1000ull / 168ull / kMaxBlockSize));
+  Print("\n");
   Print("worst: "); PrintNum(worst); Print(" insns/sample (budget 2304 cycles for everything)\n");
   Exit();
   return 0;
