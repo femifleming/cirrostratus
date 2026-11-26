@@ -2,7 +2,7 @@
 
 ### *a thin, high sheet of cloud for the Monsoon*
 
-**Version 1.2.0**
+**Version 1.3.0**
 
 <img class="panel" src="img/cover.png" width="300" align="right" alt="Monsoon panel: cover">
 
@@ -32,6 +32,12 @@ This firmware goes one layer higher, thinner and brighter:
 
 It is still your Monsoon: same panel, same jacks, same bootloader. Only the
 weather changes.
+
+**New in 1.3.0:** SPECTRAL has a second option, **SMEAR**, the spectral
+smear from Sleepcousonique's Wingie mode (section 5, mode 2). RESONATOR,
+PLATES and GAMELAN no longer retune on the tiny wobble every knob has, which
+made RESONATOR glitch and stop answering the mode menu; and if a mode ever
+runs out of time, it drops out for a moment instead of locking the panel.
 
 ---
 
@@ -408,7 +414,23 @@ lower buffer quality (3.7).
 | ⑧ BAL | noon = as before. Turning it shifts every partial by the same number of Hz (not a ratio), so harmonic sounds go inharmonic. Left shifts down, right shifts up, exponential: a few Hz near noon, ±1 kHz at the ends |
 | ⑨ FBK | regeneration: the last output spectrum comes back as a floor under the next frame (held 0.1 → 8 s). On its own it sustains; with BAL or PITCH set every pass moves the partials again, so they spiral up or down |
 | ⑩ RVB | phase diffusion: random phases blend in, coherent → a whispered wash in the same colours |
-| Keeps / morph | the frozen spectrum / yes |
+| ⑪ Options | 1 as above · 2 SMEAR (below) |
+| ⑫ Keeps / morph | the frozen spectrum / yes (option 1) |
+
+**Option 2 · SMEAR** — *a photograph left out in the rain.* The spectral
+smear from Sleepcousonique's Wingie mode, the same sound: the spectrum is
+blurred in time and a little across frequency, and its partials carry on.
+512-point transform, 4× overlap, 16 ms latency. Mono, like the Wingie's: the
+mid (L+R) is smeared and comes out of both sides.
+
+<img class="panel" src="img/mode02.png" width="300" align="right" alt="Monsoon panel: mode 2 SPECTRAL">
+
+| Control | |
+|---|---|
+| ① DENSITY | blur: none (the sound as it is) → seconds; long blurs beat and shimmer |
+| ② FREEZE | hold: the blur stops where it is |
+| ③ RVB | reverb (the module's FDN reverb: SMEAR's space) |
+| Keeps / morph | nothing / no |
 
 #### 3 · CONVOLVE — freeze captures the impulse response
 *Forecast: the room you're standing in is whatever you just played.*

@@ -2,7 +2,7 @@
 
 ### *a thin, high sheet of cloud for the Monsoon*
 
-**Version 1.2.0**
+**Version 1.3.0**
 
 <!-- PANEL cover -->
 
@@ -31,6 +31,12 @@ This firmware goes one layer higher, thinner and brighter:
 
 It is still your Monsoon: same panel, same jacks, same bootloader. Only the
 weather changes.
+
+**New in 1.3.0:** SPECTRAL has a second option, **SMEAR**, the spectral
+smear from Sleepcousonique's Wingie mode (section 5, mode 2). RESONATOR,
+PLATES and GAMELAN no longer retune on the tiny wobble every knob has, which
+made RESONATOR glitch and stop answering the mode menu; and if a mode ever
+runs out of time, it drops out for a moment instead of locking the panel.
 
 ---
 
