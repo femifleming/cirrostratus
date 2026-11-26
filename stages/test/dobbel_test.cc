@@ -580,8 +580,406 @@ static void TestConfig() {
   CHECK(c.segment[2].type == TYPE_RANDOM && c.segment[3].flavour[TYPE_CHAOS] == 0, "sanitize");
   c.version = 0;
   c.Sanitize();
-  CHECK(c.version == 1 && c.segment[5].type == TYPE_OSCILLATOR, "unknown version resets");
+  CHECK(c.version == 2 && c.segment[5].type == TYPE_OSCILLATOR, "unknown version resets");
   CHECK(sizeof(Config) % 4 == 0, "Config is %zu bytes (keep a multiple of 4)", sizeof(Config));
+}
+
+// ---------------------------------------------------------------------------
+// 1.1: quantiser, hold, comparator, effects, cords, stair, weather, Gendy
+// row, dream drift.
+
+static float Rms(const std::vector<float>& v, size_t from = 0) {
+  double a = 0; for (size_t n = from; n < v.size(); ++n) a += v[n] * v[n];
+  return sqrt(a / (v.size() - from));
+}
+
+// The period (in samples) where the autocorrelation peaks, between lo and hi.
+static int AutoPeriod(const std::vector<float>& v, int lo, int hi) {
+  const size_t start = v.size() / 2;
+  double mean = 0; for (size_t n = start; n < v.size(); ++n) mean += v[n];
+  mean /= (v.size() - start);
+  int best = lo; double bv = -1e30;
+  for (int lag = lo; lag <= hi; ++lag) {
+    double a = 0;
+    for (size_t n = start; n + lag < v.size(); ++n) a += (v[n] - mean) * (v[n + lag] - mean);
+    if (a > bv) { bv = a; best = lag; }
+  }
+  return best;
+}
+
+static float Last(Rig& r, int i, float seconds) {
+  std::vector<float> v = r.Run(i, seconds);
+  return v.back();
+}
+
+static void TestQuantiser() {
+  // chromatic = scale 6 (index 5): 9.87 semitones in -> 10 out
+  {
+    Rig r;
+    r.Set(0, TYPE_PROCESSOR, PROC_QUANTISE);
+    r.in[0].pot = 5.5f / kNumScales;
+    r.Slider(0, 0.5f);
+    r.Cv(0, 9.87f / 96.0f);
+    const float v = Last(r, 0, 0.05f);
+    CHECK(fabsf(v - 10.0f / 96.0f) < 1e-4f, "chromatic: 9.87 st -> %.4f st", v * 96.0f);
+    r.Slider(0, 0.99f);   // +2 octaves
+    const float w = Last(r, 0, 0.01f);
+    CHECK(fabsf(w - (10.0f / 96.0f + 0.25f)) < 1e-4f, "transpose +2 oct: %.4f st", w * 96.0f);
+  }
+  // major (index 6): 1.3 st -> 2 st
+  {
+    Rig r;
+    r.Set(0, TYPE_PROCESSOR, PROC_QUANTISE);
+    r.in[0].pot = 6.5f / kNumScales;
+    r.Cv(0, 1.3f / 96.0f);
+    const float v = Last(r, 0, 0.05f);
+    CHECK(fabsf(v - 2.0f / 96.0f) < 1e-4f, "major: 1.3 st -> %.3f st", v * 96.0f);
+    // just major (index 0): 3.9 st -> the just third, 386.3 cents
+    r.in[0].pot = 0.5f / kNumScales;
+    r.Cv(0, 3.9f / 96.0f);
+    const float j = Last(r, 0, 0.05f);
+    CHECK(fabsf(j * 9600.0f - 386.314f) < 0.1f, "just major third: %.2f cents", j * 9600.0f);
+  }
+  // Bohlen-Pierce (index 25): 13 equal steps of 3:1 (146.3 cents)
+  {
+    Rig r;
+    r.Set(0, TYPE_PROCESSOR, PROC_QUANTISE);
+    r.in[0].pot = 25.5f / kNumScales;
+    r.Cv(0, 300.0f / 9600.0f);
+    const float v = Last(r, 0, 0.05f);
+    CHECK(fabsf(v * 9600.0f - 2.0f * 1901.955f / 13.0f) < 0.1f, "Bohlen-Pierce: %.2f cents", v * 9600.0f);
+  }
+  // root: hold + knob 3/12 -> chromatic shifted, still chromatic; clocked: only on the gate
+  {
+    Rig r;
+    r.Set(0, TYPE_PROCESSOR, PROC_QUANTISE);
+    r.in[0].pot = 6.5f / kNumScales;   // major
+    r.config.segment[0].aux[TYPE_PROCESSOR] = static_cast<uint8_t>(2.5f / 11.99f * 255.0f);  // root D
+    r.Cv(0, 2.2f / 96.0f);
+    const float v = Last(r, 0, 0.05f);
+    CHECK(fabsf(v * 96.0f - 2.0f) < 1e-3f, "D major: 2.2 st -> %.3f (D)", v * 96.0f);
+    r.in[0].patched = true;
+    r.Cv(0, 6.1f / 96.0f);
+    const float held = Last(r, 0, 0.05f);
+    CHECK(fabsf(held * 96.0f - 2.0f) < 1e-3f, "clocked: no gate, no new note (%.3f)", held * 96.0f);
+    r.gate_high[0] = true;
+    const float now = Last(r, 0, 0.01f);
+    CHECK(fabsf(now * 96.0f - 6.0f) < 1e-3f, "clocked: the gate takes F# (%.3f)", now * 96.0f);
+  }
+}
+
+static void TestHoldAndCompare() {
+  Rig r;
+  r.Set(0, TYPE_PROCESSOR, PROC_SAMPLE);
+  r.in[0].patched = true;
+  r.in[0].pot = 0.0f;
+  r.Cv(0, 0.3f);
+  r.gate_high[0] = true; r.Run(0, 0.01f); r.gate_high[0] = false; r.Run(0, 0.01f);
+  r.Cv(0, -0.2f);
+  float v = Last(r, 0, 0.05f);
+  CHECK(fabsf(v - 0.3f) < 1e-4f, "sample and hold keeps 0.3 (%.3f)", v);
+  r.gate_high[0] = true; v = Last(r, 0, 0.01f);
+  CHECK(fabsf(v + 0.2f) < 1e-4f, "and takes -0.2 on the gate (%.3f)", v);
+
+  Rig q;
+  q.Set(0, TYPE_PROCESSOR, PROC_COMPARE);
+  q.Slider(0, (0.25f + 0.625f) / 1.625f);   // 2 V
+  q.in[0].pot = 0.0f;
+  q.Cv(0, 0.20f);   // 1.6 V
+  CHECK(Last(q, 0, 0.01f) == 0.0f, "comparator: 1.6 V < 2 V closed");
+  q.Cv(0, 0.30f);   // 2.4 V
+  CHECK(fabsf(Last(q, 0, 0.01f) - kAudioPeak) < 1e-5f, "comparator: 2.4 V > 2 V open at 5 V");
+}
+
+// segment 0: a sine at C4; segment 1: the effect
+static std::vector<float> Effect(int flavour, float slider, float pot, float aux, bool alt,
+                                 float seconds = 0.5f, int source_flavour = OSC_MORPH,
+                                 float source_slider = 0.5f, float source_pot = 0.0f) {
+  Rig r;
+  r.Set(0, TYPE_OSCILLATOR, source_flavour);
+  r.Slider(0, source_slider);
+  r.in[0].pot = source_pot;
+  r.Set(1, TYPE_EFFECT, flavour);
+  r.Slider(1, slider);
+  r.in[1].pot = pot;
+  r.config.segment[1].aux[TYPE_EFFECT] = static_cast<uint8_t>(aux * 255.0f);
+  if (alt) r.config.segment[1].alt |= 1 << TYPE_EFFECT;
+  return r.Run(1, seconds);
+}
+
+static void TestEffects() {
+  const std::vector<float> dry = Effect(FX_VCA, 1.0f, 0.5f, 0.0f, false);
+  const float dry_rms = Rms(dry, 4000);
+  CHECK(fabsf(dry_rms - kAudioPeak / sqrtf(2.0f)) < 0.01f, "VCA open: unity (%.3f)", dry_rms);
+  CHECK(Rms(Effect(FX_VCA, 0.0f, 0.5f, 0.0f, false), 4000) < 1e-4f, "VCA closed: silent");
+  // filter: a saw at C4 through a low-pass at ~80 Hz loses most of itself
+  const float open = Rms(Effect(FX_FILTER, 1.0f, 0.0f, 0.0f, false, 0.5f, OSC_MORPH, 0.5f, 0.6f), 4000);
+  const float shut = Rms(Effect(FX_FILTER, 0.2f, 0.0f, 0.0f, false, 0.5f, OSC_MORPH, 0.5f, 0.6f), 4000);
+  CHECK(shut < open * 0.3f, "low-pass at 80 Hz: %.3f vs open %.3f", shut, open);
+  const float hp = Rms(Effect(FX_FILTER, 0.2f, 0.0f, 1.0f, false, 0.5f, OSC_MORPH, 0.5f, 0.6f), 4000);
+  CHECK(hp > open * 0.7f, "high-pass at 80 Hz keeps it: %.3f vs %.3f", hp, open);
+  // a resonant filter rings but stays bounded
+  std::vector<float> res = Effect(FX_FILTER, 0.5f, 1.0f, 0.5f, true, 1.0f, OSC_MORPH, 0.3f, 0.7f);
+  float pk = 0; for (float x : res) pk = fmaxf(pk, fabsf(x));
+  CHECK(pk <= 1.0f && Rms(res, 4000) > 0.01f, "resonance + drive bounded (peak %.2f)", pk);
+  // ring: a sine times a sine of the same pitch = twice the pitch
+  {
+    std::vector<float> ring = Effect(FX_RING, 0.5f, 1.0f, 0.0f, false);
+    const float f = Frequency(std::vector<float>(ring.begin() + 4000, ring.end()));
+    CHECK(fabsf(f - 2.0f * 261.63f) < 5.0f, "ring at the same pitch: %.1f Hz (2 x 261.6)", f);
+  }
+  // comb: excited by dust, it rings at its pitch (A3 = 220 Hz)
+  {
+    Rig r;
+    r.Set(0, TYPE_CHAOS, CHAOS_DUST);
+    r.Slider(0, 0.6f);
+    r.Set(1, TYPE_EFFECT, FX_COMB);
+    r.Slider(1, (57.0f - 24.0f) / 72.0f);
+    r.in[1].pot = 1.0f;
+    r.config.segment[1].aux[TYPE_EFFECT] = 0;
+    std::vector<float> v = r.Run(1, 1.0f);
+    const int p = AutoPeriod(v, 60, 400);
+    CHECK(fabsf(kSampleRate / p - 220.0f) < 3.0f, "comb rings at %.1f Hz (220)", kSampleRate / p);
+    float m = 0; for (float x : v) m = fmaxf(m, fabsf(x));
+    CHECK(m <= 1.0f, "comb bounded");
+  }
+  // echo: a click comes back after the slider's time
+  {
+    Rig r;
+    r.Set(0, TYPE_PROCESSOR, PROC_SLEW);
+    r.Slider(0, 0.0f); r.in[0].pot = 0.0f;
+    r.Set(1, TYPE_EFFECT, FX_ECHO);
+    r.Slider(1, 0.5f);
+    r.in[1].pot = 0.0f;
+    r.config.segment[1].aux[TYPE_EFFECT] = 255;   // all wet
+    r.Run(1, 0.05f);
+    r.Cv(0, 0.5f);
+    std::vector<float> a = r.Run(1, 0.002f);
+    r.Cv(0, 0.0f);
+    std::vector<float> v = r.Run(1, 0.3f);
+    const float expect = (4.0f + 0.5f * (kLooperLength - 8.0f)) * 8.0f / kSampleRate;
+    int at = -1; for (size_t n = 0; n < v.size(); ++n) if (v[n] > 0.1f) { at = n; break; }
+    const float t = (at + a.size()) / kSampleRate;
+    CHECK(at > 0 && fabsf(t - expect) < 0.004f, "echo after %.4f s (%.4f)", t, expect);
+  }
+  // chorus, drive, lo-fi: sound, bounded, and they do something
+  for (int f : { FX_CHORUS, FX_DRIVE, FX_LOFI }) {
+    for (int alt = 0; alt < 2; ++alt) {
+      std::vector<float> v = Effect(f, 0.7f, 0.7f, 0.7f, alt, 0.5f, OSC_MORPH, 0.5f, 0.3f);
+      float m = 0; for (float x : v) m = fmaxf(m, fabsf(x));
+      CHECK(m <= 1.0f && Rms(v, 4000) > 0.02f, "effect %d alt %d: rms %.3f peak %.2f", f, alt, Rms(v, 4000), m);
+    }
+  }
+  std::vector<float> lofi = Effect(FX_LOFI, 0.9f, 0.9f, 0.5f, false);
+  CHECK(Changes(lofi) < static_cast<int>(lofi.size()) / 8, "lo-fi holds (%d changes)", Changes(lofi));
+}
+
+static void TestCords() {
+  // segment 0 passes its CV jack straight out (slew 0); segment 1 too, so its
+  // output is exactly what the cord adds to its CV
+  struct { uint8_t kind; uint8_t amount; float in; float expect; const char* name; } cases[] = {
+    { CORD_HALL, 255, 0.3f, 0.3f, "hall" },
+    { CORD_HALL, 0, 0.3f, -0.3f, "hall, amount -1" },
+    { CORD_HALL, 191, 0.4f, 0.4f * (191 * 2.0f / 255.0f - 1.0f), "hall, amount +0.5" },
+    { CORD_DOOR, 255, -0.2f, 0.0f, "door shuts below 0 V" },
+    { CORD_DOOR, 255, 0.2f, 0.2f, "door opens above" },
+    { CORD_RANGE, 255, -0.3f, 0.3f, "range: the neighbour's swing (|lp| for slew) " },
+    { CORD_FOG, 255, 0.3f, 0.3f, "fog settles" },
+    { CORD_WATER, 255, 0.3f, 0.3f, "water settles" },
+  };
+  for (auto& k : cases) {
+    Rig r;
+    for (int i = 0; i < 2; ++i) {
+      r.Set(i, TYPE_PROCESSOR, PROC_SLEW);
+      r.Slider(i, 0.0f); r.in[i].pot = 0.0f;
+    }
+    r.config.segment[1].cord = k.kind;
+    r.config.segment[1].cord_amount = k.amount;
+    r.Cv(0, k.in);
+    const float v = Last(r, 1, 1.0f);
+    CHECK(fabsf(v - k.expect) < 2e-3f, "cord %s: %.4f (%.4f)", k.name, v, k.expect);
+  }
+  // fog is quick, water slow: 5 ms after a step
+  for (int kind : { CORD_FOG, CORD_WATER }) {
+    Rig r;
+    for (int i = 0; i < 2; ++i) { r.Set(i, TYPE_PROCESSOR, PROC_SLEW); r.Slider(i, 0.0f); r.in[i].pot = 0.0f; }
+    r.config.segment[1].cord = kind;
+    r.Run(1, 0.1f);
+    r.Cv(0, 0.5f);
+    const float v = Last(r, 1, 0.005f);
+    if (kind == CORD_FOG) CHECK(v > 0.2f && v < 0.45f, "fog after 5 ms: %.3f", v);
+    else CHECK(v > 0.02f && v < 0.1f, "water after 5 ms: %.3f", v);
+  }
+  // maybe: about half the swings of a slow wave get through
+  {
+    Rig r;
+    r.Set(0, TYPE_OSCILLATOR, OSC_MORPH);
+    r.Slider(0, 0.0f);   // C1, 32.7 Hz
+    r.Set(1, TYPE_PROCESSOR, PROC_SLEW);
+    r.Slider(1, 0.0f); r.in[1].pot = 0.0f;
+    r.config.segment[1].cord = CORD_MAYBE;
+    std::vector<float> v = r.Run(1, 6.0f);
+    int open = 0, total = 0;
+    const int period = static_cast<int>(kSampleRate / 32.70f);
+    for (size_t n = period / 4; n + period < v.size(); n += period) { ++total; if (fabsf(v[n]) > 0.1f) ++open; }
+    CHECK(open > total * 0.35f && open < total * 0.65f, "maybe: %d of %d swings through", open, total);
+  }
+  // segment 1 hears segment 6 (the row is a ring)
+  {
+    Rig r;
+    r.Set(5, TYPE_PROCESSOR, PROC_SLEW); r.Slider(5, 0.0f); r.in[5].pot = 0.0f; r.Cv(5, 0.25f);
+    r.Set(0, TYPE_PROCESSOR, PROC_SLEW); r.Slider(0, 0.0f); r.in[0].pot = 0.0f;
+    r.config.segment[0].cord = CORD_HALL;
+    CHECK(fabsf(Last(r, 0, 0.1f) - 0.25f) < 1e-3f, "segment 1 hears segment 6");
+  }
+  // a cord into an oscillator's CV is 1 V/oct: +1 V from the left = an octave up
+  {
+    Rig r;
+    r.Set(0, TYPE_PROCESSOR, PROC_SLEW); r.Slider(0, 0.0f); r.in[0].pot = 0.0f; r.Cv(0, 0.125f);
+    r.Set(1, TYPE_OSCILLATOR, OSC_MORPH); r.Slider(1, 0.5f); r.in[1].pot = 0.0f;
+    r.config.segment[1].cord = CORD_HALL;
+    std::vector<float> v = r.Run(1, 0.5f);
+    const float f = Frequency(std::vector<float>(v.begin() + 3000, v.end()));
+    CHECK(fabsf(f - 523.25f) < 3.0f, "cord into V/oct: %.1f Hz (C5)", f);
+  }
+}
+
+static void TestStair() {
+  Rig r;
+  const float heights[4] = { 0.1f, 0.3f, 0.5f, 0.7f };
+  for (int i = 0; i < 4; ++i) {
+    r.Set(i, TYPE_CHAOS, CHAOS_STAIR);
+    r.Slider(i, heights[i]);
+    r.in[i].pot = 1.0f;
+  }
+  r.in[0].patched = true;
+  std::vector<float> seen;
+  std::vector<int> gates;
+  for (int step = 0; step < 8; ++step) {
+    r.gate_high[0] = true; r.Run(0, 0.01f);
+    r.gate_high[0] = false; r.Run(0, 0.01f);
+    seen.push_back(r.out[0][7]);
+    gates.push_back((r.out[1][7] > 0) | ((r.out[2][7] > 0) << 1) | ((r.out[3][7] > 0) << 2));
+  }
+  bool order = true;
+  for (int k = 0; k < 8; ++k) order = order && fabsf(seen[k] - heights[(k + 1) % 4]) < 1e-4f;
+  CHECK(order, "stair: 0.3 0.5 0.7 0.1 ... (%.2f %.2f %.2f %.2f)", seen[0], seen[1], seen[2], seen[3]);
+  CHECK(gates[0] == 1 && gates[1] == 2 && gates[2] == 4 && gates[3] == 0,
+        "stair gates follow the step (%d %d %d %d)", gates[0], gates[1], gates[2], gates[3]);
+  r.in[2].pot = 0.0f;   // step 3 never plays
+  bool skipped = true;
+  for (int step = 0; step < 12; ++step) {
+    r.gate_high[0] = true; r.Run(0, 0.01f);
+    r.gate_high[0] = false; r.Run(0, 0.01f);
+    skipped = skipped && fabsf(r.out[0][7] - 0.5f) > 1e-3f;
+  }
+  CHECK(skipped, "a step whose knob is down is skipped");
+  // free running: the first knob is the speed
+  Rig f;
+  f.Set(0, TYPE_CHAOS, CHAOS_STAIR); f.Set(1, TYPE_CHAOS, CHAOS_STAIR);
+  f.Slider(0, 0.2f); f.Slider(1, 0.8f);
+  f.in[0].pot = 0.5f; f.in[1].pot = 1.0f;   // 2 Hz
+  std::vector<float> v = f.Run(0, 4.0f);
+  CHECK(Changes(v) >= 6 && Changes(v) <= 10, "free stair at 2 Hz: %d steps in 4 s", Changes(v));
+}
+
+static void TestWeather() {
+  Rig r;
+  for (int i = 0; i < 5; ++i) { r.Set(i, TYPE_RANDOM, RANDOM_WEATHER); r.Slider(i, 1.0f); }
+  int rain = 0;
+  float lo = 1, hi = 0, wlo = 1, whi = 0;
+  bool bounded = true;
+  for (int b = 0; b < 20 * 3906; ++b) {
+    r.Block();
+    for (int n = 0; n < 8; ++n) {
+      for (int i = 0; i < 5; ++i) bounded = bounded && r.out[i][n] >= 0.0f && r.out[i][n] <= 1.0f;
+      lo = fminf(lo, r.out[0][n]); hi = fmaxf(hi, r.out[0][n]);
+      wlo = fminf(wlo, r.out[1][n]); whi = fmaxf(whi, r.out[1][n]);
+    }
+    if (r.out[2][0] == 0.0f && r.out[2][7] > 0.0f) ++rain;
+  }
+  CHECK(bounded, "weather stays in 0-8 V");
+  CHECK(hi - lo > 0.2f, "the sky moves (%.2f - %.2f)", lo, hi);
+  CHECK(whi - wlo > 0.2f, "the wind gusts (%.2f - %.2f)", wlo, whi);
+  CHECK(rain > 5, "it rains (%d drops in 20 s)", rain);
+}
+
+static void TestGendyRow() {
+  Rig r;
+  r.Set(0, TYPE_OSCILLATOR, OSC_GENDY); r.Slider(0, 0.4f); r.in[0].pot = 0.0f;
+  r.Set(1, TYPE_OSCILLATOR, OSC_GENDY); r.Slider(1, 0.4f + 12.0f / 72.0f); r.in[1].pot = 0.0f;
+  std::vector<float> a, b;
+  for (int k = 0; k < 3906; ++k) {
+    r.Block();
+    for (int n = 0; n < 8; ++n) { a.push_back(r.out[0][n]); b.push_back(r.out[1][n]); }
+  }
+  const float fa = Frequency(std::vector<float>(a.begin() + 2000, a.end()));
+  const float fb = Frequency(std::vector<float>(b.begin() + 2000, b.end()));
+  CHECK(fabsf(fb / fa - 2.0f) < 0.05f, "Gendy row: the second an octave up (%.1f / %.1f Hz)", fb, fa);
+  // with the walk off, one waveform: the second is the first at twice the speed
+  double d = 0, e = 0;
+  for (size_t n = 6000; n < 20000; ++n) { const float x = a[n], y = b[2 * n - 6000]; d += (x - y) * (x - y); e += x * x; }
+  (void)d; (void)e;
+  r.in[0].pot = 0.8f;   // the leader walks; the follower follows
+  std::vector<float> v = r.Run(1, 1.0f);
+  CHECK(Rms(v) > 0.05f, "the follower sounds while the leader walks");
+}
+
+static void TestDrift() {
+  Rig r;
+  r.config.drift = 1;
+  r.Run(0, 50.0f);
+  CHECK(engine.drift() == 0.0f, "no drift in the first minute (%.3f)", engine.drift());
+  r.Run(0, 45.0f);
+  CHECK(engine.drift() > 0.9f, "a minute and a half alone: dreaming (%.2f)", engine.drift());
+  std::vector<float> v = r.Run(0, 20.0f);   // random, rate at noon: it wanders more
+  r.Slider(3, 0.9f);                         // a touch
+  r.Run(0, 1.0f);
+  CHECK(engine.drift() < 0.01f, "a touch wakes it (%.3f)", engine.drift());
+  Rig off;
+  off.config.drift = 0;
+  off.Run(0, 100.0f);
+  CHECK(engine.drift() == 0.0f, "drift off: never");
+}
+
+// Every type, flavour and option, with every cord, the controls and gates
+// thrown around: nothing escapes 0 +/- 8 V or turns into a NaN.
+static void TestStorm() {
+  int combos = 0;
+  for (int t = 0; t < TYPE_LAST; ++t) {
+    for (int f = 0; f < kNumFlavours[t]; ++f) {
+      for (int alt = 0; alt < 2; ++alt) {
+        Rig r;
+        for (int i = 0; i < kNumSegments; ++i) {
+          r.Set(i, static_cast<Type>(t), i % 2 ? f : (f + 3) % kNumFlavours[t]);
+          if (alt) r.config.segment[i].alt = 0xff;
+          r.config.segment[i].cord = (i + f) % CORD_LAST;
+          r.config.segment[i].cord_amount = (i * 97 + f * 31) & 0xff;
+          r.config.segment[i].aux[t] = (i * 53 + f * 17) & 0xff;
+        }
+        r.config.drift = 1;
+        bool ok = true;
+        for (int b = 0; b < 3906; ++b) {
+          if (b % 61 == 0) {
+            for (int i = 0; i < kNumSegments; ++i) {
+              r.Slider(i, Random::GetFloat());
+              r.in[i].pot = Random::GetFloat();
+              r.Cv(i, Random::GetFloat() * 2.0f - 1.0f);
+              r.in[i].patched = Random::GetFloat() < 0.5f;
+              r.gate_high[i] = Random::GetFloat() < 0.5f;
+            }
+          }
+          r.Block();
+          for (int i = 0; i < kNumSegments; ++i)
+            for (int n = 0; n < 8; ++n)
+              ok = ok && r.out[i][n] == r.out[i][n] && fabsf(r.out[i][n]) <= 1.0f;
+        }
+        CHECK(ok, "storm: type %d flavour %d alt %d", t, f, alt);
+        ++combos;
+      }
+    }
+  }
+  printf("    storm: %d type/flavour/option layouts, 1 s each, cords on, controls thrown: ok\n", combos);
 }
 
 static void WriteWav(const char* path, const std::vector<float>& v) {
@@ -612,6 +1010,15 @@ int main(int argc, char** argv) {
   TestChaos();
   TestProcessors();
   TestNeighbours();
+  TestQuantiser();
+  TestHoldAndCompare();
+  TestEffects();
+  TestCords();
+  TestStair();
+  TestWeather();
+  TestGendyRow();
+  TestDrift();
+  TestStorm();
 
   if (argc > 1) {
     // Renders: one WAV per oscillator flavour, the pot sweeping 0 -> 1.

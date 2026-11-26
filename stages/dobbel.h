@@ -1,15 +1,24 @@
 // fletchfoorth: a Stages mode where every segment is its own instrument.
 //
-// Five segment types, each with its own flavours:
-//   RANDOM     - slewed random voltages, seven kinds
+// Six segment types, each with its own flavours:
+//   RANDOM     - slewed random voltages, seven kinds, and the weather
 //   CHAOS      - patterned randomness: Turing loop, logistic map, Lorenz,
-//                cellular automaton, coin-toss gates, dust
+//                cellular automaton, coin-toss gates, dust, stair row
 //   ENVELOPE   - attack and decay in one segment, curve, loop, ratchets
 //   OSCILLATOR - eight audio oscillators (morph, 16-wave bank, additive,
 //                difference pair, folder, FM from the left neighbour,
-//                Gendy, wave-rider)
-//   PROCESSOR  - envelope follower, transient gate, slew, crush/fold,
-//                gesture looper
+//                Gendy (a row shares one waveform), wave-rider)
+//   PROCESSOR  - CV: envelope follower, transient gate, slew, crush/fold,
+//                gesture looper, quantiser (Sleepcousonique's 38 scales),
+//                sample/track and hold, comparator
+//   EFFECT     - audio: the left neighbour's sound at the full rate through
+//                a filter, VCA / low-pass gate, ring modulator, comb,
+//                chorus, echo, drive or lo-fi
+//
+// Cords (after Sleepcousonique's): a segment can take its left neighbour's
+// output into its CV input through a hall wire, fog, water, a door, a range
+// or a maybe. Dream drift: left alone for a minute, the whole panel starts
+// to wander, and comes back at the first touch.
 //
 // The engine knows nothing about the hardware: it takes the controls, gates
 // and CV of six segments and returns their outputs, so the host tests run
@@ -35,17 +44,18 @@ enum Type {
   TYPE_ENVELOPE,
   TYPE_OSCILLATOR,
   TYPE_PROCESSOR,
+  TYPE_EFFECT,
   TYPE_LAST
 };
 
 enum RandomFlavour {
   RANDOM_UNIFORM, RANDOM_GAUSS, RANDOM_WALK, RANDOM_PINK, RANDOM_QUANTISED,
-  RANDOM_KIN, RANDOM_ORBIT, RANDOM_LAST
+  RANDOM_KIN, RANDOM_ORBIT, RANDOM_WEATHER, RANDOM_LAST
 };
 
 enum ChaosFlavour {
   CHAOS_TURING, CHAOS_LOGISTIC, CHAOS_LORENZ, CHAOS_CELLULAR, CHAOS_COIN,
-  CHAOS_DUST, CHAOS_LAST
+  CHAOS_DUST, CHAOS_STAIR, CHAOS_LAST
 };
 
 enum EnvelopeFlavour {
@@ -58,8 +68,29 @@ enum OscillatorFlavour {
 };
 
 enum ProcessorFlavour {
-  PROC_FOLLOW, PROC_TRANSIENT, PROC_SLEW, PROC_CRUSH, PROC_LOOPER, PROC_LAST
+  PROC_FOLLOW, PROC_TRANSIENT, PROC_SLEW, PROC_CRUSH, PROC_LOOPER,
+  PROC_QUANTISE, PROC_SAMPLE, PROC_COMPARE, PROC_LAST
 };
+
+enum EffectFlavour {
+  FX_FILTER, FX_VCA, FX_RING, FX_COMB, FX_CHORUS, FX_ECHO, FX_DRIVE, FX_LOFI,
+  FX_LAST
+};
+
+// Cords from the left neighbour into a segment's CV input (Sleepcousonique's
+// -> ~> => >| range ?>).
+enum CordKind {
+  CORD_NONE,
+  CORD_HALL,   // -> a plain wire
+  CORD_FOG,    // ~> softened (8 ms)
+  CORD_WATER,  // => a capacitor: slow to fill, slow to drain (60 ms)
+  CORD_DOOR,   // >| a diode: only what is above 0 V gets through
+  CORD_RANGE,  // range: the neighbour's swing, whatever its polarity, as 0 to amount
+  CORD_MAYBE,  // ?> each rise rolls the dice: through, or silent until the next
+  CORD_LAST
+};
+
+const int kNumScales = 38;
 
 extern const uint8_t kNumFlavours[TYPE_LAST];
 
@@ -68,12 +99,15 @@ struct SegmentConfig {
   uint8_t flavour[TYPE_LAST];  // remembered per type
   uint8_t aux[TYPE_LAST];      // hold + pot, 0-255, remembered per type
   uint8_t alt;                 // long press, one bit per type
+  uint8_t cord;                // CordKind, from the left neighbour
+  uint8_t cord_amount;         // 0-255 = -1 to +1
 };
 
 struct Config {
   SegmentConfig segment[kNumSegments];
   uint8_t version;
-  uint8_t padding[3];
+  uint8_t drift;               // dream drift on
+  uint8_t padding[2];
 
   enum { tag = 0x4C424F44 };  // DOBL
 
@@ -87,6 +121,9 @@ struct Config {
   }
   inline float aux(int i) const {
     return static_cast<float>(segment[i].aux[segment[i].type]) / 255.0f;
+  }
+  inline float cord_amount(int i) const {
+    return static_cast<float>(segment[i].cord_amount) * (2.0f / 255.0f) - 1.0f;
   }
 };
 
@@ -105,7 +142,7 @@ struct Input {
 const int kLooperLength = 768;       // 12 s at 64 Hz
 const int kRiderLength = 256;
 const int kBankTables = 16;
-const int kBankLength = 256;
+const int kBankLength = 128;         // (128 points: harmonics up to 64)
 
 struct Segment {
   uint8_t type;
@@ -167,6 +204,23 @@ struct Segment {
   bool recording;
   uint16_t refractory;
   bool armed;
+
+  // effect
+  float f1, f2;     // filter / VCA states
+  float fx_env;
+  float fx_phase;
+  float fx_held;
+  uint16_t fx_write;
+  uint16_t fx_count;
+
+  // quantiser, stair
+  float q_cents;
+  uint8_t step;
+
+  // the cord into this segment
+  float cord_s;
+  float cord_prev;
+  float cord_open;
 };
 
 struct Memory {
@@ -203,6 +257,9 @@ class Engine {
   void ProcessEnvelope(int i, const Config& c, const Input& in, float* out, size_t size);
   void ProcessOscillator(int i, const Config& c, const Input& in, float* out, size_t size);
   void ProcessProcessor(int i, const Config& c, const Input& in, float* out, size_t size);
+  void ProcessEffect(int i, const Config& c, const Input& in, float* out, size_t size);
+  float Cord(int i, const Config& c);
+  void Drift(const Config& c, const Input* input, size_t size);
 
   bool Tick(Segment* s, const Input& in, float rate_hz, size_t n);
   int RunPosition(int i, const Config& c) const;
@@ -219,6 +276,23 @@ class Engine {
   // Each segment's output this block, for its right neighbour.
   float block_out_[kNumSegments][kMaxBlockSize];
   float block_norm_[kNumSegments][kMaxBlockSize];
+
+  // Dream drift: how far (0-1), how long nothing was touched, where the
+  // dream is, and the controls last seen (to notice a touch).
+  size_t size_;      // this block's length
+  // Each segment's slider (+ CV, cords, dream) and pot as it last heard
+  // them, for the stair row's leader.
+  float heard_slider_[kNumSegments];
+  float heard_pot_[kNumSegments];
+  float drift_;
+  uint32_t idle_;
+  float dream_x_, dream_y_, dream_z_;
+  float last_slider_[kNumSegments];
+  float last_pot_[kNumSegments];
+  uint8_t last_type_[kNumSegments];
+ public:
+  inline float drift() const { return drift_; }
+ private:
 
   DISALLOW_COPY_AND_ASSIGN(Engine);
 };

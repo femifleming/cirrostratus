@@ -15,7 +15,7 @@ namespace dobbel {
 using namespace stmlib;
 
 const uint8_t kNumFlavours[TYPE_LAST] = {
-  RANDOM_LAST, CHAOS_LAST, ENVELOPE_LAST, OSC_LAST, PROC_LAST
+  RANDOM_LAST, CHAOS_LAST, ENVELOPE_LAST, OSC_LAST, PROC_LAST, FX_LAST
 };
 
 // ---------------------------------------------------------------------------
@@ -23,7 +23,7 @@ const uint8_t kNumFlavours[TYPE_LAST] = {
 
 void Config::Init() {
   memset(this, 0, sizeof(*this));
-  version = 1;
+  version = 2;
   for (int i = 0; i < kNumSegments; ++i) {
     SegmentConfig& s = segment[i];
     // The user's usual layout: four randoms, an envelope, an oscillator.
@@ -33,20 +33,25 @@ void Config::Init() {
     s.aux[TYPE_ENVELOPE] = 128;    // linear curve
     s.aux[TYPE_OSCILLATOR] = 128;  // fine tune centred
     s.aux[TYPE_PROCESSOR] = 0;     // gain x1
+    s.aux[TYPE_EFFECT] = 128;
+    s.cord = CORD_NONE;
+    s.cord_amount = 255;           // a new cord: full, upright
   }
 }
 
 void Config::Sanitize() {
-  if (version != 1) {
+  if (version != 2) {  // (1.0's settings are another size: they start fresh)
     Init();
     return;
   }
+  if (drift > 1) drift = 0;
   for (int i = 0; i < kNumSegments; ++i) {
     SegmentConfig& s = segment[i];
     if (s.type >= TYPE_LAST) s.type = TYPE_RANDOM;
     for (int t = 0; t < TYPE_LAST; ++t) {
       if (s.flavour[t] >= kNumFlavours[t]) s.flavour[t] = 0;
     }
+    if (s.cord >= CORD_LAST) s.cord = CORD_NONE;
   }
 }
 
@@ -172,6 +177,80 @@ const float kHarmonicWeight[17] = {
 
 const uint8_t kCellularRules[8] = { 30, 90, 110, 150, 184, 45, 73, 54 };
 
+// The quantiser's scales: Sleepcousonique's 38 (engine/scq_scales.inc), the
+// same order. Each: the period in cents, then n degrees in cents; a negative
+// n is n equal steps of the period.
+const float kScaleData[] = {
+	1200.0000f, 7, 0.000f, 203.910f, 386.314f, 498.045f, 701.955f, 884.359f, 1088.269f, /* 1 just major */
+	1200.0000f, 7, 0.000f, 203.910f, 315.641f, 498.045f, 701.955f, 813.686f, 1017.596f, /* 2 just minor */
+	1200.0000f, 5, 0.000f, 203.910f, 386.314f, 701.955f, 884.359f, /* 3 just pentatonic */
+	1200.0000f, 8, 0.000f, 203.910f, 386.314f, 551.318f, 701.955f, 840.528f, 968.826f, 1088.269f, /* 4 otonal 8-15 */
+	1200.0000f, 8, 0.000f, 111.731f, 231.174f, 359.472f, 498.045f, 648.682f, 813.686f, 996.090f, /* 5 utonal */
+	1200.0000f, -12, /* 6 chromatic */
+	1200.0000f, 7, 0.000f, 200.000f, 400.000f, 500.000f, 700.000f, 900.000f, 1100.000f, /* 7 major */
+	1200.0000f, 7, 0.000f, 200.000f, 300.000f, 500.000f, 700.000f, 800.000f, 1000.000f, /* 8 minor */
+	1200.0000f, 7, 0.000f, 200.000f, 300.000f, 500.000f, 700.000f, 900.000f, 1000.000f, /* 9 dorian */
+	1200.0000f, 7, 0.000f, 100.000f, 300.000f, 500.000f, 700.000f, 800.000f, 1000.000f, /* 10 phrygian */
+	1200.0000f, 7, 0.000f, 200.000f, 400.000f, 600.000f, 700.000f, 900.000f, 1100.000f, /* 11 lydian */
+	1200.0000f, 7, 0.000f, 200.000f, 400.000f, 500.000f, 700.000f, 900.000f, 1000.000f, /* 12 mixolydian */
+	1200.0000f, 7, 0.000f, 100.000f, 300.000f, 500.000f, 600.000f, 800.000f, 1000.000f, /* 13 locrian */
+	1200.0000f, 7, 0.000f, 200.000f, 300.000f, 500.000f, 700.000f, 800.000f, 1100.000f, /* 14 harmonic minor */
+	1200.0000f, 7, 0.000f, 200.000f, 300.000f, 500.000f, 700.000f, 900.000f, 1100.000f, /* 15 melodic minor */
+	1200.0000f, 5, 0.000f, 200.000f, 400.000f, 700.000f, 900.000f, /* 16 major pentatonic */
+	1200.0000f, 5, 0.000f, 300.000f, 500.000f, 700.000f, 1000.000f, /* 17 minor pentatonic */
+	1200.0000f, 6, 0.000f, 300.000f, 500.000f, 600.000f, 700.000f, 1000.000f, /* 18 blues */
+	1200.0000f, -6, /* 19 whole tone */
+	1200.0000f, 8, 0.000f, 200.000f, 300.000f, 500.000f, 600.000f, 800.000f, 900.000f, 1100.000f, /* 20 diminished */
+	1200.0000f, -24, /* 21 24-TET quarter tones */
+	1200.0000f, -19, /* 22 19-TET */
+	1200.0000f, -22, /* 23 22-TET */
+	1200.0000f, -31, /* 24 31-TET */
+	1200.0000f, -53, /* 25 53-TET */
+	1901.9550f, -13, /* 26 Bohlen-Pierce (13 steps of 3:1) */
+	78.0000f, -1, /* 27 Carlos alpha (78 c steps) */
+	63.8000f, -1, /* 28 Carlos beta (63.8 c) */
+	35.1000f, -1, /* 29 Carlos gamma (35.1 c) */
+	1200.0000f, 5, 0.000f, 231.000f, 474.000f, 717.000f, 955.000f, /* 30 slendro */
+	1200.0000f, 7, 0.000f, 120.000f, 270.000f, 540.000f, 670.000f, 785.000f, 950.000f, /* 31 pelog */
+	1200.0000f, 7, 0.000f, 200.000f, 350.000f, 500.000f, 700.000f, 900.000f, 1050.000f, /* 32 maqam rast */
+	1200.0000f, 7, 0.000f, 150.000f, 300.000f, 500.000f, 700.000f, 800.000f, 1000.000f, /* 33 maqam bayati */
+	1200.0000f, 43, 0.000f, 21.506f, 53.273f, 84.467f, 111.731f, 150.637f, 165.004f, 182.404f, 203.910f, 231.174f, 266.871f, 294.135f, 315.641f, 347.408f, 386.314f, 417.508f, 435.084f, 470.781f, 498.045f, 519.551f, 551.318f, 582.512f, 617.488f, 648.682f, 680.449f, 701.955f, 729.219f, 764.916f, 782.492f, 813.686f, 852.592f, 884.359f, 905.865f, 933.129f, 968.826f, 996.090f, 1017.596f, 1034.996f, 1049.363f, 1088.269f, 1115.533f, 1146.727f, 1178.494f, /* 34 Partch 43 */
+	1200.0000f, 12, 0.000f, 111.731f, 203.910f, 315.641f, 386.314f, 498.045f, 590.224f, 701.955f, 813.686f, 884.359f, 1017.596f, 1088.269f, /* 35 just chromatic */
+	1200.0000f, 12, 0.000f, 90.225f, 203.910f, 294.135f, 407.820f, 498.045f, 611.730f, 701.955f, 792.180f, 905.865f, 996.090f, 1109.775f, /* 36 Pythagorean */
+	1200.0000f, 12, 0.000f, 76.000f, 193.200f, 310.300f, 386.300f, 503.400f, 579.500f, 696.600f, 772.600f, 889.700f, 1006.800f, 1082.900f, /* 37 quarter-comma meantone */
+	1200.0000f, 12, 0.000f, 90.200f, 192.200f, 294.100f, 390.200f, 498.000f, 588.300f, 696.100f, 792.200f, 888.300f, 996.100f, 1092.200f, /* 38 Werckmeister III */
+};
+
+// Finds scale `index` in kScaleData.
+const float* FindScale(int index) {
+  const float* p = kScaleData;
+  for (int k = 0; k < index; ++k) {
+    const int n = static_cast<int>(p[1]);
+    p += 2 + (n > 0 ? n : 0);
+  }
+  return p;
+}
+
+// The degree of `scale` nearest to `cents` (any octave), in cents.
+float NearestDegree(const float* scale, float cents) {
+  const float period = scale[0];
+  const int n = static_cast<int>(scale[1]);
+  const float o = Floor(cents / period);
+  const float within = cents - o * period;
+  float best = 0.0f, best_d = 1e9f;
+  if (n < 0) {
+    const float step = period / static_cast<float>(-n);
+    const float k = Floor(within / step + 0.5f);
+    return o * period + k * step;
+  }
+  for (int k = 0; k <= n; ++k) {
+    const float d = k < n ? scale[2 + k] : period;   // (the next period's root)
+    const float dist = fabsf(within - d);
+    if (dist < best_d) { best_d = dist; best = d; }
+  }
+  return o * period + best;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -186,6 +265,18 @@ void Engine::Init(Memory* memory) {
   }
   memset(block_out_, 0, sizeof(block_out_));
   memset(block_norm_, 0, sizeof(block_norm_));
+  size_ = kMaxBlockSize;
+  memset(heard_slider_, 0, sizeof(heard_slider_));
+  memset(heard_pot_, 0, sizeof(heard_pot_));
+  drift_ = 0.0f;
+  idle_ = 0;
+  dream_x_ = 1.0f;
+  dream_y_ = 1.0f;
+  dream_z_ = 20.0f;
+  for (int i = 0; i < kNumSegments; ++i) {
+    last_slider_[i] = last_pot_[i] = -1.0f;
+    last_type_[i] = 0xff;
+  }
   BuildBank();
 }
 
@@ -296,6 +387,11 @@ void Engine::Reset(int i, uint8_t type, uint8_t flavour) {
   if (type == TYPE_PROCESSOR && flavour == PROC_LOOPER) {
     s.loop_length = 0;
   }
+  if (type == TYPE_EFFECT) {
+    // comb, chorus and echo use this segment's looper memory
+    memset(memory_->looper[i], 0, sizeof(memory_->looper[i]));
+  }
+  s.cord_open = 1.0f;
 }
 
 // Clock for the random and chaos types: the gate when patched, otherwise the
@@ -333,24 +429,150 @@ int Engine::RunPosition(int i, const Config& c) const {
   return position;
 }
 
+// The cord into segment i from its left neighbour (segment 1 hears segment
+// 6: the row is a ring), once per block, in output units (1.0 = 8 V): what a
+// patch cable from that output into this CV jack would add.
+float Engine::Cord(int i, const Config& c) {
+  const uint8_t kind = c.segment[i].cord;
+  if (kind == CORD_NONE) return 0.0f;
+  Segment& s = segment_[i];
+  const int src = i > 0 ? i - 1 : kNumSegments - 1;
+  // segment 6's output is a block old when segment 1 runs (it runs last)
+  const float* o = block_out_[src];
+  const float x = o[size_ - 1];
+  const float amount = c.cord_amount(i);
+  const float block_rate = kSampleRate / kMaxBlockSize;
+  float v = 0.0f;
+  switch (kind) {
+    case CORD_HALL:
+      v = x * amount;
+      break;
+    case CORD_FOG:
+      s.cord_s += (x * amount - s.cord_s) * (1.0f / (0.008f * block_rate));
+      v = s.cord_s;
+      break;
+    case CORD_WATER:
+      s.cord_s += (x * amount - s.cord_s) * (1.0f / (0.06f * block_rate));
+      v = s.cord_s;
+      break;
+    case CORD_DOOR:
+      v = (x > 0.0f ? x : 0.0f) * amount;
+      break;
+    case CORD_RANGE:
+      v = block_norm_[src][size_ - 1] * amount;
+      break;
+    case CORD_MAYBE: {
+        // each rise through the middle of the neighbour's swing rolls again
+        const float m = block_norm_[src][size_ - 1];
+        if (s.cord_prev <= 0.5f && m > 0.5f) {
+          s.cord_open = Random::GetFloat() < 0.5f ? 1.0f : 0.0f;
+        }
+        s.cord_prev = m;
+        v = x * amount * s.cord_open;
+      }
+      break;
+  }
+  return Clamp(v, -1.0f, 1.0f);
+}
+
+// Dream drift. Every touch of a slider, a knob or a button wakes the panel;
+// a minute after the last, the controls start to wander on a slow Lorenz
+// attractor (each segment its own mix of its three axes), coming in over 30
+// s, up to a sixth of their travel. A touch brings them back in half a
+// second.
+void Engine::Drift(const Config& c, const Input* input, size_t size) {
+  bool touched = false;
+  for (int i = 0; i < kNumSegments; ++i) {
+    if (fabsf(input[i].slider - last_slider_[i]) > 0.02f ||
+        fabsf(input[i].pot - last_pot_[i]) > 0.02f ||
+        last_type_[i] != c.segment[i].type) {
+      touched = true;
+      last_slider_[i] = input[i].slider;
+      last_pot_[i] = input[i].pot;
+      last_type_[i] = c.segment[i].type;
+    }
+  }
+  const float block = static_cast<float>(size);
+  if (touched || !c.drift) idle_ = 0;
+  else if (idle_ < 0xf0000000u) idle_ += size;
+  if (c.drift && idle_ > static_cast<uint32_t>(60.0f * kSampleRate)) {
+    drift_ += block / (30.0f * kSampleRate);
+    if (drift_ > 1.0f) drift_ = 1.0f;
+  } else {   // awake: back in half a second
+    drift_ -= drift_ * block / (0.15f * kSampleRate);
+    if (drift_ < 1e-4f) drift_ = 0.0f;
+  }
+  if (drift_ > 0.0f) {
+    // a slow Lorenz: one loop every ten seconds or so
+    const float h = block * (0.25f / kSampleRate);
+    const float dx = 10.0f * (dream_y_ - dream_x_);
+    const float dy = dream_x_ * (28.0f - dream_z_) - dream_y_;
+    const float dz = dream_x_ * dream_y_ - (8.0f / 3.0f) * dream_z_;
+    dream_x_ += dx * h;
+    dream_y_ += dy * h;
+    dream_z_ += dz * h;
+    if (!(fabsf(dream_x_) < 100.0f && fabsf(dream_y_) < 100.0f && fabsf(dream_z_) < 100.0f)) {
+      dream_x_ = 1.0f; dream_y_ = 1.0f; dream_z_ = 20.0f;
+    }
+  }
+}
+
 void Engine::Process(
     const Config& config,
     const Input* input,
     float output[kNumSegments][kMaxBlockSize],
     size_t size) {
+  size_ = size;
+  for (int i = 0; i < kNumSegments; ++i) {   // (the cooked values come below)
+    heard_slider_[i] = input[i].cv_slider;
+    heard_pot_[i] = input[i].pot;
+  }
+  Drift(config, input, size);
+  const float ax = dream_x_ * (1.0f / 20.0f);
+  const float ay = dream_y_ * (1.0f / 27.0f);
+  const float az = (dream_z_ - 25.0f) * (1.0f / 20.0f);
   for (int i = 0; i < kNumSegments; ++i) {
     const uint8_t type = config.segment[i].type;
     const uint8_t flavour = config.flavour(i);
     if (segment_[i].type != type || segment_[i].flavour != flavour) {
       Reset(i, type, flavour);
     }
+    // what this segment hears: its own controls, the cord from the left,
+    // and the dream
+    Input in = input[i];
+    const float cord = Cord(i, config);
+    if (cord != 0.0f) {
+      in.cv += cord;
+      in.cv_raw += cord;
+      in.cv_slider += cord;
+    }
+    if (drift_ > 0.0f) {
+      static const float kMix[kNumSegments][3] = {
+        { 1.0f, 0.3f, 0.0f }, { -0.4f, 1.0f, 0.2f }, { 0.2f, -0.5f, 1.0f },
+        { -1.0f, 0.0f, 0.4f }, { 0.3f, 0.8f, -0.6f }, { 0.6f, -0.6f, -0.6f },
+      };
+      const float d = drift_ * (1.0f / 6.0f);
+      const float w1 = Clamp(kMix[i][0] * ax + kMix[i][1] * ay + kMix[i][2] * az, -1.0f, 1.0f);
+      const float w2 = Clamp(kMix[(i + 3) % kNumSegments][0] * ax +
+                             kMix[(i + 3) % kNumSegments][1] * ay +
+                             kMix[(i + 3) % kNumSegments][2] * az, -1.0f, 1.0f);
+      in.slider = Clamp(in.slider + d * w1, 0.0f, 1.0f);
+      in.cv_slider += d * w1;
+      in.pot = Clamp(in.pot + d * w2, 0.0f, 1.0f);
+    }
+    heard_slider_[i] = in.cv_slider;
+    heard_pot_[i] = in.pot;
     float* out = output[i];
     switch (type) {
-      case TYPE_RANDOM: ProcessRandom(i, config, input[i], out, size); break;
-      case TYPE_CHAOS: ProcessChaos(i, config, input[i], out, size); break;
-      case TYPE_ENVELOPE: ProcessEnvelope(i, config, input[i], out, size); break;
-      case TYPE_OSCILLATOR: ProcessOscillator(i, config, input[i], out, size); break;
-      default: ProcessProcessor(i, config, input[i], out, size); break;
+      case TYPE_RANDOM: ProcessRandom(i, config, in, out, size); break;
+      case TYPE_CHAOS: ProcessChaos(i, config, in, out, size); break;
+      case TYPE_ENVELOPE: ProcessEnvelope(i, config, in, out, size); break;
+      case TYPE_OSCILLATOR: ProcessOscillator(i, config, in, out, size); break;
+      case TYPE_PROCESSOR: ProcessProcessor(i, config, in, out, size); break;
+      default: ProcessEffect(i, config, in, out, size); break;
+    }
+    for (size_t n = 0; n < size; ++n) {   // -8 to +8 V, whatever came in
+      out[n] = Clamp(out[n], -1.0f, 1.0f);
     }
     for (size_t n = 0; n < size; ++n) {
       block_out_[i][n] = out[n];
@@ -428,6 +650,65 @@ void Engine::ProcessRandom(
         s.value = Clamp(v * 0.5f + 0.5f, 0.0f, 1.0f);
       }
       s.lp = s.value;
+    } else if (s.flavour == RANDOM_WEATHER) {
+      // A sky: pressure fronts come and go; low pressure brings gusts, and
+      // rain when the air is wet. The slider is how fast the weather moves.
+      // Side by side, weather segments read one sky: the first gives the
+      // sky (pressure with its gusts), then the wind, the rain (triggers),
+      // the humidity, the pressure alone.
+      const int leader = i - run;
+      bool rain_gate = false;
+      if (run == 0) {
+        if (Tick(&s, in, rate * 0.1f, n)) {
+          s.event = 1;
+          float t = s.target + (Gauss() - 0.5f) * 0.8f;   // the next front
+          if (t > 1.0f) t = 2.0f - t;
+          if (t < 0.0f) t = -t;
+          s.target = Clamp(t, 0.0f, 1.0f);
+          float w = s.walk + (Gauss() - 0.5f) * 0.5f;      // and the damp
+          if (w > 1.0f) w = 2.0f - w;
+          if (w < 0.0f) w = -w;
+          s.walk = Clamp(w, 0.0f, 1.0f);
+        }
+        const float slow = rate * 0.02f * kInvSampleRate;
+        s.x += (s.target - s.x) * slow;          // pressure
+        s.y += (s.walk - s.y) * slow * 0.5f;     // humidity
+        const float low = 1.0f - s.x;
+        // gusts: more often, and stronger, the lower the pressure
+        if (Random::GetFloat() < (0.2f + low) * rate * 0.3f * kInvSampleRate) {
+          s.z = (0.3f + 0.7f * Random::GetFloat()) * (0.4f + 0.6f * low);
+        }
+        s.lp += (s.z - s.lp) * (rate * 0.5f * kInvSampleRate + 2e-4f);
+        s.z -= s.z * rate * 0.05f * kInvSampleRate;
+        const float wind = Clamp(0.25f * low + s.lp, 0.0f, 1.0f);
+        // rain: dust whose density follows the damp, when the pressure is low
+        if (s.gate_samples) {
+          --s.gate_samples;
+        } else if (Random::GetFloat() <
+                   s.y * s.y * low * low * rate * 4.0f * kInvSampleRate) {
+          s.gate_samples = 160;  // 5 ms
+          s.f_slow = 0.4f + 0.6f * Random::GetFloat();
+        }
+        run_x_[i][n] = s.x;
+        run_y_[i][n] = wind;
+        run_z_[i][n] = s.gate_samples ? s.f_slow : 0.0f;
+        s.value = Clamp(0.65f * s.x + 0.35f * wind, 0.0f, 1.0f);
+      } else {
+        switch (run % 5) {
+          case 1: s.value = run_y_[leader][n]; break;
+          case 2: s.value = run_z_[leader][n]; rain_gate = true; break;
+          case 3: s.value = Clamp(segment_[leader].y, 0.0f, 1.0f); break;
+          case 4: s.value = run_x_[leader][n]; break;
+          default: s.value = run_y_[leader][n]; break;
+        }
+        if (rain_gate && s.value > 0.0f && s.lp == 0.0f) s.event = 1;
+        s.lp = rain_gate ? s.value : 0.0f;
+      }
+      if (rain_gate) {  // triggers, never bipolar
+        out[n] = s.value * aux;
+        block_norm_[i][n] = s.value;
+        continue;
+      }
     } else {
       bool tick = Tick(&s, in, rate, n);
       if (tick && in.patched && Random::GetFloat() > chance) {
@@ -630,6 +911,44 @@ void Engine::ProcessChaos(
         if (s.gate_samples) --s.gate_samples;
         break;
 
+      case CHAOS_STAIR: {
+          // A row of stair segments is one stepped sequence. Each slider (+
+          // CV) is its step's height, each knob the chance its step plays (a
+          // step that loses the roll is skipped). The first segment's gate
+          // jack is the clock; with none, its knob is the speed and its step
+          // always plays. The first segment outputs the stairs, the others a
+          // gate while their step is on.
+          if (run == 0) {
+            int length = 1;
+            while (i + length < kNumSegments &&
+                   c.segment[i + length].type == TYPE_CHAOS &&
+                   c.flavour(i + length) == CHAOS_STAIR) {
+              ++length;
+            }
+            const float speed = ExpMap(b, 0.25f, 16.0f);
+            if (Tick(&s, in, speed, n)) {
+              s.event = 1;
+              int next = s.step;
+              for (int tries = 0; tries < length; ++tries) {
+                next = (next + 1) % length;
+                const float chance = (next == 0 && !in.patched)
+                    ? 1.0f : Clamp(heard_pot_[i + next], 0.0f, 1.0f);
+                if (Random::GetFloat() < chance * 1.02f) break;
+                if (tries == length - 1) next = s.step;   // all lost: stay
+              }
+              s.step = static_cast<uint8_t>(next);
+            }
+            run_cells_[i][n] = s.step;
+            v = Clamp(heard_slider_[i + s.step], 0.0f, 1.0f);
+          } else {
+            const bool on = run_cells_[leader][n] == static_cast<uint64_t>(run);
+            if (on && s.value == 0.0f) s.event = 1;
+            v = on ? 1.0f : 0.0f;
+            gate_out = true;
+          }
+        }
+        break;
+
       case CHAOS_DUST: {
           // Triggers at random moments, no clock. Slider = density.
           if (Random::GetFloat() < dust_chance) {
@@ -762,6 +1081,7 @@ void Engine::ProcessOscillator(
       ExpMap(Clamp(in.pot, 0.0f, 1.0f), 0.05f, 10.0f);
   const float b = Clamp(in.pot, 0.0f, 1.0f);
   const bool voice = c.alt(i);
+  const int gendy_run = s.flavour == OSC_GENDY ? RunPosition(i, c) : 0;
   const float attack_coef = OnePoleCoefficient(0.002f);
   const float release_coef = OnePoleCoefficient(0.3f);
 
@@ -870,13 +1190,22 @@ void Engine::ProcessOscillator(
 
       case OSC_GENDY: {
           // Xenakis' dynamic stochastic synthesis: 12 breakpoints whose
-          // heights and spacing take a random walk; pot = how far.
+          // heights and spacing take a random walk; pot = how far. Side by
+          // side, Gendy segments play the first one's breakpoints, each at
+          // its own pitch: one waveform, moving as a cloud.
+          Segment& g = gendy_run > 0 ? segment_[i - gendy_run] : s;
           const int k = s.gendy_index;
           const int k2 = (k + 1) % 12;
-          s.phase2 += dt * s.gendy_sum * s.gendy_inv;
+          s.phase2 += dt * g.gendy_sum * s.gendy_inv;
+          bool advanced = false;
           if (s.phase2 >= 1.0f) {
             s.phase2 -= 1.0f;
             s.gendy_index = k2;
+            advanced = true;
+            if (k2 == 0) s.event = 1;
+          }
+          if (s.phase2 >= 1.0f) s.phase2 = 0.0f;
+          if (gendy_run == 0 && advanced) {
             const float step = b * 0.35f;
             float a = s.gendy_amp[k2] + (Gauss() - 0.5f) * 2.0f * step;
             if (a > 1.0f) a = 2.0f - a;
@@ -886,12 +1215,13 @@ void Engine::ProcessOscillator(
             d = Clamp(d, 0.4f, 2.5f);
             s.gendy_sum += d - s.gendy_dur[k2];
             s.gendy_dur[k2] = d;
-            s.gendy_inv = 1.0f / d;  // the next segment's length
-            if (k2 == 0) s.event = 1;
+          }
+          if (advanced) {
+            s.gendy_inv = 1.0f / g.gendy_dur[k2];  // the next segment's length
           }
           const int a = s.gendy_index;
           const int a2 = (a + 1) % 12;
-          y = s.gendy_amp[a] + (s.gendy_amp[a2] - s.gendy_amp[a]) * s.phase2;
+          y = g.gendy_amp[a] + (g.gendy_amp[a2] - g.gendy_amp[a]) * s.phase2;
           y -= s.dc;
           s.dc += y * 0.0005f;
         }
@@ -1040,6 +1370,98 @@ void Engine::ProcessProcessor(
       }
       break;
 
+    case PROC_QUANTISE: {
+        // The CV jack (+ the cord) onto a scale: Sleepcousonique's 38, picked
+        // with the knob. Slider: transpose, -2 to +2 octaves in whole
+        // octaves. Hold + knob: the root, 0-11 semitones up. Gate patched:
+        // a new note only on its rising edge. Long press: a trigger out on
+        // every new note instead of the pitch.
+        const int scale_index = static_cast<int>(Clamp(b * kNumScales, 0.0f, kNumScales - 1.0f));
+        const float* scale = FindScale(scale_index);
+        const float root = Floor(aux * 11.99f) * 100.0f;
+        const float octaves = Floor(slider * 4.99f) - 2.0f;
+        const float cents_in = in.cv * 9600.0f - root;
+        bool sample = !in.patched;
+        for (size_t n = 0; n < size; ++n) {
+          if (in.patched && (in.gate[n] & GATE_FLAG_RISING)) sample = true;
+        }
+        if (sample) {
+          // a little hysteresis: stay on the note unless the input is
+          // clearly nearer another one
+          const float cand = NearestDegree(scale, cents_in);
+          if (cand != s.q_cents &&
+              fabsf(cents_in - cand) + 8.0f < fabsf(cents_in - s.q_cents)) {
+            s.q_cents = cand;
+            s.event = 1;
+            s.gate_samples = 160;
+          }
+        }
+        const float v = (s.q_cents + root) * (1.0f / 9600.0f) + octaves * 0.125f;
+        for (size_t n = 0; n < size; ++n) {
+          if (alt) {
+            out[n] = s.gate_samples ? kAudioPeak : 0.0f;
+            if (s.gate_samples) --s.gate_samples;
+          } else {
+            out[n] = v;
+          }
+          block_norm_[i][n] = Clamp(v, 0.0f, 1.0f);
+        }
+        s.norm = Clamp(v * 1.6f, 0.0f, 1.0f);
+      }
+      break;
+
+    case PROC_SAMPLE: {
+        // Sample and hold the CV jack on each rising gate (with no gate: an
+        // internal clock, slider = rate 0.05-100 Hz). Knob: glide to the new
+        // value (0-1 s). Long press: track and hold (follows while the gate
+        // is high, holds while low).
+        const float rate = ExpMap(slider, 0.05f, 100.0f);
+        const float glide = OnePoleCoefficient(b * b);
+        for (size_t n = 0; n < size; ++n) {
+          bool take;
+          if (alt && in.patched) {
+            take = (in.gate[n] & GATE_FLAG_HIGH) != 0;
+          } else {
+            take = Tick(&s, in, rate, n);
+          }
+          if (take) {
+            if (!alt) s.event = 1;
+            s.held = in.cv;
+          }
+          s.lp += (s.held - s.lp) * glide;
+          out[n] = s.lp;
+          block_norm_[i][n] = Clamp(fabsf(s.lp), 0.0f, 1.0f);
+        }
+        s.norm = Clamp(fabsf(s.lp), 0.0f, 1.0f);
+      }
+      break;
+
+    case PROC_COMPARE: {
+        // A gate (5 V) while the CV jack is above the slider's level (-5 to
+        // +8 V); the knob is the hysteresis (0-1 V). Long press: a window, the
+        // gate is open while the input is within the knob's distance of the
+        // slider. Hold + knob: the gate's height, 5 V up to 8 V.
+        const float level = -0.625f + slider * 1.625f;
+        const float width = b * 0.125f;
+        const float gain = (1.0f + aux * 0.6f) * kAudioPeak;
+        for (size_t n = 0; n < size; ++n) {
+          const float x2 = in.cv;
+          bool open;
+          if (alt) {
+            open = fabsf(x2 - level) < width + 0.005f;
+          } else {
+            const float edge = s.held > 0.5f ? level - width * 0.5f : level + width * 0.5f;
+            open = x2 > edge;
+          }
+          if (open && s.held < 0.5f) s.event = 1;
+          s.held = open ? 1.0f : 0.0f;
+          out[n] = s.held * gain;
+          block_norm_[i][n] = s.held;
+        }
+        s.norm = s.held;
+      }
+      break;
+
     default: {  // PROC_LOOPER
         // Gate high records the CV jack (64 times a second, up to 12 s);
         // gate low loops it. Slider = speed 1/4x-4x (noon 1x), pot = smoothing,
@@ -1092,6 +1514,254 @@ void Engine::ProcessProcessor(
       }
       break;
   }
+}
+
+// ---------------------------------------------------------------------------
+// EFFECT
+//
+// The left neighbour's output, sample by sample at the full rate (segment 1
+// takes its own CV jack instead, read once a block: lo-fi). Slider + CV
+// (and the cord) is the main control, the knob the second, hold + knob the
+// third, the long press an option. Comb, chorus and echo use this segment's
+// looper memory (768 samples).
+
+namespace {
+
+inline float NoteToF(float note) {   // in cycles per sample
+  return 440.0f * Exp2((note - 69.0f) * (1.0f / 12.0f)) * kInvSampleRate;
+}
+
+inline float TanPi(float f) {        // tan(pi f), f < 0.45 (stmlib's FAST)
+  const float a = 3.260e-01f * 31.00627668f;
+  const float b = 1.823e-01f * 306.0196848f;
+  const float f2 = f * f;
+  return f * (3.14159265f + f2 * (a + b * f2));
+}
+
+inline float ReadLine(const int16_t* line, float pos) {   // pos >= 0
+  const int j = static_cast<int>(pos);
+  const float fx = pos - j;
+  const int16_t a = line[j % kLooperLength];
+  const int16_t b = line[(j + 1) % kLooperLength];
+  return (a + (b - a) * fx) * kInv32767;
+}
+
+}  // namespace
+
+void Engine::ProcessEffect(
+    int i, const Config& c, const Input& in, float* out, size_t size) {
+  Segment& s = segment_[i];
+  const float slider = Clamp(in.slider, 0.0f, 1.0f);
+  const float b = Clamp(in.pot, 0.0f, 1.0f);
+  const float aux = c.aux(i);
+  const bool alt = c.alt(i);
+  int16_t* line = memory_->looper[i];
+  const float* source = i > 0 ? block_out_[i - 1] : NULL;
+  const float pitch_note = 24.0f + slider * 72.0f + in.cv * 96.0f;
+  float peak = 0.0f;
+
+  // per-block settings
+  float g = 0.0f, r = 0.0f, h = 0.0f, level = 0.0f, lpg = 0.0f;
+  float decay_coef = 0.0f, attack_coef = 0.0f, dt = 0.0f, fb = 0.0f;
+  float delay = 0.0f, depth = 0.0f, mix = 0.0f, damp = 0.0f, drive = 0.0f;
+  int hold = 1;
+  float quantum = 0.0f;
+  switch (s.flavour) {
+    case FX_FILTER: {
+        // a state-variable filter. Slider + CV: cutoff, 20 Hz to 13 kHz,
+        // 1 V/oct. Knob: resonance (up to self-oscillation). Hold + knob:
+        // low-pass -> band-pass -> high-pass. Long press: drive into it.
+        float f = NoteToF(16.0f + slider * 112.0f + in.cv * 96.0f);
+        f = Clamp(f, 0.0003f, 0.42f);
+        g = TanPi(f);
+        r = 2.0f - 1.98f * b;      // 1/Q: 0.5 to 50
+        h = 1.0f / (1.0f + r * g + g * g);
+      }
+      break;
+    case FX_VCA: {
+        // Slider + CV: level (linear; hold + knob curves it towards
+        // exponential). Gate patched: it also opens on a gate (2 ms attack,
+        // knob = decay 5 ms to 5 s). Long press: a low-pass gate, the sound
+        // darkens as it closes.
+        float l = Clamp(in.cv_slider, 0.0f, 1.2f);
+        const float curve = 1.0f + aux * 3.0f;
+        level = Exp2(curve * Log2(l + 1e-6f));
+        attack_coef = OnePoleCoefficient(0.002f);
+        decay_coef = OnePoleCoefficient(ExpMap(b, 0.005f, 5.0f));
+        lpg = alt ? 1.0f : 0.0f;
+      }
+      break;
+    case FX_RING: {
+        // The sound times a carrier. Slider + CV: the carrier's pitch (C1 to
+        // C7, 1 V/oct). Knob: dry -> ring. Hold + knob: carrier sine -> square.
+        // Long press: the carrier is the CV jack (another sound, lo-fi).
+        dt = Clamp(NoteToF(pitch_note), 0.0f, 0.45f);
+        mix = b;
+      }
+      break;
+    case FX_COMB: {
+        // A tuned comb: the sound rings at the slider's pitch (C1 to C7, 1
+        // V/oct, 41 Hz lowest). Knob: feedback (ring time). Hold + knob:
+        // damping. Long press: negative feedback (hollow, an octave down).
+        const float f = Clamp(NoteToF(pitch_note), 41.0f * kInvSampleRate, 0.2f);
+        delay = Clamp(1.0f / f, 2.0f, kLooperLength - 2.0f);
+        fb = b * 0.995f * (alt ? -1.0f : 1.0f);
+        damp = 1.0f - 0.85f * aux;
+      }
+      break;
+    case FX_CHORUS: {
+        // A modulated delay. Slider + CV: speed, 0.05 to 8 Hz. Knob: depth.
+        // Hold + knob: feedback (a flanger towards the right). Long press:
+        // vibrato (only the moving copy).
+        dt = ExpMap(Clamp(in.cv_slider, 0.0f, 1.2f), 0.05f, 8.0f) * kInvSampleRate;
+        depth = b * 220.0f;
+        fb = aux * 0.85f;
+      }
+      break;
+    case FX_ECHO: {
+        // A short, warm echo (stored 3906 times a second, up to 0.19 s).
+        // Slider + CV: time. Knob: feedback. Hold + knob: dry -> wet. Long
+        // press: hold, the echo repeats what it has for ever.
+        delay = 4.0f + Clamp(in.cv_slider, 0.0f, 1.0f) * (kLooperLength - 8.0f);
+        fb = alt ? 1.0f : b * 0.95f;
+        mix = aux;
+      }
+      break;
+    case FX_DRIVE: {
+        // Slider + CV: drive, x1 to x16. Knob: soft clip -> wave folder.
+        // Hold + knob: output level. Long press: asymmetric (even harmonics).
+        drive = 1.0f + Clamp(in.cv_slider, 0.0f, 1.2f) * 15.0f;
+        mix = b;
+        level = 0.25f + aux * 1.0f;
+      }
+      break;
+    default: {  // FX_LOFI
+        // Slider + CV: sample rate, 31 kHz down to 100 Hz. Knob: bits, 16
+        // down to 2. Hold + knob: output level. Long press: the rate jitters.
+        const float rate = ExpMap(1.0f - Clamp(in.cv_slider, 0.0f, 1.0f), 100.0f, kSampleRate);
+        hold = static_cast<int>(kSampleRate / rate);
+        if (hold < 1) hold = 1;
+        quantum = Exp2(-(15.0f - b * 14.0f));
+        level = 0.25f + aux * 1.0f;
+      }
+      break;
+  }
+
+  for (size_t n = 0; n < size; ++n) {
+    const float x = source ? source[n] : in.cv_raw;
+    float y = x;
+    switch (s.flavour) {
+      case FX_FILTER: {
+          float xin = alt ? SoftClip(x * 3.0f * kInvAudioPeak) * kAudioPeak : x;
+          const float hp = (xin - r * s.f1 - g * s.f1 - s.f2) * h;
+          const float bp = g * hp + s.f1;
+          s.f1 = g * hp + bp;
+          const float lp = g * bp + s.f2;
+          s.f2 = g * bp + lp;
+          if (!(fabsf(s.f1) < 50.0f && fabsf(s.f2) < 50.0f)) s.f1 = s.f2 = 0.0f;
+          const float m = aux * 2.0f;
+          y = m < 1.0f ? lp + (bp * r - lp) * m : bp * r + (hp - bp * r) * (m - 1.0f);
+        }
+        break;
+      case FX_VCA: {
+          float e = 1.0f;
+          if (in.patched) {
+            const bool high = (in.gate[n] & GATE_FLAG_HIGH) != 0;
+            if (in.gate[n] & GATE_FLAG_RISING) s.event = 1;
+            s.fx_env += ((high ? 1.0f : 0.0f) - s.fx_env) * (high ? attack_coef : decay_coef);
+            e = s.fx_env;
+          }
+          const float gain = level * e;
+          if (lpg > 0.0f) {
+            const float coef = 0.005f + 0.6f * gain * gain;
+            s.f1 += (x - s.f1) * (coef > 1.0f ? 1.0f : coef);
+            y = s.f1 * gain;
+          } else {
+            y = x * gain;
+          }
+        }
+        break;
+      case FX_RING: {
+          s.fx_phase += dt;
+          if (s.fx_phase >= 1.0f) s.fx_phase -= 1.0f;
+          float carrier;
+          if (alt) {
+            carrier = Clamp(in.cv_raw * kInvAudioPeak, -1.0f, 1.0f);
+          } else {
+            const float sn = Sin(s.fx_phase);
+            carrier = sn + (SoftClip(sn * 8.0f) - sn) * aux;
+          }
+          y = x + (x * carrier - x) * mix;
+        }
+        break;
+      case FX_COMB: {
+          s.fx_write = (s.fx_write + 1) % kLooperLength;
+          const float d = ReadLine(line, s.fx_write + kLooperLength - delay);
+          s.f1 += (d - s.f1) * damp;
+          s.f2 += (x - s.f2) * 0.002f;   // no DC in (at full feedback it would pile up 200x)
+          const float v = SoftClip(x - s.f2 + fb * s.f1);
+          line[s.fx_write] = static_cast<int16_t>(v * 32767.0f);
+          y = v * 0.5f;
+        }
+        break;
+      case FX_CHORUS: {
+          s.fx_phase += dt;
+          if (s.fx_phase >= 1.0f) s.fx_phase -= 1.0f;
+          s.fx_write = (s.fx_write + 1) % kLooperLength;
+          const float tap = 30.0f + 250.0f * (fb > 0.3f ? 0.3f : 1.0f) +
+              depth * (0.5f + 0.5f * Sin(s.fx_phase));
+          const float wet = ReadLine(line, s.fx_write + kLooperLength - tap);
+          line[s.fx_write] = static_cast<int16_t>(Clamp(x + wet * fb, -1.0f, 1.0f) * 32767.0f);
+          y = alt ? wet : 0.5f * (x + wet);
+        }
+        break;
+      case FX_ECHO: {
+          // stored once every 8 samples (the mean of the 8), read back with
+          // a straight line between the stored values
+          s.fx_held += x;
+          if (++s.fx_count >= kMaxBlockSize) {
+            s.fx_count = 0;
+            s.fx_write = (s.fx_write + 1) % kLooperLength;
+            const float back = ReadLine(line, s.fx_write + kLooperLength - delay);
+            s.f2 = s.f1;
+            s.f1 = back;
+            const float in8 = alt ? 0.0f : s.fx_held * (1.0f / kMaxBlockSize);
+            line[s.fx_write] = static_cast<int16_t>(
+                Clamp(in8 + back * fb, -1.0f, 1.0f) * 32767.0f);
+            s.fx_held = 0.0f;
+          }
+          const float wet = s.f2 + (s.f1 - s.f2) * (s.fx_count * (1.0f / kMaxBlockSize));
+          y = x + (wet - x) * mix;
+        }
+        break;
+      case FX_DRIVE: {
+          float u = x * kInvAudioPeak * drive + (alt ? 0.3f : 0.0f);
+          const float soft = SoftClip(u);
+          const float folded = Fold(u * 0.5f);
+          float v = soft + (folded - soft) * mix;
+          s.f1 += (v - s.f1) * 0.0005f;   // the asymmetry's DC
+          y = (v - s.f1) * kAudioPeak * level;
+        }
+        break;
+      default: {  // FX_LOFI
+          int h2 = hold;
+          if (alt) h2 += static_cast<int>(Random::GetFloat() * hold);
+          if (++s.fx_count >= h2) {
+            s.fx_count = 0;
+            s.fx_held = Floor(x / (quantum * kAudioPeak) + 0.5f) * quantum * kAudioPeak;
+          }
+          y = s.fx_held * level;
+        }
+        break;
+    }
+    y = Clamp(y, -1.0f, 1.0f);
+    out[n] = y;
+    const float a = fabsf(y);
+    if (a > peak) peak = a;
+    block_norm_[i][n] = 0.5f + 0.5f * Clamp(y * kInvAudioPeak, -1.0f, 1.0f);
+  }
+  s.f_env += (peak * kInvAudioPeak - s.f_env) * 0.05f;
+  s.norm = Clamp(s.f_env, 0.0f, 1.0f);
 }
 
 }  // namespace dobbel
