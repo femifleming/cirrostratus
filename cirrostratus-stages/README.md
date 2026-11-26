@@ -1,8 +1,8 @@
-# fletchfoorth
+# Cirrostratus Stages
 
-**Every segment its own instrument, for Mutable Instruments Stages.**
+**Every segment its own instrument, for Mutable Instruments Stages.** (Formerly fletchfoorth; part of [Cirrostratus](https://github.com/femifleming/cirrostratus).)
 
-fletchfoorth is a new mode for Stages in which every segment is its own instrument. Tap a button and the segment becomes the next type:
+Cirrostratus Stages is a new mode for Stages in which every segment is its own instrument. Tap a button and the segment becomes the next type:
 
 | Light | Type | Flavours |
 |---|---|---|
@@ -15,15 +15,15 @@ fletchfoorth is a new mode for Stages in which every segment is its own instrume
 
 Hold a button and move the slider to pick the flavour, turn the knob to set its hidden setting, hold half a second for its extra option (bipolar, loop, voice, invert). Hold a button and tap the one on its left for a **cord** from that segment into this one's CV input, Sleepcousonique's kinds: hall, fog, water, door, range, maybe. Hold buttons 1 and 2 for 2 s for **dream drift**: left alone for a minute, the panel slowly wanders on a Lorenz attractor until you touch it. Neighbours can team up: Orbit and Lorenz rows read one shared point or attractor, cellular automata share one ring of cells, FM and the wave-rider listen to the segment on their left.
 
-It is built on [BRIBESTAGES](https://github.com/thisisbribery/bribestages) (qiemem's bipolar multi-mode firmware plus segment linking, envelope followers and sync LFOs). All of that still works in its own modes; fletchfoorth is one more mode, on **button 6** (hold 5 s). Ouroboros alternate moved to a second hold of button 5.
+It is built on [BRIBESTAGES](https://github.com/thisisbribery/bribestages) (qiemem's bipolar multi-mode firmware plus segment linking, envelope followers and sync LFOs). All of that still works in its own modes; Cirrostratus Stages is one more mode, on **button 6** (hold 5 s). Ouroboros alternate moved to a second hold of button 5.
 
-**Manual:** [`docs/fletchfoorth-manual.pdf`](docs/fletchfoorth-manual.pdf), with a drawing of the panel for every section (also readable as [`docs/fletchfoorth-manual.md`](docs/fletchfoorth-manual.md)).
+**Manual:** [`docs/Cirrostratus-Stages-Manual.pdf`](docs/Cirrostratus-Stages-Manual.pdf), with a drawing of the panel for every section (also readable as [`docs/Cirrostratus-Stages-Manual.md`](docs/Cirrostratus-Stages-Manual.md)).
 
 > Tested on the host (713 checks on the real engine code) and on an emulated Cortex-M4 for CPU, and the update file is checked to decode to exactly the firmware. **Not yet run on a real Stages.**
 
 ## Download
 
-[`firmware/fletchfoorth-v1.3.1.wav`](firmware/fletchfoorth-v1.3.1.wav) for a module mounted normally, [`firmware/fletchfoorth-v1.3.1-flipped.wav`](firmware/fletchfoorth-v1.3.1-flipped.wav) upside down (SHA-256 in `firmware/SHA256SUMS.txt`). Also on the [releases page](https://github.com/femifleming/cirrostratus/releases).
+[`firmware/cirrostratus-stages-v1.3.1.wav`](firmware/cirrostratus-stages-v1.3.1.wav) for a module mounted normally, [`firmware/cirrostratus-stages-v1.3.1-flipped.wav`](firmware/cirrostratus-stages-v1.3.1-flipped.wav) upside down (SHA-256 in `firmware/SHA256SUMS.txt`). Also on the [releases page](https://github.com/femifleming/cirrostratus/releases).
 
 ## Install
 
@@ -37,9 +37,9 @@ The module updates from an audio file; the updater can't be damaged by a failed 
 6. Play the .wav from the start. The button lights are a level meter: **3 or 4 lit is right**.
 7. Green slider lights run left to right (about 80 s); the module restarts on the new firmware.
 
-All six button lights blinking red: press button 6, raise slider 6, play again from the start. Upside-down module: use the `-flipped` file, mirrored (leftmost segment). Then **hold button 6 for 5 seconds** to enter fletchfoorth.
+All six button lights blinking red: press button 6, raise slider 6, play again from the start. Upside-down module: use the `-flipped` file, mirrored (leftmost segment). Then **hold button 6 for 5 seconds** to enter Cirrostratus Stages.
 
-Your BRIBESTAGES / qiemem settings are kept; fletchfoorth stores its own settings separately, in the last 4 KB of flash. (Coming from fletchfoorth 1.0: its settings start fresh once, they grew. 1.1 → 1.3.1 keeps them.)
+Your BRIBESTAGES / qiemem settings are kept; Cirrostratus Stages stores its own settings separately, in the last 4 KB of flash. (Coming from 1.0: its settings start fresh once, they grew. 1.1 → 1.3.1 keeps them.)
 
 ## Build
 
@@ -49,8 +49,8 @@ Needs the Arm GNU toolchain and Python 3.
 touch stages/resources.cc stages/resources.h
 make -f stages/makefile TOOLCHAIN_PATH=<toolchain>/
 make -f stages/makefile TOOLCHAIN_PATH=<toolchain>/ build/stages/stages.bin
-python3 tools/qpsk.py encode build/stages/stages.bin fletchfoorth.wav
-python3 tools/qpsk.py decode fletchfoorth.wav check.bin    # expect bad=0
+python3 tools/qpsk.py encode build/stages/stages.bin Cirrostratus Stages.wav
+python3 tools/qpsk.py decode Cirrostratus Stages.wav check.bin    # expect bad=0
 ```
 Add `FLIPPED=1` for the upside-down build.
 
@@ -66,10 +66,10 @@ Add `FLIPPED=1` for the upside-down build.
 
 | File | What |
 |---|---|
-| `stages/dobbel.h/.cc` | the fletchfoorth engine: all types and flavours, hardware-free |
+| `stages/dobbel.h/.cc` | the Cirrostratus Stages engine: all types and flavours, hardware-free |
 | `stages/stages.cc` | the mode's process function; the engine lives in the idle segment generators' memory and they are re-initialised when you leave |
-| `stages/settings.h/.cc` | fletchfoorth's settings in their own flash pages (the State chunk keeps its size, so nobody's settings reset) |
-| `stages/ui.cc/.h` | the mode on button 6, Ouroboros alternate on a second hold of button 5, fletchfoorth's buttons and lights |
+| `stages/settings.h/.cc` | Cirrostratus Stages' settings in their own flash pages (the State chunk keeps its size, so nobody's settings reset) |
+| `stages/ui.cc/.h` | the mode on button 6, Ouroboros alternate on a second hold of button 5, Cirrostratus Stages' buttons and lights |
 | `stages/modes.h` | `MULTI_MODE_DOBBEL` |
 | `stages/test/dobbel_test.cc`, `tools/bench/`, `tools/manual/` | tests, CPU benchmark, manual |
 

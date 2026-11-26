@@ -86,7 +86,7 @@ class Ui {
     follow_output_[i] = static_cast<uint8_t>(fabsf(output) * 15.0f + 0.5f);
   }
 
-  // fletchfoorth: output level (0-1) and a tick / hit, for the LEDs.
+  // Cirrostratus Stages: output level (0-1) and a tick / hit, for the LEDs.
   void set_dobbel(int i, float level, bool event) {
     const float l = level < 0.0f ? 0.0f : (level > 1.0f ? 1.0f : level);
     dobbel_level_[i] = static_cast<uint8_t>(l * 15.0f + 0.5f);

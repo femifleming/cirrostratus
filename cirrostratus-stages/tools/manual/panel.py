@@ -1,4 +1,4 @@
-"""Draws the Stages panel for the fletchfoorth manual.
+"""Draws the Stages panel for the Cirrostratus Stages manual.
 
 Coordinates follow the photo of the real module (module at 437..912 x
 72..932 in a 1360x1000 picture), scaled by S, so every control sits where it

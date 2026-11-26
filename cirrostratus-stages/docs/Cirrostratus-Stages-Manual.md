@@ -1,4 +1,4 @@
-# fletchfoorth
+# Cirrostratus Stages
 
 ### *every segment its own instrument, for Stages*
 
@@ -6,11 +6,11 @@
 
 <img class="panel" src="img/overview.png" width="260" align="right" alt="Stages panel: overview">
 
-**fletchfoorth** is a new mode for Mutable Instruments **Stages**, built on
+**Cirrostratus Stages** is a new mode for Mutable Instruments **Stages**, built on
 [BRIBESTAGES](https://github.com/thisisbribery/bribestages) (qiemem's bipolar
 firmware plus segment linking, envelope followers and sync LFOs).
 
-In fletchfoorth every one of the six segments is its own instrument. Tap a
+In Cirrostratus Stages every one of the six segments is its own instrument. Tap a
 segment's button and it becomes the next type:
 
 | Light | Type | What it is |
@@ -29,7 +29,9 @@ Segments can also take each other's outputs through **cords**, the same
 kinds as in Sleepcousonique (section 10), and the whole panel can **dream**
 when you leave it alone (section 11).
 
-**New in 1.3.1:** the overload light fired on the module, so this version
+**New in 1.3.1:** a new name: this was **fletchfoorth**, and it is now
+**Cirrostratus Stages**, in one place with Cirrostratus for the Monsoon
+(nothing on the module changes; your settings are kept). And the overload light fired on the module, so this version
 gives the engine more room and lets you see how busy the chip is. The audio
 now runs up to three blocks ahead instead of one (0.8 ms instead of 0.26 ms),
 so a block that runs long borrows time from the others; a block is only
@@ -44,7 +46,7 @@ lighter. Morph and the wave bank now keep everything that isn't the note
 60 to 70 dB below it across the slider. The wave bank's top table was the
 last source of grit at low notes, so the bank now stops at 128 harmonics
 (the lowest notes are a touch less airy), and every octave's table has 8 to
-16 points per harmonic. fletchfoorth also needs about a quarter less CPU
+16 points per harmonic. Cirrostratus Stages also needs about a quarter less CPU
 (the heaviest set of segments went from 1,512 to 1,156 instructions a
 sample). If the module ever does run out of time, the **button lights
 flicker red** for a moment (section 14). Your settings are kept.
@@ -57,10 +59,10 @@ each block instead of stepping. Your settings are kept.
 
 **New in 1.1:** the Effect type, three CV processors (quantiser with
 Sleepcousonique's 38 scales, sample and hold, comparator), the Weather and the
-Stair row, Gendy rows, cords, dream drift. 1.0's fletchfoorth settings start
+Stair row, Gendy rows, cords, dream drift. 1.0's Cirrostratus Stages settings start
 fresh once (the settings grew).
 
-Everything BRIBESTAGES does still works in its own modes. fletchfoorth is one
+Everything BRIBESTAGES does still works in its own modes. Cirrostratus Stages is one
 more mode next to them.
 
 ---
@@ -72,13 +74,12 @@ damaged by a failed attempt, so you can always try again.
 
 **Where:** the Cirrostratus releases page,
 github.com/femifleming/cirrostratus/releases, or the repository's
-`cirrostratus-stages/firmware/` folder. (fletchfoorth used to have its own
-repository; since 1.3.1 it lives in Cirrostratus, next to the Monsoon
-firmware.)
+`cirrostratus-stages/firmware/` folder. (It used to be fletchfoorth, with its own repository; since 1.3.1 it
+lives in Cirrostratus, next to the Monsoon firmware.)
 
 **You need:** a computer or phone with a headphone jack (a wired USB headphone
 adapter works, Bluetooth doesn't), a 3.5 mm patch cable, and
-`fletchfoorth-v1.3.1.wav` (or `fletchfoorth-v1.3.1-flipped.wav` for a module mounted
+`cirrostratus-stages-v1.3.1.wav` (or `cirrostratus-stages-v1.3.1-flipped.wav` for a module mounted
 upside down).
 
 <img class="panel" src="img/install.png" width="260" align="right" alt="Stages panel: install">
@@ -99,18 +100,18 @@ upside down).
 out. Press button 6, raise slider 6, and play the file again from the start.
 
 **Your settings:** BRIBESTAGES and qiemem settings (segment types, links,
-mode) are kept. fletchfoorth keeps its own settings in a separate corner of
+mode) are kept. Cirrostratus Stages keeps its own settings in a separate corner of
 the memory, so switching modes never disturbs either. To go back, flash
 BRIBESTAGES or qiemem the same way.
 
 ---
 
-## 2. Getting into fletchfoorth
+## 2. Getting into Cirrostratus Stages
 
 <img class="panel" src="img/enter.png" width="260" align="right" alt="Stages panel: enter">
 
 **Hold button 6 for 5 seconds.** The lights show the mode, and the module
-starts in fletchfoorth. It remembers the mode through power cycles.
+starts in Cirrostratus Stages. It remembers the mode through power cycles.
 
 The first time, the segments are what you probably want anyway: **1–4 Random,
 5 Envelope, 6 Oscillator**.
@@ -124,12 +125,12 @@ The first time, the segments are what you probably want anyway: **1–4 Random,
 | button 3 | Slow LFO |
 | button 4 | 6EG |
 | button 5 | Ouroboros. **Hold button 5 again** while in Ouroboros: Ouroboros alternate (and back) |
-| button 6 | **fletchfoorth** |
+| button 6 | **Cirrostratus Stages** |
 
 Ouroboros alternate used to have button 6; it is now behind a second hold of
 button 5, so no mode was lost.
 
-When you leave fletchfoorth, the other modes start fresh (their settings are
+When you leave Cirrostratus Stages, the other modes start fresh (their settings are
 kept; a running loop or LFO simply restarts).
 
 ---
@@ -518,12 +519,12 @@ go: your gesture loops.
 | Overload light | if the processing ever misses its deadline (the DAC would play a stale block: a gritty, chopped sound), all six **button lights flicker red** for half a second. (Not for the moment after a settings save: every change is saved to flash when you let go of the button, and the chip can't run anything while it writes flash, so a block or two goes missing there, as on stock Stages.) If you see it, the set of segments is too heavy for the chip: please report which types and flavours were running, and what the load meter shows |
 | Load meter | hold buttons 5 and 6 together for 1 s: the slider lights show the share of the chip's time the engine uses (interrupts that land in it included), measured with the chip's own cycle counter over the last 65 ms. Each light is a sixth; the last lit one glows dimmer for a part. All six full = out of time |
 | Buffering | the engine runs up to three blocks of 8 samples ahead of the outputs (0.8 ms), so one slow block doesn't miss its deadline (Stages had one block) |
-| Memory | fletchfoorth uses the memory the normal Stages engines use; they rest while it runs (16.7 KB of their 23.6 KB); the wave bank is in flash: 16 waves × 8 band-limited octave tables, 69 KB |
+| Memory | Cirrostratus Stages uses the memory the normal Stages engines use; they rest while it runs (16.7 KB of their 23.6 KB); the wave bank is in flash: 16 waves × 8 band-limited octave tables, 69 KB |
 | Settings | stored in their own flash pages (the last 4 KB), untouched by firmware updates and by the other modes |
-| Chaining | each module runs its own six segments; fletchfoorth doesn't chain |
+| Chaining | each module runs its own six segments; Cirrostratus Stages doesn't chain |
 | Tests | 713 host checks on the real engine code (pitch, V/oct, envelope times, rates, ranges, every flavour; scales to the cent, filter, ring, comb pitch, echo time, every cord, the stair, the weather, Gendy rows, dream drift; the wave bank's tables and, by FFT at C2, C4 and C6, how far below the notes everything between the harmonics sits; a storm of every type, flavour and option with cords and thrown controls) and a check that the update file decodes to exactly the firmware |
 
-fletchfoorth runs on real Stages modules: the overload light and the load
+Cirrostratus Stages runs on real Stages modules: the overload light and the load
 meter came out of the first runs on one (1.2 to 1.3.1), and every version is
 also tested on the computer and on an emulated processor first.
 
@@ -539,5 +540,5 @@ also tested on the computer and on an emulated processor first.
   and the wave-rider.
 - **Iannis Xenakis**: the random walk and Gendy.
 
-fletchfoorth is MIT-licensed, and part of Cirrostratus
+Cirrostratus Stages is MIT-licensed, and part of Cirrostratus
 (github.com/femifleming/cirrostratus, folder `cirrostratus-stages/`).

@@ -1,5 +1,5 @@
 #!/bin/sh
-# fletchfoorth CPU benchmark on QEMU's Cortex-M4F (netduinoplus2 model).
+# Cirrostratus Stages CPU benchmark on QEMU's Cortex-M4F (netduinoplus2 model).
 set -e
 cd "$(dirname "$0")/../.."
 OUT=build/bench

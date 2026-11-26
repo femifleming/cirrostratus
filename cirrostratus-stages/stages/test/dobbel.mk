@@ -1,4 +1,4 @@
-# Host tests for the fletchfoorth engine: make -f stages/test/dobbel.mk test
+# Host tests for the Cirrostratus Stages engine: make -f stages/test/dobbel.mk test
 CXX ?= c++
 CXXFLAGS = -std=c++11 -O2 -g -Wall -Werror -Wno-unused-local-typedefs -I. \
 	-fsanitize=address,undefined -DTEST

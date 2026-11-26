@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds the oscillator wave bank: stages/dobbel_bank.cc.
 
-Sixteen waveforms (the same shapes as fletchfoorth 1.1), each stored as a
+Sixteen waveforms (the same shapes as Cirrostratus Stages 1.1), each stored as a
 set of band-limited tables, one per octave ("mip levels"): level L holds
 harmonics up to 128 >> L. The oscillator picks the two levels around its
 pitch and crossfades them, so nothing it plays folds back below Nyquist.

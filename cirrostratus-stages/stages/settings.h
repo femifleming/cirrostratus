@@ -140,7 +140,7 @@ class Settings {
     return state_.multimode == MULTI_MODE_DOBBEL;
   }
 
-  // fletchfoorth's own settings live in their own flash pages (the last 4 KB),
+  // Cirrostratus Stages' own settings live in their own flash pages (the last 4 KB),
   // so the State chunk above never changes size: a size change would format
   // the settings and start the factory test.
   inline const dobbel::Config& dobbel() const { return dobbel_; }

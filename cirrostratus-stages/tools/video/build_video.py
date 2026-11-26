@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""The fletchfoorth video manual: narrated chapters, each step showing the
+"""The Cirrostratus Stages video manual: narrated chapters, each step showing the
 Stages panel (tools/manual/panel.py, drawn from the photo of the module) with
 the controls it talks about lit, next to the chapter's steps. The same look
 and narrator as Cirrostratus' Monsoon video (deep blue, Inter / Plex Mono,
 Kokoro "bf_emma"), music under the voice, ducked while she speaks.
 
   python3 tools/video/build_video.py --music ~/Desktop/Njari/Bliss.wav
-      [--out ~/Desktop/fletchfoorth-Video-Manual-1.3.1.mp4] [--only 3-5]
+      [--out ~/Desktop/Cirrostratus-Stages-Video-Manual-1.3.1.mp4] [--only 3-5]
       [--still] [--print]
 
 The narration uses the Monsoon video's Kokoro set-up next door
@@ -133,13 +133,13 @@ DEFAULT = cols(G, G, G, G, R, "greenred")
 def chapters():
     ch = []
 
-    ch.append(dict(code="intro", title="fletchfoorth", sub="every segment its own instrument, for Stages",
-        say="fletchfoorth. Every segment its own instrument, for Mutable Instruments Stages. It's a new mode "
+    ch.append(dict(code="intro", title="Cirrostratus Stages", sub="every segment its own instrument, for Stages",
+        say="Cirrostratus Stages. Every segment its own instrument, for Mutable Instruments Stages. It's a new mode "
             "on button six, part of Cirrostratus, built on BRIBESTAGES, and everything Stages and BRIBESTAGES "
             "do still works in their own modes.",
         steps=[
             ("six types", "tap a button: the next type",
-             "In fletchfoorth every one of the six segments is its own instrument. Tap a segment's button and it "
+             "In Cirrostratus Stages every one of the six segments is its own instrument. Tap a segment's button and it "
              "becomes the next type: random, chaos, envelope, oscillator, processor, or effect.",
              dict(cols=cols(G, Y, R, "greenred", "yellowred", "greenyellow"),
                   badges=[(0, "led", "random"), (1, "led", "chaos"), (2, "led", "env"),
@@ -181,8 +181,8 @@ def chapters():
         say="Installing. The module updates from an audio file. The updater is built in, and a failed try "
             "can't damage it, so you can always try again.",
         steps=[
-            ("the file", "fletchfoorth-v1.3.1.wav",
-             "You need a computer or phone with a headphone jack, a patch cable, and the file fletchfoorth "
+            ("the file", "cirrostratus-stages-v1.3.1.wav",
+             "You need a computer or phone with a headphone jack, a patch cable, and the file Cirrostratus Stages "
              "version one point three point one, from the Cirrostratus releases page. There's a flipped one for "
              "a module mounted upside down.", dict(cols=[dict(led=None) for _ in range(6)])),
             ("cv 6", "headphones into CV 6, slider 6 to the middle",
@@ -204,10 +204,10 @@ def chapters():
         ]))
 
     ch.append(dict(code="enter", title="getting in", sub="hold button 6 for 5 seconds",
-        say="Getting into fletchfoorth.",
+        say="Getting into Cirrostratus Stages.",
         steps=[
             ("hold 6", "5 seconds",
-             "Hold button six for five seconds. The lights show the mode, and the module starts in fletchfoorth. "
+             "Hold button six for five seconds. The lights show the mode, and the module starts in Cirrostratus Stages. "
              "It remembers the mode through power cycles.", one(5, R, [("button", "hold 5 s")])),
             ("first time", "1–4 random, 5 envelope, 6 oscillator",
              "The first time, the segments are what you probably want anyway: one to four random, five an "
@@ -477,8 +477,8 @@ def chapters():
                   badges=[(1, "out", "wind"), (2, "out", "rain")], dim=[3, 4, 5])),
         ]))
 
-    ch.append(dict(code="outro", title="fletchfoorth", sub="part of Cirrostratus",
-        say="That's fletchfoorth. Thanks to Mutable Instruments and Émilie Gillet for Stages, to qiemem, and to "
+    ch.append(dict(code="outro", title="Cirrostratus Stages", sub="part of Cirrostratus",
+        say="That's Cirrostratus Stages. Thanks to Mutable Instruments and Émilie Gillet for Stages, to qiemem, and to "
             "BRIBESTAGES. The manual, the firmware and the source are on the Cirrostratus page.",
         steps=[
             ("thanks", "Mutable Instruments · qiemem · BRIBESTAGES",
@@ -599,7 +599,7 @@ def load_music(path, seconds):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--music", required=True)
-    ap.add_argument("--out", default=os.path.expanduser("~/Desktop/fletchfoorth-Video-Manual-1.3.1.mp4"))
+    ap.add_argument("--out", default=os.path.expanduser("~/Desktop/Cirrostratus-Stages-Video-Manual-1.3.1.mp4"))
     ap.add_argument("--work", default=os.path.join(ROOT, "build", "video"))
     ap.add_argument("--only", help="chapter range a-b (for previews)")
     ap.add_argument("--still", action="store_true", help="one frame per chapter as PNG, then stop")

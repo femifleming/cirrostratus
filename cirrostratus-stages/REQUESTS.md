@@ -35,3 +35,8 @@
 > now on the stages firmware it flashes every time i change an alg for a stage, i dont want it to do that
 
 1.3.1: every change is saved to flash when the button is let go, and the chip can't run code while it writes flash, so a block or two goes missing around each save (stock Stages does the same). That isn't the engine running out of time: the overload light now ignores the quarter second after any settings save.
+
+> also, the stages and monsoon firmware should be under the same repo with one name. and on this compter in one folder under one name cirrostratus, it can have subfolder cirrostratus stages and cirroctratus monsoon, right now there are too many different folders with different names.
+> push the merged repo, delete the old, dont keep fleshcfoorth,
+
+1.3.1: fletchfoorth is now **Cirrostratus Stages**, in one repository with Cirrostratus for the Monsoon (femifleming/cirrostratus, folders cirrostratus-stages/ and cirrostratus-monsoon/, hyphens because make breaks on spaces), with its whole history. Update files, manual and video renamed (cirrostratus-stages-v1.3.1.wav, Cirrostratus-Stages-Manual.pdf); code-internal names (dobbel::, MULTI_MODE_DOBBEL) kept. New video manual (tools/video/build_video.py), never on GitHub. The old fletchfoorth repository was deleted.

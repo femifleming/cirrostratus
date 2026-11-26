@@ -49,7 +49,7 @@ const MultiMode Ui::multimodes_[6] = {
   MULTI_MODE_STAGES_SLOW_LFO,
   MULTI_MODE_SIX_EG,
   MULTI_MODE_OUROBOROS,  // hold again while in Ouroboros: Ouroboros alternate
-  MULTI_MODE_DOBBEL, // fletchfoorth: long press the right-most button
+  MULTI_MODE_DOBBEL, // Cirrostratus Stages: long press the right-most button
 };
 
 /* static */
@@ -348,7 +348,7 @@ void Ui::MultiModeToggle(const uint8_t i) {
   // Save the toggle value into permanent settings (if necessary)
   State* state = settings_->mutable_state();
   uint8_t target = (uint8_t) multimodes_[i];
-  // Ouroboros alternate gave its button to fletchfoorth: holding the Ouroboros
+  // Ouroboros alternate gave its button to Cirrostratus Stages: holding the Ouroboros
   // button again while in Ouroboros switches to the alternate, and back.
   if (multimodes_[i] == MULTI_MODE_OUROBOROS &&
       state->multimode == MULTI_MODE_OUROBOROS) {
@@ -658,7 +658,7 @@ void Ui::UpdateLEDs() {
 }
 
 // ---------------------------------------------------------------------------
-// fletchfoorth UI
+// Cirrostratus Stages UI
 //
 // Tap: next type (Random, Chaos, Envelope, Oscillator, Processor).
 // Hold + slider: flavour (zones). Hold + pot: aux, per type.

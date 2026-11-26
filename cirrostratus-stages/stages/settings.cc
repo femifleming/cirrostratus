@@ -63,7 +63,7 @@ bool Settings::Init() {
   
   bool success = chunk_storage_.Init(&persistent_data_, &state_);
 
-  // fletchfoorth: defaults first (a blank page is formatted with them).
+  // Cirrostratus Stages: defaults first (a blank page is formatted with them).
   dobbel_marker_.magic = 0x444f4242;
   dobbel_.Init();
   dobbel_storage_.Init(&dobbel_marker_, &dobbel_);

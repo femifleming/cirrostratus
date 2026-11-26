@@ -1,4 +1,4 @@
-// Host tests for the fletchfoorth engine (stages/dobbel.cc).
+// Host tests for the Cirrostratus Stages engine (stages/dobbel.cc).
 //   make -f stages/test/dobbel.mk test
 // Runs every type and flavour, checks the numbers the manual promises.
 

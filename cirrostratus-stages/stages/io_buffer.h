@@ -36,7 +36,7 @@
 
 namespace stages {
 
-// Four blocks of 8 (fletchfoorth 1.3.1; Stages had two): the render runs up
+// Four blocks of 8 (Cirrostratus Stages 1.3.1; Stages had two): the render runs up
 // to three blocks ahead of the DAC, so a block that takes longer than its
 // 256 us (a 1 kHz UI tick landing in it, a checksum block) borrows from the
 // others. Only running out of time on average misses one. Latency 0.8 ms.

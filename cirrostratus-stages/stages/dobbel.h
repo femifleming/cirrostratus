@@ -1,4 +1,4 @@
-// fletchfoorth: a Stages mode where every segment is its own instrument.
+// Cirrostratus Stages: a Stages mode where every segment is its own instrument.
 //
 // Six segment types, each with its own flavours:
 //   RANDOM     - slewed random voltages, seven kinds, and the weather

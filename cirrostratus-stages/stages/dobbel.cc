@@ -1,4 +1,4 @@
-// fletchfoorth engine. See dobbel.h.
+// Cirrostratus Stages engine. See dobbel.h.
 
 #include "stages/dobbel.h"
 

@@ -102,7 +102,7 @@ The rest of this manual is the long-range forecast.
 
 The files are on the Cirrostratus releases page,
 github.com/femifleming/cirrostratus/releases (the same repository holds
-Cirrostratus for the Monsoon in `cirrostratus-monsoon/` and fletchfoorth for
+Cirrostratus for the Monsoon in `cirrostratus-monsoon/` and Cirrostratus Stages for
 Stages in `cirrostratus-stages/`). You get:
 
 | File | What for |
