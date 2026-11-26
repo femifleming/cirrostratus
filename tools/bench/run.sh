@@ -6,9 +6,9 @@ OUT=build/bench
 mkdir -p $OUT
 FLAGS="-O2 -g -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 \
   -fno-use-cxa-atexit -fdata-sections -ffunction-sections -fshort-enums \
-  -funroll-loops -finline-functions-called-once -fno-move-loop-invariants -I."
+  -funroll-loops -finline-functions-called-once -fno-move-loop-invariants -I. $BENCH_DEFS"
 arm-none-eabi-gcc $FLAGS -c tools/bench/startup.c -o $OUT/startup.o
-for f in tools/bench/bench_main.cc stages/dobbel.cc stages/resources.cc stmlib/utils/random.cc; do
+for f in tools/bench/bench_main.cc stages/dobbel.cc stages/dobbel_bank.cc stages/resources.cc stmlib/utils/random.cc; do
   arm-none-eabi-g++ $FLAGS -std=c++11 -fno-exceptions -fno-rtti -c "$f" -o "$OUT/$(basename "$f").o"
 done
 arm-none-eabi-g++ $FLAGS -nostartfiles -Wl,--gc-sections -T tools/bench/bench.ld \

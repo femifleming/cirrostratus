@@ -2,7 +2,7 @@
 
 ### *every segment its own instrument, for Stages*
 
-**Version 1.1**
+**Version 1.2**
 
 <img class="panel" src="img/overview.png" width="260" align="right" alt="Stages panel: overview">
 
@@ -29,6 +29,12 @@ Segments can also take each other's outputs through **cords**, the same
 kinds as in Sleepcousonique (section 10), and the whole panel can **dream**
 when you leave it alone (section 11).
 
+**New in 1.2:** cleaner oscillators. Morph, the wave bank and Fold no longer
+alias (the grainy, "low-res" edge at higher notes): the wave bank is now
+stored band-limited, one table per octave, and Morph reads the same tables;
+Fold runs at twice the rate; every oscillator's pitch glides smoothly within
+each block instead of stepping. Your settings are kept.
+
 **New in 1.1:** the Effect type, three CV processors (quantiser with
 Sleepcousonique's 38 scales, sample and hold, comparator), the Weather and the
 Stair row, Gendy rows, cords, dream drift. 1.0's fletchfoorth settings start
@@ -46,7 +52,7 @@ damaged by a failed attempt, so you can always try again.
 
 **You need:** a computer or phone with a headphone jack (a wired USB headphone
 adapter works, Bluetooth doesn't), a 3.5 mm patch cable, and
-`fletchfoorth-v1.1.wav` (or `fletchfoorth-v1.1-flipped.wav` for a module mounted
+`fletchfoorth-v1.2.wav` (or `fletchfoorth-v1.2-flipped.wav` for a module mounted
 upside down).
 
 <img class="panel" src="img/install.png" width="260" align="right" alt="Stages panel: install">
@@ -272,11 +278,11 @@ waveforms).
 
 | # | Flavour | Knob | Sound |
 |---|---|---|---|
-| 1 | **Morph** | sine → triangle → saw → square → narrow pulse | the classic shapes, smoothly in between, alias-reduced |
-| 2 | **Wave bank** | scans 16 waveforms, crossfading | sine, triangle, saw, square, pulse 25 %, pulse 10 %, half sine, full-wave sine, pinched sine, 4 steps, 8 steps, formant, sync saw, frozen noise, sine + octave, organ |
+| 1 | **Morph** | sine → triangle → saw → square → narrow pulse | the classic shapes, smoothly in between, band-limited: clean up to the top of the slider |
+| 2 | **Wave bank** | scans 16 waveforms, crossfading | sine, triangle, saw, square, pulse 25 %, pulse 10 %, half sine, full-wave sine, pinched sine, 4 steps, 8 steps, formant, sync saw, frozen noise, sine + octave, organ. Every wave is stored band-limited, one table per octave (up to 256 harmonics), so even the hard-edged ones stay clean at high notes |
 | 3 | **Additive** | 1 to 16 harmonics | from a pure sine to a bright, saw-like stack. Harmonics above 14 kHz are left out, so high notes stay clean |
 | 4 | **Pair** | second sine from unison to a fifth above | two sines; between them your ear hears a third, lower tone (difference tones, as in the Oneirophone) |
-| 5 | **Fold** | fold depth | a sine through a wavefolder: from round to glassy |
+| 5 | **Fold** | fold depth | a sine through a wavefolder: from round to glassy. Folded at twice the rate, and the depth eases off in the top octave so the folds don't turn to grit |
 | 6 | **FM** | modulation depth | the segment on the **left** is the modulator: another oscillator gives FM; a random or envelope bends the phase slowly. Segment 1 has no left neighbour: a plain sine |
 | 7 | **Gendy** | how far the waveform wanders | Xenakis' dynamic stochastic synthesis: 12 points whose heights and spacing take a random walk every cycle. Left: a steady tone; right: a living, unstable one. **Gendy row:** side by side, Gendy segments play the first one's points, each at its own pitch: one waveform moving as a cloud of voices (the first one's knob is the wander) |
 | 8 | **Rider** | how long one rewrite takes (0.05 to 10 s) | the wave-rider: it records the segment on its **left** into its own waveform as it plays (segment 1 records its CV jack). The gate held high freezes the waveform |
@@ -481,11 +487,11 @@ go: your gesture loops.
 |---|---|
 | Output | −8 to +8 V at most; randoms 0 to 8 V or ±5 V; oscillators and effects ±5 V; chaos and stair gates 8 V (times the amplitude); transient, compare and quantise triggers 5 V (compare up to 8 V) |
 | Processing | 31,250 samples a second per segment (Effects process their left neighbour at that rate); CV and knobs read 3,906 times a second; cords once per block (3,906 a second) |
-| CPU | measured on an emulated Cortex-M4: 733 instructions per sample for the default set, 1,287 for the heaviest (six additive oscillators), 1,121 for six effects (six choruses); the chip has 2,304 cycles per sample |
-| Memory | fletchfoorth uses the memory the normal Stages engines use; they rest while it runs (19.9 KB of their 23.6 KB; the wave bank's 16 waves are 128 points each, enough for 64 harmonics) |
+| CPU | measured on an emulated Cortex-M4: 808 instructions per sample for the default set, 1,512 for the heaviest (six Morph oscillators), 1,162 for six effects (six choruses); the chip has 2,304 cycles per sample |
+| Memory | fletchfoorth uses the memory the normal Stages engines use; they rest while it runs (16.7 KB of their 23.6 KB); the wave bank is in flash: 16 waves × 9 band-limited octave tables, 63 KB |
 | Settings | stored in their own flash pages (the last 4 KB), untouched by firmware updates and by the other modes |
 | Chaining | each module runs its own six segments; fletchfoorth doesn't chain |
-| Tests | 267 host tests on the real engine code (pitch, V/oct, envelope times, rates, ranges, every flavour; scales to the cent, filter, ring, comb pitch, echo time, every cord, the stair, the weather, Gendy rows, dream drift; a storm of every type, flavour and option with cords and thrown controls) and a check that the update file decodes to exactly the firmware |
+| Tests | 752 host checks on the real engine code (pitch, V/oct, envelope times, rates, ranges, every flavour; scales to the cent, filter, ring, comb pitch, echo time, every cord, the stair, the weather, Gendy rows, dream drift; the wave bank's tables and how far below the notes the oscillators' aliases sit; a storm of every type, flavour and option with cords and thrown controls) and a check that the update file decodes to exactly the firmware |
 
 fletchfoorth has so far been tested on the computer and an emulated
 processor, not yet on a real Stages.

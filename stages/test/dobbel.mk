@@ -2,7 +2,7 @@
 CXX ?= c++
 CXXFLAGS = -std=c++11 -O2 -g -Wall -Werror -Wno-unused-local-typedefs -I. \
 	-fsanitize=address,undefined -DTEST
-SRC = stages/test/dobbel_test.cc stages/dobbel.cc stages/resources.cc stmlib/utils/random.cc
+SRC = stages/test/dobbel_test.cc stages/dobbel.cc stages/dobbel_bank.cc stages/resources.cc stmlib/utils/random.cc
 BIN = build/dobbel_test/dobbel_test
 
 $(BIN): $(SRC) stages/dobbel.h

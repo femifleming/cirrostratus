@@ -121,15 +121,69 @@ inline float Gauss() {
           Random::GetFloat()) * 0.25f;
 }
 
-inline float Blep(float t, float dt, float inv_dt) {
-  if (t < dt) {
-    t *= inv_dt;
-    return t + t - t * t - 1.0f;
-  } else if (t > 1.0f - dt) {
-    t = (t - 1.0f) * inv_dt;
-    return t * t + t + t + 1.0f;
+// The levels for a phase increment dt: level L holds harmonics up to
+// 256 >> L, so it is safe while (256 >> L) * dt <= 0.5. Crossfading the
+// first safe level with the next one down keeps the brightness continuous
+// as the pitch moves, and nothing folds back below Nyquist.
+struct Mip {
+  int lo, hi;
+  float w;  // how much of the brighter level (lo)
+};
+
+inline Mip BankMip(float dt) {
+  Mip m;
+  const float x = Log2(dt * 512.0f);
+  if (x <= 0.0f) {
+    m.lo = m.hi = 0;
+    m.w = 1.0f;
+    return m;
   }
-  return 0.0f;
+  int k = static_cast<int>(x);
+  if (static_cast<float>(k) < x) ++k;
+  if (k >= kBankLevels - 1) {
+    m.lo = m.hi = kBankLevels - 1;
+    m.w = 1.0f;
+    return m;
+  }
+  m.lo = k;
+  m.hi = k + 1;
+  m.w = static_cast<float>(k) - x;
+  return m;
+}
+
+// One wave of the bank at two mip levels, looked up once per block.
+struct BankWave {
+  const int16_t* lo;
+  const int16_t* hi;
+  float size_lo, size_hi;
+  float w;
+};
+
+inline BankWave GetBankWave(int wave, const Mip& m) {
+  BankWave b;
+  b.lo = kBankData + kBankOffset[wave][m.lo];
+  b.hi = kBankData + kBankOffset[wave][m.hi];
+  b.size_lo = static_cast<float>(1 << kBankBits[wave][m.lo]);
+  b.size_hi = static_cast<float>(1 << kBankBits[wave][m.hi]);
+  b.w = b.lo == b.hi ? 1.0f : m.w;
+  return b;
+}
+
+// Linear read; the guard point after each table means no wrapping.
+inline float ReadTable(const int16_t* t, float size, float p) {
+  const float x = p * size;
+  const int j = static_cast<int>(x);
+  const float f = x - static_cast<float>(j);
+  const float x0 = t[j];
+  return x0 + (static_cast<float>(t[j + 1]) - x0) * f;
+}
+
+// In table units (peak about 32000).
+inline float ReadBank(const BankWave& b, float p) {
+  const float a = ReadTable(b.lo, b.size_lo, p);
+  if (b.w >= 1.0f) return a;
+  const float c = ReadTable(b.hi, b.size_hi, p);
+  return c + (a - c) * b.w;
 }
 
 // Reflects x back into [-1, 1] as many times as needed.
@@ -138,6 +192,7 @@ inline float Fold(float x) {
   u -= Floor(u);
   return 1.0f - 4.0f * fabsf(u - 0.5f);
 }
+
 
 inline float b_for_additive(float pot) {
   return pot < 0.0f ? 0.0f : (pot > 1.0f ? 1.0f : pot);
@@ -277,76 +332,6 @@ void Engine::Init(Memory* memory) {
     last_slider_[i] = last_pot_[i] = -1.0f;
   }
   last_config_ = 0;
-  BuildBank();
-}
-
-namespace {
-
-float BankSample(int t, int n, const float* smooth_random) {
-  const float p = static_cast<float>(n) / kBankLength;
-  const float s = Sin(p);
-  float v = 0.0f;
-  switch (t) {
-    case 0: v = s; break;                                         // sine
-    case 1: v = 1.0f - 4.0f * fabsf(p - 0.5f) ; v = -v; break;     // triangle
-    case 2: v = 2.0f * p - 1.0f; break;                           // saw
-    case 3: v = p < 0.5f ? 1.0f : -1.0f; break;                   // square
-    case 4: v = p < 0.25f ? 1.0f : -1.0f; break;                  // pulse 25 %
-    case 5: v = p < 0.1f ? 1.0f : -1.0f; break;                   // pulse 10 %
-    case 6: v = s > 0.0f ? s : 0.0f; break;                       // half sine
-    case 7: v = fabsf(s); break;                                  // full-wave sine
-    case 8: v = s * s * s; break;                                 // pinched sine
-    case 9: v = Floor(p * 4.0f) / 1.5f - 1.0f; break;            // 4 steps
-    case 10: v = Floor(p * 8.0f) / 3.5f - 1.0f; break;           // 8 steps
-    case 11: v = Sin(Wrap(p * 5.0f)) * (0.5f - 0.5f * Cos(p)); break;  // formant
-    case 12: v = Wrap(p * 2.7f) * 2.0f - 1.0f; break;             // sync saw
-    case 13: {                                                    // frozen noise
-        const float x = p * 16.0f;
-        const int k = static_cast<int>(x);
-        const float f = x - k;
-        const float e = f * f * (3.0f - 2.0f * f);
-        v = smooth_random[k] + (smooth_random[k + 1] - smooth_random[k]) * e;
-      }
-      break;
-    case 14: v = s + 0.5f * Sin(Wrap(p * 2.0f)); break;           // sine + octave
-    case 15:                                                      // organ
-      v = s + 0.6f * Sin(Wrap(p * 2.0f)) + 0.4f * Sin(Wrap(p * 4.0f)) +
-          0.25f * Sin(Wrap(p * 3.0f));
-      break;
-  }
-  return v;
-}
-
-}  // namespace
-
-// Sixteen waveforms in the spirit of the SDS VCO's bank: the classics, then
-// shapes that only a table can make.
-void Engine::BuildBank() {
-  float smooth_random[17];
-  uint32_t seed = Random::state();
-  Random::Seed(0x5d5d5d5d);
-  for (int k = 0; k < 16; ++k) smooth_random[k] = Random::GetFloat() * 2.0f - 1.0f;
-  smooth_random[16] = smooth_random[0];
-  Random::Seed(seed);
-
-  for (int t = 0; t < kBankTables; ++t) {
-    // two passes (mean and peak, then write) so no table sits on the stack
-    float mean = 0.0f;
-    for (int n = 0; n < kBankLength; ++n) {
-      mean += BankSample(t, n, smooth_random);
-    }
-    mean /= kBankLength;
-    float peak = 0.0f;
-    for (int n = 0; n < kBankLength; ++n) {
-      const float v = fabsf(BankSample(t, n, smooth_random) - mean);
-      if (v > peak) peak = v;
-    }
-    const float scale = peak > 0.0f ? 32000.0f / peak : 0.0f;
-    for (int n = 0; n < kBankLength; ++n) {
-      memory_->bank[t][n] = static_cast<int16_t>(
-          (BankSample(t, n, smooth_random) - mean) * scale);
-    }
-  }
 }
 
 void Engine::Reset(int i, uint8_t type, uint8_t flavour) {
@@ -1068,8 +1053,41 @@ void Engine::ProcessOscillator(
       in.cv * 96.0f + (c.aux(i) - 0.5f) * 2.0f;
   float f = 440.0f * Exp2((note - 69.0f) / 12.0f);
   f = Clamp(f, 0.5f, 12000.0f);
+  // The pitch glides across the block, from the last block's to this one's:
+  // no zipper steps when the slider, the CV or a sweep moves it.
   const float dt = f * kInvSampleRate;
-  const float inv_dt = 1.0f / dt;
+  if (s.dt <= 0.0f) s.dt = dt;
+  const float dt_from = s.dt;
+  const float dt_step = (dt - dt_from) / static_cast<float>(size);
+  s.dt = dt;
+  // Band-limited tables for the higher of the two pitches (morph, bank).
+  BankWave wave_a, wave_b;
+  float bank_frac = 0.0f;
+  if (s.flavour == OSC_MORPH || s.flavour == OSC_BANK) {
+    const Mip mip = BankMip(dt > dt_from ? dt : dt_from);
+    if (s.flavour == OSC_MORPH) {
+      wave_a = GetBankWave(1, mip);  // triangle
+      wave_b = GetBankWave(2, mip);  // saw
+    } else {
+      const float m = Clamp(in.pot, 0.0f, 1.0f) * (kBankTables - 1.001f);
+      const int k = static_cast<int>(m);
+      bank_frac = m - static_cast<float>(k);
+      wave_a = GetBankWave(k, mip);
+      wave_b = GetBankWave(k + 1, mip);
+    }
+  }
+  const float tri_gain = kBankGain[1];
+  const float saw_gain = kBankGain[2];
+  // The folder's depth: x1 to x7, eased off in the top octaves so its
+  // harmonics stay mostly below 47 kHz (about 10 per unit of depth).
+  float fold_gain = 1.0f;
+  float fold_mid = 0.0f;
+  if (s.flavour == OSC_FOLD) {
+    fold_gain += Clamp(in.pot, 0.0f, 1.0f) * 6.0f;
+    const float fold_limit = 0.15f / (dt > dt_from ? dt : dt_from);
+    if (fold_gain > fold_limit) fold_gain = fold_limit > 1.0f ? fold_limit : 1.0f;
+    fold_mid = fold_gain * 0.5f / Cos(0.5f * dt);
+  }
   // additive: whole harmonics, the fading last one, none above 14 kHz
   const float harmonics = 1.0f + b_for_additive(in.pot) * 15.0f;
   int top = static_cast<int>(14000.0f / f);
@@ -1103,53 +1121,52 @@ void Engine::ProcessOscillator(
       s.voice = 1.0f;
     }
 
+    const float dtn = dt_from + dt_step * static_cast<float>(n + 1);
     float p = s.phase;
     float y = 0.0f;
     bool already_scaled = false;
     switch (s.flavour) {
       case OSC_MORPH: {
-          // sine -> triangle -> saw -> square -> narrow pulse
+          // sine -> triangle -> saw -> square -> narrow pulse, all read from
+          // the band-limited bank (square and pulse are two saws apart)
           const float m = b * 3.999f;
           const int k = static_cast<int>(m);
           const float frac = m - k;
-          float w[2];
-          for (int j = 0; j < 2; ++j) {
-            switch (k + j) {
-              case 0: w[j] = Sin(p); break;
-              case 1: w[j] = 1.0f - 4.0f * fabsf(Wrap(p + 0.25f) - 0.5f); break;
-              case 2: w[j] = 2.0f * p - 1.0f - Blep(p, dt, inv_dt); break;
-              case 3: {
-                  const float q = Wrap(p + 0.5f);
-                  w[j] = (p < 0.5f ? 1.0f : -1.0f) + Blep(p, dt, inv_dt) - Blep(q, dt, inv_dt);
-                }
-                break;
-              default: {
-                  const float pw = 0.5f - 0.42f * frac;
-                  const float q = Wrap(p + 1.0f - pw);
-                  w[j] = (p < pw ? 1.0f : -1.0f) + Blep(p, dt, inv_dt) - Blep(q, dt, inv_dt);
-                }
-                break;
-            }
+          switch (k) {
+            case 0: {
+                const float sine = Sin(p);
+                const float tri = -ReadBank(wave_a, Wrap(p + 0.25f)) * tri_gain;
+                y = sine + (tri - sine) * frac;
+              }
+              break;
+            case 1: {
+                const float tri = -ReadBank(wave_a, Wrap(p + 0.25f)) * tri_gain;
+                const float saw = ReadBank(wave_b, p) * saw_gain;
+                y = tri + (saw - tri) * frac;
+              }
+              break;
+            case 2: {
+                const float saw = ReadBank(wave_b, p) * saw_gain;
+                const float square = ReadBank(wave_b, Wrap(p + 0.5f)) * saw_gain - saw;
+                y = saw + (square - saw) * frac;
+              }
+              break;
+            default: {
+                // the last quarter narrows the square's pulse
+                const float pw = 0.5f - 0.42f * frac;
+                y = (ReadBank(wave_b, Wrap(p + 1.0f - pw)) - ReadBank(wave_b, p)) *
+                    saw_gain + 2.0f * pw - 1.0f;
+              }
+              break;
           }
-          // the last quarter narrows the square's pulse instead of fading
-          y = k < 3 ? w[0] + (w[1] - w[0]) * frac : w[1];
         }
         break;
 
       case OSC_BANK: {
           // Sixteen waveforms; the pot scans them, crossfading neighbours.
-          const float m = b * (kBankTables - 1.001f);
-          const int k = static_cast<int>(m);
-          const float frac = m - k;
-          const float x = p * kBankLength;
-          const int j = static_cast<int>(x);
-          const float fx = x - j;
-          const int j2 = (j + 1) & (kBankLength - 1);
-          const int16_t* t0 = memory_->bank[k];
-          const int16_t* t1 = memory_->bank[k + 1];
-          const float a0 = t0[j] + (t0[j2] - t0[j]) * fx;
-          const float a1 = t1[j] + (t1[j2] - t1[j]) * fx;
-          y = (a0 + (a1 - a0) * frac) * kInv32000;
+          const float a0 = ReadBank(wave_a, p);
+          const float a1 = bank_frac > 0.0f ? ReadBank(wave_b, p) : a0;
+          y = (a0 + (a1 - a0) * bank_frac) * kInv32000;
         }
         break;
 
@@ -1175,14 +1192,34 @@ void Engine::ProcessOscillator(
       case OSC_PAIR: {
           // Two sines; between them the ear hears a third, lower tone.
           const float ratio = 1.0f + b * 0.5f;
-          s.phase2 += dt * ratio;
+          s.phase2 += dtn * ratio;
           if (s.phase2 >= 1.0f) s.phase2 -= 1.0f;
           y = 0.5f * (Sin(p) + Sin(s.phase2));
         }
         break;
 
-      case OSC_FOLD:
-        y = Fold(Sin(p) * (1.0f + b * 6.0f));
+      case OSC_FOLD: {
+          // Folded at twice the rate (the half-way sample, then this one),
+          // then back down through a half-band filter. The half-way sine
+          // comes from its neighbours:
+          // sin(a) + sin(b) = 2 sin((a + b) / 2) cos((b - a) / 2).
+          const float sine = Sin(p);
+          const float z_mid = Fold((s.fold_sin + sine) * fold_mid);
+          const float z_now = Fold(sine * fold_gain);
+          s.fold_sin = sine;
+          // a ring written twice, so the window z[0..18] is never split
+          int pos = s.fold_pos - 1;
+          if (pos < 0) pos += 19;
+          s.fold_z[pos] = s.fold_z[pos + 19] = z_mid;
+          if (--pos < 0) pos += 19;
+          s.fold_z[pos] = s.fold_z[pos + 19] = z_now;
+          s.fold_pos = pos;
+          const float* z = s.fold_z + pos;  // z[0] newest
+          y = 0.5f * z[9] +
+              0.307808409f * (z[8] + z[10]) - 0.077682721f * (z[6] + z[12]) +
+              0.025546120f * (z[4] + z[14]) - 0.006282386f * (z[2] + z[16]) +
+              0.000526214f * (z[0] + z[18]);
+        }
         break;
 
       case OSC_FM: {
@@ -1201,7 +1238,7 @@ void Engine::ProcessOscillator(
           Segment& g = gendy_run > 0 ? segment_[i - gendy_run] : s;
           const int k = s.gendy_index;
           const int k2 = (k + 1) % 12;
-          s.phase2 += dt * g.gendy_sum * s.gendy_inv;
+          s.phase2 += dtn * g.gendy_sum * s.gendy_inv;
           bool advanced = false;
           if (s.phase2 >= 1.0f) {
             s.phase2 -= 1.0f;
@@ -1259,7 +1296,7 @@ void Engine::ProcessOscillator(
         break;
     }
 
-    s.phase += dt;
+    s.phase += dtn;
     if (s.phase >= 1.0f) s.phase -= 1.0f;
     const float o = (already_scaled ? y : y * kAudioPeak) * s.voice;
     out[n] = o;

@@ -142,7 +142,13 @@ struct Input {
 const int kLooperLength = 768;       // 12 s at 64 Hz
 const int kRiderLength = 256;
 const int kBankTables = 16;
-const int kBankLength = 128;         // (128 points: harmonics up to 64)
+const int kBankLevels = 9;           // band-limited: harmonics 256, 128, ... 1
+
+// The wave bank lives in flash (stages/dobbel_bank.cc, tools/make_bank.py).
+extern const int16_t kBankData[];  // each table has t[-1], t[N], t[N + 1]
+extern const uint16_t kBankOffset[kBankTables][kBankLevels];
+extern const uint8_t kBankBits[kBankTables][kBankLevels];
+extern const float kBankGain[kBankTables];
 
 struct Segment {
   uint8_t type;
@@ -154,6 +160,10 @@ struct Segment {
   float norm;       // 0-1 for neighbours and LEDs
   float phase;      // clock phase (random / chaos) or oscillator phase
   float phase2;
+  float dt;         // oscillator: last block's phase increment (glides)
+  float fold_sin;   // oscillator: the folder's last sine
+  float fold_z[38]; // oscillator: the folder's 2x oversampled history (twice)
+  int fold_pos;
   uint32_t since;   // samples since the last tick
   float period;     // samples between ticks
   float target;
@@ -226,7 +236,6 @@ struct Segment {
 struct Memory {
   int16_t looper[kNumSegments][kLooperLength];
   int16_t rider[kNumSegments][kRiderLength];
-  int16_t bank[kBankTables][kBankLength];
 };
 
 class Engine {
@@ -250,7 +259,6 @@ class Engine {
 
  private:
   void Reset(int i, uint8_t type, uint8_t flavour);
-  void BuildBank();
 
   void ProcessRandom(int i, const Config& c, const Input& in, float* out, size_t size);
   void ProcessChaos(int i, const Config& c, const Input& in, float* out, size_t size);

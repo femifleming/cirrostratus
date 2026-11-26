@@ -556,16 +556,89 @@ static void TestNeighbours() {
 }
 
 static void TestBank() {
-  Rig r;
+  // Every level of every wave: in range, no DC, and the levels of one wave
+  // agree (same shape, fewer harmonics), so moving between them is smooth.
   for (int t = 0; t < kBankTables; ++t) {
-    int peak = 0;
-    long sum = 0;
-    for (int n = 0; n < kBankLength; ++n) {
-      peak = std::max(peak, abs(static_cast<int>(memory.bank[t][n])));
-      sum += memory.bank[t][n];
+    int top = 0;
+    for (int l = 0; l < kBankLevels; ++l) {
+      const int16_t* d = kBankData + kBankOffset[t][l];
+      const int n = 1 << kBankBits[t][l];
+      CHECK(n >= 128 && n <= 1024, "bank %d level %d: %d points", t, l, n);
+      long sum = 0;
+      int peak = 0;
+      for (int k = 0; k < n; ++k) {
+        sum += d[k];
+        peak = std::max(peak, abs(static_cast<int>(d[k])));
+      }
+      CHECK(labs(sum / n) < 40, "bank %d level %d DC %ld", t, l, sum / n);
+      CHECK(peak <= 32000, "bank %d level %d peak %d", t, l, peak);
+      top = std::max(top, peak);
+      if (l > 0 && l <= 4) {  // (the top octaves really are only a few partials)
+        const int16_t* e = kBankData + kBankOffset[t][l - 1];
+        const int m = 1 << kBankBits[t][l - 1];
+        double diff = 0, ref = 0;
+        for (int k = 0; k < 64; ++k) {
+          const float a = d[k * n / 64], b = e[k * m / 64];
+          diff += (a - b) * (a - b);
+          ref += b * b;
+        }
+        CHECK(diff < ref * 0.1, "bank %d levels %d and %d differ (%.3f)", t, l - 1, l,
+              diff / ref);
+      }
     }
-    CHECK(peak > 31000 && peak <= 32000, "bank table %d peak %d", t, peak);
-    CHECK(labs(sum / kBankLength) < 400, "bank table %d DC %ld", t, sum / kBankLength);
+    CHECK(top > 30000, "bank %d peak %d", t, top);
+  }
+}
+
+// Fourier analysis by brute force: power at bin frequency f (Hann window).
+static double PowerAt(const std::vector<float>& v, float f) {
+  double re = 0, im = 0;
+  const size_t n = v.size();
+  for (size_t k = 0; k < n; ++k) {
+    const double w = 0.5 - 0.5 * cos(2 * M_PI * k / n);
+    const double a = 2 * M_PI * f * k / kSampleRate;
+    re += v[k] * w * cos(a);
+    im += v[k] * w * sin(a);
+  }
+  return re * re + im * im;
+}
+
+static void TestOscillatorsDontAlias() {
+  // A saw-like bank wave, the morph's square and the folder at C6 (1047 Hz):
+  // an alias of harmonic h lands at h * f0 folded about Nyquist. Probe a few
+  // that land between harmonics and compare with the strongest harmonic.
+  // (1.1 measured -15 dB for the bank saw, -27 for the morph, -20 for the
+  // folder.)
+  struct Case { int flavour; float pot; const char* name; float limit; };
+  const Case cases[] = {
+    { OSC_BANK, 2.0f / 15.0f, "bank saw", -60.0f },
+    { OSC_BANK, 3.0f / 15.0f, "bank square", -60.0f },
+    { OSC_MORPH, 2.0f / 3.999f + 0.25f, "morph square", -60.0f },
+    { OSC_MORPH, 0.95f, "morph pulse", -60.0f },
+    { OSC_FOLD, 0.6f, "fold", -35.0f },
+  };
+  const float f0 = 440.0f * powf(2.0f, (84.0f - 69.0f) / 12.0f);
+  for (const Case& c : cases) {
+    Rig r;
+    r.Set(0, TYPE_OSCILLATOR, c.flavour);
+    r.Slider(0, (84.0f - 24.0f) / 72.0f);
+    r.in[0].pot = c.pot;
+    r.config.segment[0].aux[TYPE_OSCILLATOR] = 128;
+    r.Run(0, 0.1f);
+    std::vector<float> v = r.Run(0, 0.25f);
+    double fund = 0;  // the strongest harmonic (a deep fold can null the first)
+    for (int h = 1; h * f0 < kSampleRate / 2; ++h) fund = std::max(fund, PowerAt(v, h * f0));
+    double worst = 0;
+    for (int h = 15; h < 40; ++h) {
+      float a = fmodf(h * f0, kSampleRate);
+      if (a > kSampleRate / 2) a = kSampleRate - a;
+      const float nearest = roundf(a / f0) * f0;
+      if (fabsf(a - nearest) < 60.0f) continue;  // lands on a harmonic
+      worst = std::max(worst, PowerAt(v, a));
+    }
+    const double db = 10 * log10(worst / fund + 1e-30);
+    printf("    %-13s C6 worst alias %6.1f dB\n", c.name, db);
+    CHECK(db < c.limit, "%s at C6: aliases at %.1f dB", c.name, db);
   }
 }
 
@@ -1005,6 +1078,7 @@ int main(int argc, char** argv) {
   Random::Seed(1234);
   TestConfig();
   TestBank();
+  TestOscillatorsDontAlias();
   TestEveryFlavourRuns();
   TestOscillatorPitch();
   TestDifferencePair();
