@@ -103,6 +103,37 @@ MONSOON_TEST(hardware_switch_completes_while_shedding) {
   return true;
 }
 
+// One shed block (a rare overrun on the module) must be a dip, not a
+// hard click: 1.3-1.5 cut the wet signal to silence for the block, which on the
+// module was heard as glitchy pulses on top of the audio.
+MONSOON_TEST(hardware_shed_block_is_not_a_click) {
+  auto in = Sine(220.0f, 1.0f, 0.5f);
+  const ModeId modes[] = { MODE_HALL, MODE_PLATES, MODE_CAPTURE, MODE_CHLOE };
+  for (ModeId mode : modes) {
+    float steps[2] = { 0.0f, 0.0f };
+    for (int shed = 0; shed < 2; ++shed) {
+      Module m;
+      CHECK(m.SetMode(mode), "init");
+      auto out = m.Render(in, [&](size_t b) {
+        m.engine().set_shed(shed && b >= 1000 && b < 1003 && b != 1001);
+        Controls c = DefaultControls();
+        c.blend = 1.0f;
+        return c;
+      });
+      // the biggest sample-to-sample step after the mode has settled
+      for (size_t i = 900 * kBlockSize; i + 1 < out.size(); ++i) {
+        steps[shed] = std::max(steps[shed], std::fabs(out[i + 1].l - out[i].l));
+      }
+    }
+    std::printf("    %-8s largest step %.4f, with shed blocks %.4f\n",
+                Engine::mode_name(mode), steps[0], steps[1]);
+    // (1.5's hard cut: 0.093 in HALL; the ramp keeps it near a third)
+    CHECK(steps[1] <= std::max(0.045f, steps[0] * 1.3f), "%s: a shed block clicks (%.4f vs %.4f)",
+          Engine::mode_name(mode), steps[1], steps[0]);
+  }
+  return true;
+}
+
 // A minute in every mode at the heavy settings with noisy knobs and
 // triggers: finite, never clipping, never stuck at a rail.
 MONSOON_TEST(hardware_minute_in_every_mode) {

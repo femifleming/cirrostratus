@@ -166,6 +166,8 @@ class Engine {
   bool silence_;
   bool init_failed_;
   bool shed_;
+  bool shed_last_;        // the previous block was shed: fade the mode back in
+  FloatFrame last_wet_;   // the mode's last output, for a shed block's ramp
   volatile uint8_t buffer_quality_;
   volatile uint8_t fft_setting_;
 

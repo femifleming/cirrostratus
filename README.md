@@ -4,7 +4,9 @@
 (Jak Plugg's 12HP Mutable Instruments Clouds variant): 29 modes in two
 banks, a 48 kHz floating-point engine, and a clean output section.
 
-**Version 1.5.0.** GRAINS is gone: mode 1 is retired, every other mode
+**Version 1.5.1.** Fixes glitchy pulses on top of the audio: a block that ran a little long used to skip the mode for the next block (a click); now only a real overrun does, and it ramps down and back in.
+
+**1.5.0:** GRAINS is gone: mode 1 is retired, every other mode
 keeps its number (bank 1 is 2–15), and settings, calibration and slots
 carry over. Every mode and option was then checked on QEMU's STM32F405,
 built with the firmware's own flags, against the same run on a computer

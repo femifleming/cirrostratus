@@ -114,6 +114,8 @@ uint8_t Engine::num_options(ModeId id) {
 bool Engine::Init(void* main_mem, size_t main_size,
                   void* ccm_mem, size_t ccm_size) {
   shed_ = false;
+  shed_last_ = false;
+  last_wet_.l = last_wet_.r = 0.0f;
   SharedFft();
   size_t reverb_bytes = Fdn::MemoryBytes() + 64;
   if (ccm_size < reverb_bytes) return false;
@@ -356,11 +358,32 @@ void Engine::ProcessFloat(const Controls& raw, const FloatFrame* in,
     memcpy(mode_in_, in, sizeof(FloatFrame) * n);
   }
 
+  const float inv_block = 1.0f / static_cast<float>(n);
   if (run_mode) {
     current_->Process(c, mode_in_, wet_, n);
+    if (shed_last_) {
+      // back from a shed block: fade in, no step
+      for (size_t i = 0; i < n; ++i) {
+        const float g = static_cast<float>(i + 1) * inv_block;
+        wet_[i].l *= g;
+        wet_[i].r *= g;
+      }
+    }
+    last_wet_ = wet_[n - 1];
+  } else if (shed_ && !init_failed_ && state_ != STATE_SWITCH_PENDING) {
+    // A shed block (the last interrupt ran out of time): ramp from where the
+    // mode left off down to silence, so a skipped block is a dip, not a click.
+    for (size_t i = 0; i < n; ++i) {
+      const float g = 1.0f - static_cast<float>(i + 1) * inv_block;
+      wet_[i].l = last_wet_.l * g;
+      wet_[i].r = last_wet_.r * g;
+    }
+    last_wet_.l = last_wet_.r = 0.0f;
   } else {
     memset(wet_, 0, sizeof(FloatFrame) * n);
+    last_wet_.l = last_wet_.r = 0.0f;
   }
+  shed_last_ = shed_ && !run_mode;
 
   // Fades for mode switching.
   const float fade_inc = 1.0f / kFadeSamples;

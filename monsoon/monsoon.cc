@@ -58,9 +58,12 @@ void SysTick_Handler() {
 }
 
 // The audio interrupt's share of a block (32 frames at 48 kHz = 112,000
-// cycles at 168 MHz): past 85 % the next block skips the mode (see
-// Engine::set_shed), so the panel and mode changes always get their time.
-static const uint32_t kShedCycles = 168000000u / 48000u * kBlockSize * 85u / 100u;
+// cycles at 168 MHz): only a block that really ran out of time (98 %) makes
+// the next one skip the mode (see Engine::set_shed), so the panel and mode
+// changes always get their time. (1.3-1.5 shed past 85 %: the heavier modes
+// crossed that now and then on the module, and every skipped block was a
+// click.)
+static const uint32_t kShedCycles = 168000000u / 48000u * kBlockSize * 98u / 100u;
 
 void FillBuffer(Codec::Frame* input, Codec::Frame* output, size_t n) {
 #ifdef PROFILE_INTERRUPT

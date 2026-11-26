@@ -2,7 +2,7 @@
 
 ### *a thin, high sheet of cloud for the Monsoon*
 
-**Version 1.5.0**
+**Version 1.5.1**
 
 <img class="panel" src="img/cover.png" width="300" align="right" alt="Monsoon panel: cover">
 
@@ -33,6 +33,11 @@ This firmware goes one layer higher, thinner and brighter:
 
 It is still your Monsoon: same panel, same jacks, same bootloader. Only the
 weather changes.
+
+**New in 1.5.1:** no more glitchy pulses. When a block of audio took a little
+too long, 1.3 to 1.5 skipped the mode for the next block, and that gap was a
+click on top of the sound. Now only a block that truly runs out of time is
+skipped, and the effect glides out and back in instead of cutting.
 
 **New in 1.5.0:** **GRAINS is gone.** Mode 1 is retired and every other
 mode keeps its number, so bank 1 now runs from 2 to 15 (POSITION's bottom
