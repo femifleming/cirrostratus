@@ -152,6 +152,9 @@ class Ui {
   volatile uint8_t dobbel_flash_[kNumChannels];
   uint8_t dobbel_changed_;   // bit per segment: hold + slider/pot used
   bool dobbel_dirty_;
+  int32_t drift_hold_;       // buttons 1 and 2 held together, ms
+  int32_t drift_flash_;      // ms left of the dream-drift on/off flash
+  bool drift_flash_on_;
 
   Settings* settings_;
   ChainState* chain_state_;

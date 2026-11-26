@@ -80,7 +80,7 @@ static uint32_t Measure(const Config& config) {
   return (uint32_t)(total * 1000ull / 168ull / (kBlocks * kMaxBlockSize));
 }
 
-static const char* kTypeNames[TYPE_LAST] = { "random", "chaos", "envelope", "oscillator", "processor" };
+static const char* kTypeNames[TYPE_LAST] = { "random", "chaos", "envelope", "oscillator", "processor", "effect" };
 
 int main() {
   SYST_RVR = 0xFFFFFF;

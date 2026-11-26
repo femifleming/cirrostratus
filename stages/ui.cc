@@ -98,6 +98,9 @@ void Ui::Init(Settings* settings, ChainState* chain_state, CvReader* cv_reader) 
   }
   dobbel_changed_ = 0;
   dobbel_dirty_ = false;
+  drift_hold_ = 0;
+  drift_flash_ = 0;
+  drift_flash_on_ = false;
 }
 
 void Ui::Poll() {
@@ -661,10 +664,32 @@ void Ui::UpdateLEDs() {
 // While a button is held its slider and pot are locked, so moving them sets
 // the hidden settings without changing the sound; they unlock slowly after.
 
+// Cords: hold a button and tap the one on its left (button 6 for button 1):
+// the cord into the held segment steps none -> hall -> fog -> water -> door
+// -> range -> maybe -> none. Hold both and turn the held segment's knob: the
+// cord's amount (-1 to +1). Dream drift: hold buttons 1 and 2 together for 2 s.
 bool Ui::PollDobbel(uint8_t pressed) {
   dobbel::Config* config = settings_->mutable_dobbel();
+  // dream drift on / off
+  if ((pressed & 3) == 3 && !((changing_slider_prop_ | changing_pot_prop_) & 3)) {
+    if (drift_hold_ >= 0 && ++drift_hold_ >= 2000) {
+      config->drift = !config->drift;
+      dobbel_dirty_ = true;
+      drift_hold_ = -1;   // once per hold
+      drift_flash_ = 700;
+      drift_flash_on_ = config->drift != 0;
+      press_time_[0] = press_time_[1] = -1;
+    }
+  } else if ((pressed & 3) != 3) {
+    drift_hold_ = 0;
+  }
+  if (drift_flash_ > 0) --drift_flash_;
+
   for (uint8_t i = 0; i < kNumChannels; ++i) {
     dobbel::SegmentConfig& seg = config->segment[i];
+    const uint8_t left = (i + kNumChannels - 1) % kNumChannels;
+    const uint8_t right = (i + 1) % kNumChannels;
+    const bool with_left = (pressed >> left) & 1;
     if (switches_.pressed(i)) {
       cv_reader_->Lock(i);
       const float slider = cv_reader_->lp_slider(i);
@@ -686,9 +711,15 @@ bool Ui::PollDobbel(uint8_t pressed) {
           fabsf(pot - cv_reader_->locked_pot(i)) > 0.05f) {
         changing_pot_prop_ |= bit;
         float p = pot < 0.0f ? 0.0f : (pot > 1.0f ? 1.0f : pot);
-        const uint8_t aux = static_cast<uint8_t>(p * 255.0f + 0.5f);
-        if (seg.aux[seg.type] != aux) {
-          seg.aux[seg.type] = aux;
+        const uint8_t value = static_cast<uint8_t>(p * 255.0f + 0.5f);
+        if (with_left) {          // both held: the cord's amount
+          if (seg.cord_amount != value) {
+            seg.cord_amount = value;
+            dobbel_dirty_ = true;
+          }
+          press_time_[left] = -1;  // (the left button's release is no tap)
+        } else if (seg.aux[seg.type] != value) {
+          seg.aux[seg.type] = value;
           dobbel_dirty_ = true;
         }
       }
@@ -703,6 +734,11 @@ bool Ui::PollDobbel(uint8_t pressed) {
           if (press_time_[i] < kLongPressDurationForMultiModeToggle) {
             seg.alt ^= 1 << seg.type;
           }
+        } else if ((pressed >> right) & 1) {
+          // a tap while the right neighbour is held: that segment's cord
+          dobbel::SegmentConfig& held = config->segment[right];
+          held.cord = (held.cord + 1) % dobbel::CORD_LAST;
+          press_time_[right] = -1;
         } else {
           seg.type = (seg.type + 1) % dobbel::TYPE_LAST;
         }
@@ -775,8 +811,11 @@ void Ui::UpdateDobbelLEDs(uint32_t ms) {
         case dobbel::TYPE_OSCILLATOR:
           color = phase ? LED_COLOR_GREEN : LED_COLOR_RED;
           break;
-        default:
+        case dobbel::TYPE_PROCESSOR:
           color = phase ? LED_COLOR_YELLOW : LED_COLOR_RED;
+          break;
+        default:  // EFFECT
+          color = phase ? LED_COLOR_GREEN : LED_COLOR_YELLOW;
           break;
       }
       if ((seg.alt >> seg.type) & 1) {
@@ -787,11 +826,31 @@ void Ui::UpdateDobbelLEDs(uint32_t ms) {
         brightness = 0xf;
       }
     }
+    // The right neighbour held (and not this one): this light shows the
+    // cord into it (off, then green, yellow, red, then the same blinking).
+    const uint8_t right = (i + 1) % kNumChannels;
+    if (switches_.pressed(right) && !switches_.pressed(i) && press_time_[right] != 0) {
+      const uint8_t k = config.segment[right].cord;
+      const LedColor solid[3] = { LED_COLOR_GREEN, LED_COLOR_YELLOW, LED_COLOR_RED };
+      if (k == dobbel::CORD_NONE) {
+        color = LED_COLOR_OFF;
+      } else if (k <= 3) {
+        color = solid[k - 1];
+      } else {
+        color = blink ? solid[k - 4] : LED_COLOR_OFF;
+      }
+      brightness = 0xf;
+    }
+    if (drift_flash_ > 0) {   // dream drift on (green) / off (red)
+      color = drift_flash_on_ ? LED_COLOR_GREEN : LED_COLOR_RED;
+      brightness = 0xf;
+    }
     leds_.set(LED_GROUP_UI + i,
               (brightness > pwm && brightness != 0) ? color : LED_COLOR_OFF);
     uint8_t level = dobbel_level_[i];
+    const uint8_t left = (i + kNumChannels - 1) % kNumChannels;
     if (switches_.pressed(i) && (changing_pot_prop_ & (1 << i))) {
-      level = seg.aux[seg.type] >> 4;
+      level = switches_.pressed(left) ? seg.cord_amount >> 4 : seg.aux[seg.type] >> 4;
     }
     leds_.set(LED_GROUP_SLIDER + i, level > pwm ? LED_COLOR_GREEN : LED_COLOR_OFF);
   }
