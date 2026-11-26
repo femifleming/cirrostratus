@@ -23,7 +23,7 @@ It is built on [BRIBESTAGES](https://github.com/thisisbribery/bribestages) (qiem
 
 ## Download
 
-[`firmware/fletchfoorth-v1.3.1.wav`](firmware/fletchfoorth-v1.3.1.wav) for a module mounted normally, [`firmware/fletchfoorth-v1.3.1-flipped.wav`](firmware/fletchfoorth-v1.3.1-flipped.wav) upside down (SHA-256 in `firmware/SHA256SUMS.txt`). Also on the [releases page](../../releases).
+[`firmware/fletchfoorth-v1.3.1.wav`](firmware/fletchfoorth-v1.3.1.wav) for a module mounted normally, [`firmware/fletchfoorth-v1.3.1-flipped.wav`](firmware/fletchfoorth-v1.3.1-flipped.wav) upside down (SHA-256 in `firmware/SHA256SUMS.txt`). Also on the [releases page](https://github.com/femifleming/cirrostratus/releases).
 
 ## Install
 
