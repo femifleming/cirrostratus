@@ -231,25 +231,83 @@ void GrainsMode::Process(const Controls& c, const FloatFrame* in,
   }
 }
 
+// Longest stretch of stored samples one grain reads in a block: 32 frames at
+// up to ~7x speed, plus the Hermite taps and margin (longer: per-sample path).
+static const int32_t kMaxSpan = 236;
+
 template<bool kLofi>
 void GrainsMode::Render(FloatFrame* out, size_t n) {
   const bool mono = buffer_.channels() == 1;
+  // A grain's block of reads covers one short contiguous stretch of the
+  // buffer: decode that stretch once (ReadStored: the same stored values the
+  // per-sample reads use) and interpolate from it, instead of four wrapped,
+  // segment-checked, exponent-scaled reads per sample and channel. Same
+  // Hermite, same taps: the output is the same; it costs far fewer
+  // instructions, at every buffer quality.
+  const float to_stored = kLofi ? buffer_.inv_decimation() : 1.0f;
+  float span[2][kMaxSpan];
   for (int k = 0; k < kMaxGrains; ++k) {
     Grain& g = grains_[k];
     if (!g.active) continue;
     float pos = g.position;
     float phase = g.phase;
-    for (size_t i = 0; i < n; ++i) {
-      float w = Window(phase, g.texture);
-      float l = buffer_.ReadT<kLofi>(0, pos);
-      float r = mono ? l : buffer_.ReadT<kLofi>(1, pos);
-      out[i].l += l * w * g.gain_l;
-      out[i].r += r * w * g.gain_r;
-      pos += g.increment;
-      phase += g.phase_inc;
-      if (phase >= 1.0f) {
-        g.active = false;
-        break;
+    const float end = pos + g.increment * static_cast<float>(n);
+    const float a = (pos < end ? pos : end) * to_stored;
+    const float b = (pos < end ? end : pos) * to_stored;
+    // Hermite taps -1..+2, plus one sample of margin each side for the
+    // rounding of position / decimation.
+    const int32_t lo = static_cast<int32_t>(FastFloor(a)) - 2;
+    const int32_t len = static_cast<int32_t>(FastFloor(b)) - lo + 4;
+    if (len <= kMaxSpan) {
+      buffer_.ReadStored(0, lo, static_cast<size_t>(len), span[0]);
+      if (!mono) buffer_.ReadStored(1, lo, static_cast<size_t>(len), span[1]);
+      const float flo = static_cast<float>(lo);
+      const float* sl = span[0];
+      const float* sr = mono ? span[0] : span[1];
+      // The window is exact every 4th sample and a straight line between
+      // (grains are >= 1200 samples long: ~-120 dB from the exact output).
+      const float step4 = 4.0f * g.phase_inc;
+      float w = 0.0f, dw = 0.0f, next = Window(phase, g.texture);
+      for (size_t i = 0; i < n; ++i) {
+        if ((i & 3) == 0) {
+          w = next;
+          const float ahead = phase + step4;
+          next = Window(ahead < 1.0f ? ahead : 1.0f, g.texture);
+          dw = (next - w) * 0.25f;
+        }
+        const float p = (kLofi ? pos * to_stored : pos) - flo;
+        const float fl = FastFloor(p);
+        const int32_t x = static_cast<int32_t>(fl);
+        const float t = p - fl;
+        const float l = Hermite(sl[x - 1], sl[x], sl[x + 1], sl[x + 2], t);
+        const float r = mono ? l
+            : Hermite(sr[x - 1], sr[x], sr[x + 1], sr[x + 2], t);
+        // The percussive window's corner (its peak at 3 %) is not smooth:
+        // exact there.
+        const float wi = phase < 0.04f ? Window(phase, g.texture) : w;
+        out[i].l += l * wi * g.gain_l;
+        out[i].r += r * wi * g.gain_r;
+        w += dw;
+        pos += g.increment;
+        phase += g.phase_inc;
+        if (phase >= 1.0f) {
+          g.active = false;
+          break;
+        }
+      }
+    } else {
+      for (size_t i = 0; i < n; ++i) {
+        float w = Window(phase, g.texture);
+        float l = buffer_.ReadT<kLofi>(0, pos);
+        float r = mono ? l : buffer_.ReadT<kLofi>(1, pos);
+        out[i].l += l * w * g.gain_l;
+        out[i].r += r * w * g.gain_r;
+        pos += g.increment;
+        phase += g.phase_inc;
+        if (phase >= 1.0f) {
+          g.active = false;
+          break;
+        }
       }
     }
     // Keep the position bounded (wrapping is handled by the buffer reads).

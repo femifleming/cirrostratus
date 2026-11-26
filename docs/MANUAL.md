@@ -261,8 +261,10 @@ STRETCH, CAPTURE, TAPE, BARBERPOLE** and **BLOOM**. Store the audio at a
 lower sample rate and/or 8-bit and the same memory holds up to six times
 as much sound.
 
-**Hold WRITE, tap DISP** (within a second, before the save page opens).
-**FREEZE** steps through the six settings, the LEDs show the one you're on:
+**Hold WRITE, tap DISP** (it doesn't matter how long you've held WRITE).
+An amber light sweeps across the four LEDs: you're on the page, and LED 4
+stays amber while you are. **FREEZE** steps through the six settings, LEDs
+1–3 show the one you're on:
 
 | LEDs | Setting | Length | Sound |
 |---|---|---|---|
@@ -274,7 +276,8 @@ as much sound.
 | ●●● red | 16 kHz 8-bit | 6× | both: lo-fi, longest |
 
 LED 4 blinks amber while the choice differs from the current one. **WRITE**
-applies it and leaves; **DISP** (or 6 s) leaves without changing anything.
+applies it: all four LEDs flash its colour, then the page closes. **DISP**
+(or 6 s) leaves without changing anything.
 Applying restarts the running mode's buffer empty, so do it before you
 record. Modes without a buffer don't notice.
 

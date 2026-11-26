@@ -165,6 +165,27 @@ class SampleBuffer {
   // the fast way for block reads such as STRETCH's analysis window.
   void ReadSpan(int channel, int32_t start, size_t n, float* out) const;
 
+  // `n` consecutive STORED samples from stored index `start` (wraps) into
+  // `out`, as floats: the values ReadLofi()/Read() interpolate between (at
+  // 48 kHz 16-bit stored samples are 48 kHz frames). For hot loops that
+  // interpolate themselves: position / decimation() is the stored position.
+  void ReadStored(int channel, int32_t start, size_t n, float* out) const {
+    int32_t k = Wrap(start);
+    const int32_t size = static_cast<int32_t>(size_);
+    if (eight_bit_) {
+      for (size_t i = 0; i < n; ++i) {
+        out[i] = Sample8(channel, static_cast<size_t>(k));
+        if (++k == size) k = 0;
+      }
+    } else {
+      for (size_t i = 0; i < n; ++i) {
+        out[i] = Sample16(channel, static_cast<size_t>(k));
+        if (++k == size) k = 0;
+      }
+    }
+  }
+  float inv_decimation() const { return inv_decimation_; }
+
   // Position `delay` frames behind the write head.
   float Behind(float delay) const {
     return static_cast<float>(write_head()) - delay;

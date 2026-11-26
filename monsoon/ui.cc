@@ -44,6 +44,9 @@ void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
   settings_dirty_ = false;
   panic_until_ = 0;
   mono_bass_until_ = 0;
+  buffer_opened_ = 0;
+  buffer_applied_until_ = 0;
+  save_by_hold_ = false;
   menu_lo_ = kMenuLo;
   menu_hi_ = kMenuHi;
 
@@ -87,14 +90,34 @@ void Ui::Poll() {
     if (page_ == UI_PAGE_ENV) settings_dirty_ = true;
     page_ = previous_page_;
   }
+  if (page_ == UI_PAGE_BUFFER && buffer_applied_until_ &&
+      now > buffer_applied_until_) {
+    buffer_applied_until_ = 0;
+    page_ = previous_page_;
+  }
   if (page_ == UI_PAGE_MONO_BASS && now > mono_bass_until_) {
     page_ = previous_page_;
   }
   PaintLeds();
 }
 
+void Ui::OpenBufferPage(uint32_t now) {
+  used_as_modifier_[SWITCH_WRITE] = true;
+  used_as_modifier_[SWITCH_DISP] = true;
+  buffer_cursor_ = settings_->data().buffer_quality;
+  buffer_opened_ = now;
+  buffer_applied_until_ = 0;
+  save_by_hold_ = false;
+  page_ = UI_PAGE_BUFFER;
+}
+
 void Ui::OnPress(uint8_t id) {
   page_timeout_ = system_clock.milliseconds() + kPageTimeout;
+  if (buffer_applied_until_) {
+    // Any press ends the "applied" confirmation and acts as usual.
+    buffer_applied_until_ = 0;
+    if (page_ == UI_PAGE_BUFFER) page_ = previous_page_;
+  }
   if (page_ == UI_PAGE_SPLASH) {
     page_ = previous_page_;
     used_as_modifier_[id] = true;  // the skipping press does nothing else
@@ -144,11 +167,14 @@ void Ui::OnPress(uint8_t id) {
       } else if (switches_.pressed(SWITCH_WRITE) &&
                  (page_ == UI_PAGE_VU_METER || page_ == UI_PAGE_KNOBS)) {
         // WRITE held + DISP: buffer page.
-        used_as_modifier_[SWITCH_WRITE] = true;
-        used_as_modifier_[SWITCH_DISP] = true;
-        buffer_cursor_ = settings_->data().buffer_quality;
         previous_page_ = page_;
-        page_ = UI_PAGE_BUFFER;
+        OpenBufferPage(system_clock.milliseconds());
+      } else if (switches_.pressed(SWITCH_WRITE) && page_ == UI_PAGE_SAVE &&
+                 save_by_hold_) {
+        // WRITE held past a second opened the save page first: DISP while
+        // WRITE is still down still means the buffer page (previous_page_
+        // is already the page the save page came from).
+        OpenBufferPage(system_clock.milliseconds());
       } else if (page_ == UI_PAGE_LOAD || page_ == UI_PAGE_SAVE) {
         slot_ = (slot_ + 1) % kNumSlots;
         used_as_modifier_[SWITCH_DISP] = true;
@@ -201,6 +227,7 @@ void Ui::OnLongPress(uint8_t id) {
                (page_ == UI_PAGE_VU_METER || page_ == UI_PAGE_KNOBS)) {
       previous_page_ = page_;
       used_as_modifier_[SWITCH_WRITE] = true;
+      save_by_hold_ = true;
       page_ = UI_PAGE_SAVE;
     }
   }
@@ -237,6 +264,7 @@ void Ui::OnRelease(uint8_t id, uint32_t duration) {
       break;
 
     case SWITCH_WRITE:
+      save_by_hold_ = false;
       if (modifier) break;
       if (page_ == UI_PAGE_MODE_MENU) {
         // Tap WRITE in the menu: other bank. DoEvents re-reads POSITION.
@@ -263,7 +291,9 @@ void Ui::OnRelease(uint8_t id, uint32_t duration) {
           settings_dirty_ = true;
         }
         engine_->set_buffer_quality(buffer_cursor_);
-        page_ = previous_page_;
+        // Stay a moment to show it took (all four LEDs flash the new
+        // setting's colour), then back.
+        buffer_applied_until_ = system_clock.milliseconds() + 800;
       } else if (page_ == UI_PAGE_CALIBRATION_1) {
         cv_scaler_->CalibrateC1();
         cv_scaler_->CalibrateOffsets();
@@ -530,15 +560,29 @@ void Ui::PaintLeds() {
 
     case UI_PAGE_BUFFER:
       {
-        // LEDs 1-3: 48 / 24 / 16 kHz as a bar (longer bar = longer
-        // buffer), green 16-bit, red 8-bit. LED 4 blinks amber while
-        // WRITE would change something.
+        // Opening: an amber sweep across the four LEDs (so the page can't
+        // be mistaken for the meter). Then LEDs 1-3: 48 / 24 / 16 kHz as a
+        // bar (longer bar = longer buffer), green 16-bit, red 8-bit; LED 4
+        // steady amber = this page, blinking amber = WRITE would change
+        // something. After WRITE: all four flash the applied colour.
         const bool eight = QualityEightBit(buffer_cursor_);
         const int lit = QualityDecimation(buffer_cursor_);
-        for (int i = 0; i < lit; ++i) {
-          leds_.set_status(i, eight ? 255 : 0, eight ? 0 : 255);
+        const uint8_t r = eight ? 255 : 0, g = eight ? 0 : 255;
+        if (buffer_applied_until_) {
+          if (fast_blink) {
+            for (int i = 0; i < 4; ++i) leds_.set_status(i, r, g);
+          }
+          break;
         }
-        if (buffer_cursor_ != settings_->data().buffer_quality && blink) {
+        const uint32_t age = now - buffer_opened_;
+        if (age < 320) {
+          leds_.set_status(static_cast<uint8_t>(age / 80), 255, 160);
+          break;
+        }
+        for (int i = 0; i < lit; ++i) leds_.set_status(i, r, g);
+        if (buffer_cursor_ != settings_->data().buffer_quality) {
+          if (blink) leds_.set_status(3, 255, 160);
+        } else {
           leds_.set_status(3, 255, 160);
         }
       }

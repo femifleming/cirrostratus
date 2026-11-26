@@ -102,6 +102,9 @@ class Ui {
   uint32_t option_flash_until_;
   uint32_t panic_until_;
   uint32_t mono_bass_until_;
+  uint32_t buffer_opened_;        // when the buffer page opened (wipe)
+  uint32_t buffer_applied_until_; // > 0: showing the applied setting
+  bool save_by_hold_;             // the save page came from holding WRITE
 
   uint8_t menu_mode_;
   uint8_t menu_bank_;
@@ -115,6 +118,8 @@ class Ui {
   int8_t morph_slot_;
   uint8_t env_cursor_;
   uint8_t buffer_cursor_;
+
+  void OpenBufferPage(uint32_t now);
 
   volatile bool save_requested_;
   volatile bool settings_dirty_;
