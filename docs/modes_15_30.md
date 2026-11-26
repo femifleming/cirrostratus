@@ -25,7 +25,7 @@ wooden body, metal sheet, cathedral.
 
 A spectral dynamic EQ: it finds narrow ringing peaks standing above their
 neighbours and pushes them down, stereo-linked so the image doesn't move
-(27 ms latency).
+(27 ms latency). FFT 1024 (256–2048 with the FFT size setting, 3.8).
 
 | Control | |
 |---|---|
@@ -104,6 +104,7 @@ if you're a little sharp.
 
 A denoiser plus a 50/60 Hz hum comb. It learns the noise when you hold
 FREEZE; until then it tracks the noise floor by itself (32 ms latency).
+FFT 1024 (256–1024 with the FFT size setting, 3.8).
 
 | Control | |
 |---|---|
@@ -160,7 +161,8 @@ echoes spiral up or down forever.
 #### 23 · SPECDELAY — spectral delay
 *Forecast: the lows arrive late, the highs early (or the other way round).*
 
-Every frequency band has its own delay and feedback.
+Every frequency band has its own delay and feedback. FFT 512 (256–1024 with
+the FFT size setting, 3.8: bigger means finer bands and longer steps).
 
 | Control | |
 |---|---|
@@ -278,6 +280,7 @@ so they beat (ombak).
 
 Every partial is moved to a new frequency: stretched apart (bells),
 mirrored around an anchor note (highs become lows), or folded under it.
+FFT 1024 (256–2048 with the FFT size setting, 3.8).
 
 | Control | |
 |---|---|

@@ -2,7 +2,7 @@
 
 ### *a thin, high sheet of cloud for the Monsoon*
 
-**Version 1.3.0**
+**Version 1.4.0**
 
 <img class="panel" src="img/cover.png" width="300" align="right" alt="Monsoon panel: cover">
 
@@ -23,7 +23,8 @@ This firmware goes one layer higher, thinner and brighter:
 - **48 kHz**, 32-bit float inside, 16-bit block-float buffers that keep quiet
   sounds clean (a −60 dB whisper is stored with 93 dB SNR), and a
   **buffer quality** setting that trades fidelity for up to **6× longer
-  buffers** in every mode that records
+  buffers** in every mode that records, and an **FFT size** setting
+  (256 to 2048 points) for every spectral mode
 - a clean **output section**: equal-power blend, hard stereo (whatever the
   mode makes), **bass kept mono below 60 Hz**, a transparent limiter and
   dithered output
@@ -33,7 +34,18 @@ This firmware goes one layer higher, thinner and brighter:
 It is still your Monsoon: same panel, same jacks, same bootloader. Only the
 weather changes.
 
-**New in 1.3.0:** SPECTRAL has a second option, **SMEAR**, the spectral
+**New in 1.4.0:** an **FFT size** page (hold DISP, tap FREEZE; section
+3.8) sets the resolution of all seven spectral modes at once: 256 points
+for sharp, grainy, transient spectra up to 2048 for smooth, glassy ones,
+or each mode's own size as before. Blur, decay and delay times stay the
+same at every size; only the resolution changes.
+
+**1.3.1:** GRAINS needed more time than the module has, so the whole
+output broke up, dry signal included, at every buffer quality. It now
+runs in about four fifths of the time with the same sound. The buffer page
+opens however long you've held WRITE, and shows itself clearly (3.7).
+
+**1.3.0:** SPECTRAL has a second option, **SMEAR**, the spectral
 smear from Sleepcousonique's Wingie mode (section 5, mode 2). RESONATOR,
 PLATES and GAMELAN no longer retune on the tiny wobble every knob has, which
 made RESONATOR glitch and stop answering the mode menu; and if a mode ever
@@ -221,7 +233,8 @@ power cycles.
   you there.
 - What goes in the jar depends on the mode: a recorded buffer, a frozen
   spectrum, a wavetable, a captured impulse response, a tape loop… Each
-  mode below says what it keeps.
+  mode below says what it keeps. A jar also keeps the buffer quality (3.7)
+  and FFT size (3.8) it was made with, and plays back at them.
 
 **Slot morph** (SPECTRAL and CAPTURE): on the load page, tap **FREEZE**
 instead of WRITE. That slot becomes the *morph source*: its LED stays red,
@@ -462,7 +475,8 @@ lower buffer quality (3.7).
 **Option 2 · SMEAR** — *a photograph left out in the rain.* The spectral
 smear from Sleepcousonique's Wingie mode, the same sound: the spectrum is
 blurred in time and a little across frequency, and its partials carry on.
-512-point transform, 4× overlap, 16 ms latency. Mono, like the Wingie's: the
+512-point transform (256–2048 with the FFT size setting, 3.8), 4× overlap,
+16 ms latency. Mono, like the Wingie's: the
 mid (L+R) is smeared and comes out of both sides.
 
 <img class="panel" src="img/mode02.png" width="300" align="right" alt="Monsoon panel: mode 2 SPECTRAL">
@@ -540,7 +554,8 @@ ear makes the tone at Δ, a note that isn't in the signal.
 *Forecast: two weather fronts collide.*
 
 Left input = modulator, right input = carrier (64 ms latency). With only IN L patched,
-both sides are the same signal.
+both sides are the same signal. FFT 2048 (256–2048 with the FFT size
+setting, 3.8).
 
 <img class="panel" src="img/mode06.png" width="300" align="right" alt="Monsoon panel: mode 6 CROSS">
 
@@ -562,6 +577,8 @@ both sides are the same signal.
 
 A phase vocoder with phase locking reads a recorded buffer slowly: 0.30 s
 stereo or 0.89 s mono, up to 1.76 s / 5.23 s at a lower buffer quality (3.7).
+FFT 2048 (256–2048 with the FFT size setting, 3.8: smaller is more
+transient, less smooth).
 
 <img class="panel" src="img/mode07.png" width="300" align="right" alt="Monsoon panel: mode 7 STRETCH">
 
@@ -771,7 +788,7 @@ wooden body, metal sheet, cathedral.
 
 A spectral dynamic EQ: it finds narrow ringing peaks standing above their
 neighbours and pushes them down, stereo-linked so the image doesn't move
-(27 ms latency).
+(27 ms latency). FFT 1024 (256–2048 with the FFT size setting, 3.8).
 
 <img class="panel" src="img/mode16.png" width="300" align="right" alt="Monsoon panel: mode 16 QUELL">
 
@@ -858,6 +875,7 @@ if you're a little sharp.
 
 A denoiser plus a 50/60 Hz hum comb. It learns the noise when you hold
 FREEZE; until then it tracks the noise floor by itself (32 ms latency).
+FFT 1024 (256–1024 with the FFT size setting, 3.8).
 
 <img class="panel" src="img/mode20.png" width="300" align="right" alt="Monsoon panel: mode 20 PUTZ">
 
@@ -920,7 +938,8 @@ echoes spiral up or down forever.
 #### 23 · SPECDELAY — spectral delay
 *Forecast: the lows arrive late, the highs early (or the other way round).*
 
-Every frequency band has its own delay and feedback.
+Every frequency band has its own delay and feedback. FFT 512 (256–1024 with
+the FFT size setting, 3.8: bigger means finer bands and longer steps).
 
 <img class="panel" src="img/mode23.png" width="300" align="right" alt="Monsoon panel: mode 23 SPECDELAY">
 
@@ -1050,6 +1069,7 @@ so they beat (ombak).
 
 Every partial is moved to a new frequency: stretched apart (bells),
 mirrored around an anchor note (highs become lows), or folded under it.
+FFT 1024 (256–2048 with the FFT size setting, 3.8).
 
 <img class="panel" src="img/mode29.png" width="300" align="right" alt="Monsoon panel: mode 29 MIRROR">
 

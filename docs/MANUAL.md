@@ -2,7 +2,7 @@
 
 ### *a thin, high sheet of cloud for the Monsoon*
 
-**Version 1.3.0**
+**Version 1.4.0**
 
 <!-- PANEL cover -->
 
@@ -22,7 +22,8 @@ This firmware goes one layer higher, thinner and brighter:
 - **48 kHz**, 32-bit float inside, 16-bit block-float buffers that keep quiet
   sounds clean (a −60 dB whisper is stored with 93 dB SNR), and a
   **buffer quality** setting that trades fidelity for up to **6× longer
-  buffers** in every mode that records
+  buffers** in every mode that records, and an **FFT size** setting
+  (256 to 2048 points) for every spectral mode
 - a clean **output section**: equal-power blend, hard stereo (whatever the
   mode makes), **bass kept mono below 60 Hz**, a transparent limiter and
   dithered output
@@ -32,7 +33,18 @@ This firmware goes one layer higher, thinner and brighter:
 It is still your Monsoon: same panel, same jacks, same bootloader. Only the
 weather changes.
 
-**New in 1.3.0:** SPECTRAL has a second option, **SMEAR**, the spectral
+**New in 1.4.0:** an **FFT size** page (hold DISP, tap FREEZE; section
+3.8) sets the resolution of all seven spectral modes at once: 256 points
+for sharp, grainy, transient spectra up to 2048 for smooth, glassy ones,
+or each mode's own size as before. Blur, decay and delay times stay the
+same at every size; only the resolution changes.
+
+**1.3.1:** GRAINS needed more time than the module has, so the whole
+output broke up, dry signal included, at every buffer quality. It now
+runs in about four fifths of the time with the same sound. The buffer page
+opens however long you've held WRITE, and shows itself clearly (3.7).
+
+**1.3.0:** SPECTRAL has a second option, **SMEAR**, the spectral
 smear from Sleepcousonique's Wingie mode (section 5, mode 2). RESONATOR,
 PLATES and GAMELAN no longer retune on the tiny wobble every knob has, which
 made RESONATOR glitch and stop answering the mode menu; and if a mode ever
@@ -212,7 +224,8 @@ power cycles.
   you there.
 - What goes in the jar depends on the mode: a recorded buffer, a frozen
   spectrum, a wavetable, a captured impulse response, a tape loop… Each
-  mode below says what it keeps.
+  mode below says what it keeps. A jar also keeps the buffer quality (3.7)
+  and FFT size (3.8) it was made with, and plays back at them.
 
 **Slot morph** (SPECTRAL and CAPTURE): on the load page, tap **FREEZE**
 instead of WRITE. That slot becomes the *morph source*: its LED stays red,

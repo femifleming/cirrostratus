@@ -45,7 +45,8 @@ lower buffer quality (3.7).
 **Option 2 · SMEAR** — *a photograph left out in the rain.* The spectral
 smear from Sleepcousonique's Wingie mode, the same sound: the spectrum is
 blurred in time and a little across frequency, and its partials carry on.
-512-point transform, 4× overlap, 16 ms latency. Mono, like the Wingie's: the
+512-point transform (256–2048 with the FFT size setting, 3.8), 4× overlap,
+16 ms latency. Mono, like the Wingie's: the
 mid (L+R) is smeared and comes out of both sides.
 
 | Control | |
@@ -115,7 +116,8 @@ ear makes the tone at Δ, a note that isn't in the signal.
 *Forecast: two weather fronts collide.*
 
 Left input = modulator, right input = carrier (64 ms latency). With only IN L patched,
-both sides are the same signal.
+both sides are the same signal. FFT 2048 (256–2048 with the FFT size
+setting, 3.8).
 
 | Control | |
 |---|---|
@@ -135,6 +137,8 @@ both sides are the same signal.
 
 A phase vocoder with phase locking reads a recorded buffer slowly: 0.30 s
 stereo or 0.89 s mono, up to 1.76 s / 5.23 s at a lower buffer quality (3.7).
+FFT 2048 (256–2048 with the FFT size setting, 3.8: smaller is more
+transient, less smooth).
 
 | Control | |
 |---|---|
