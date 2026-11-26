@@ -218,38 +218,33 @@ def row(label, text, spoken=None, hl=None):
 def general_chapters():
     return [
         dict(code="cs00", title="cirrostratus", sub="a thin, high sheet of cloud for the monsoon",
-             desc="Alternative firmware for Jak Plugg's Monsoon, the twelve HP Clouds. Twenty-nine modes in two "
+             desc="Alternative firmware for Jak Plugg's Monsoon, the twelve HP Clouds. Thirty modes in two "
                   "banks, a forty-eight kilohertz floating-point engine, and eight hands-on controls in every mode.",
              say="Cirrostratus. A thin, high sheet of cloud for the Monsoon. It's alternative firmware for "
-                 "Jak Plugg's Monsoon: twenty-nine modes in two banks, a forty-eight kilohertz floating-point engine, "
+                 "Jak Plugg's Monsoon: thirty modes in two banks, a forty-eight kilohertz floating-point engine, "
                  "and eight controls in every mode: the four sliders, and now the BAL, FBK and RVB knobs too. "
                  "Same panel, same jacks. Only the weather changes.",
-             rows=[row("modes", "29 · two banks", hl=[]), row("engine", "48 kHz · 32-bit float", hl=[]),
+             rows=[row("modes", "30 · two banks", hl=[]), row("engine", "48 kHz · 32-bit float", hl=[]),
                    row("slots", "4 jars of sky", hl=[]), row("look up", "always", hl=[])], kind="intro"),
-        dict(code="nw15", title="new in 1.5", sub="grains retired, every mode checked",
-             desc="GRAINS is retired: every other mode keeps its number, and your settings, calibration and "
-                  "slots carry over. Then every mode and option ran on an emulated STM32F405, built exactly "
-                  "like the firmware: CHLOE's short delays and TAPE's fastest speed were over the module's "
-                  "time, and are fixed.",
-             say="New in one point five.",
-             rows=[row("grains", "retired · numbers kept",
-                       "Grains is retired. Every other mode keeps its number, so bank one now runs from two to "
-                       "fifteen, and the bottom of POSITION lands on Spectral. Your settings, your calibration "
-                       "and your save slots all carry over.", hl=["disp", "leds", "sl0"]),
-                   row("every mode", "checked on the chip's twin",
-                       "Then every mode and every option ran on an emulated copy of the module's chip, built "
-                       "exactly like the firmware, and was checked against a computer: at ordinary settings, "
-                       "flat out, fully dry, and with every slider at both ends.", hl=["sl0", "sl1", "sl2", "sl3"]),
-                   row("fully dry", "the input, untouched",
-                       "With WET all the way down, every mode passes your input through untouched.",
-                       hl=["k0", "in_l", "out_l"]),
-                   row("chloe", "short delays fit the cpu",
-                       "Chloe's PT2399 and BBD delays needed up to three times the time the module has at short "
-                       "delays. Their clocks now stop rising there, and the line gets shorter instead: the same "
-                       "delay time, short echoes just a little darker.", hl=["sl2"]),
-                   row("tape", "tops out at ×3",
-                       "And Tape now tops out at three times speed, where four was too much.",
-                       hl=["sl2", "tune"])], kind="steps"),
+        dict(code="nw152", title="new in 1.5.2", sub="a spring tank, a smooth smear",
+             desc="Mode 1 is SPRING: a spring reverb tank, every echo a falling chirp. SPECTRAL's SMEAR is "
+                  "smooth at long blurs: no more flutter, no more dropouts. And since 1.5.1 no clicks when "
+                  "a block runs long.",
+             say="New in one point five point two.",
+             rows=[row("1 · spring", "a spring reverb tank",
+                       "Mode one is back, as Spring: the tank from the back of a guitar amp. Every echo arrives "
+                       "as a falling chirp, the boing and the drip. Texture sets how long the drip is, RVB is "
+                       "the dwell, and TRIG kicks the tank.", hl=["disp", "leds", "sl3", "k3"]),
+                   row("smear", "smooth, at any blur",
+                       "Spectral's Smear option is smooth now. Under a long blur, the bins of one note used to "
+                       "drift against each other, so the smear fluttered like a stutter and sometimes cancelled "
+                       "itself out. Now they move as one.", hl=["sl1"]),
+                   row("1.5.1", "no more pulses",
+                       "And since one point five point one, a block that runs a little long no longer leaves a "
+                       "click: the effect glides out and back in.", hl=["out_l", "out_r"]),
+                   row("checked", "every mode, on the chip's twin",
+                       "Every mode and option ran again on an emulated copy of the module's chip, checked "
+                       "against a computer: all of them pass.", hl=["sl0", "sl1", "sl2", "sl3"])], kind="steps"),
         dict(code="in01", title="installing", sub="getting the cloud up there",
              desc="Rack off. Computer out into IN L. Hold FREEZE and power on: the FREEZE button blinks. "
                   "Play cirrostratus.wav from the start. Four green lights as each block is written; "
@@ -319,8 +314,7 @@ def general_chapters():
              say="Choosing a mode.",
              rows=[row("hold disp", "menu opens",
                        "Hold DISP. The four lights show the mode as a binary number: green for bank one, "
-                       "modes two to fifteen, red for bank two, sixteen to thirty. Mode one, Grains, is retired, so "
-                       "the others keep their numbers.", hl=["disp", "leds"]),
+                       "modes one to fifteen, red for bank two, sixteen to thirty.", hl=["disp", "leds"]),
                    row("position", "browse the bank", "Move the POSITION slider to browse.",
                        hl=["sl0"]),
                    row("tap write", "other bank", "Tap WRITE to flip banks.", hl=["write"]),
@@ -451,10 +445,10 @@ def build_chapters():
         ch.append(dict(code=code, title=m["name"].lower(), sub=m["sub"].lower(), desc=m["desc"],
                        forecast=m["forecast"], say=say, rows=rows, kind="mode", num=m["num"]))
     ch.append(dict(code="cs∞", title="look up", sub="cirrostratus · firmware for monsoon",
-                   desc="Twenty-nine kinds of sky. Thanks to Mutable Instruments, Tom Burns and Jak Plugg.",
-                   say="That's Cirrostratus. Twenty-nine kinds of sky, in one small cloud. Thanks to Mutable Instruments, "
+                   desc="Thirty kinds of sky. Thanks to Mutable Instruments, Tom Burns and Jak Plugg.",
+                   say="That's Cirrostratus. Thirty kinds of sky, in one small cloud. Thanks to Mutable Instruments, "
                        "Tom Burns and Jak Plugg. Now go and look up.",
-                   rows=[row("modes", "29", hl=[]), row("tests", "225 passing", hl=[]),
+                   rows=[row("modes", "30", hl=[]), row("tests", "231 passing", hl=[]),
                          row("licence", "mit", hl=[])], kind="outro"))
     for i, c in enumerate(ch):
         c["index"] = i
@@ -468,10 +462,10 @@ def short_chapters():
     allk = ["sl0", "sl1", "sl2", "sl3"]
     ch = [
         dict(code="cs", title="cirrostratus", sub="a thin, high sheet of cloud",
-             desc="Firmware for the Monsoon. Twenty-nine kinds of weather, at forty-eight kilohertz, in floating point.",
-             say="Cirrostratus. A thin, high sheet of cloud, drawn across the Monsoon. Twenty-nine kinds of weather, "
+             desc="Firmware for the Monsoon. Thirty kinds of weather, at forty-eight kilohertz, in floating point.",
+             say="Cirrostratus. A thin, high sheet of cloud, drawn across the Monsoon. Thirty kinds of weather, "
                  "sung at forty-eight kilohertz. The same panel. A different sky.",
-             rows=[row("modes", "29 · two banks", hl=[]), row("engine", "48 kHz · float", hl=[]),
+             rows=[row("modes", "30 · two banks", hl=[]), row("engine", "48 kHz · float", hl=[]),
                    row("look up", "always", hl=[])], kind="intro"),
         dict(code="pn", title="the panel", sub="four sliders, one big knob, three new hands",
              desc="POSITION, DENSITY, SIZE, TEXTURE shape the sky. TUNE is pitch. BAL, FBK and RVB belong to "
@@ -483,7 +477,7 @@ def short_chapters():
                    row("tune", "pitch, v/oct", hl=["tune", "voct"]),
                    row("bal fbk rvb", "new hands in every mode", hl=["k1", "k2", "k3"]),
                    row("wet", "how much sky", hl=["k0"])], kind="panel"),
-        dict(code="mn", title="twenty-nine skies", sub="hold disp, slide position, let go",
+        dict(code="mn", title="thirty skies", sub="hold disp, slide position, let go",
              desc="Hold DISP: the lights count in binary, green for the first bank, red for the second. "
                   "POSITION browses, WRITE crosses banks, FREEZE picks an option.",
              say="Hold display, and the four lights count in binary. Green is the first bank, red the second. "
@@ -491,7 +485,7 @@ def short_chapters():
              rows=[row("hold disp", "the lights count", hl=["disp", "leds"]),
                    row("position", "wander", hl=["sl0"]), row("write", "cross the banks", hl=["write"]),
                    row("let go", "the new sky fades in", hl=["disp"])], kind="menu"),
-        dict(code="wx", title="the weather", sub="a few of the twenty-nine",
+        dict(code="wx", title="the weather", sub="a few of the thirty",
              desc="Spectra held and refracted. Strings with a buzzing bridge. "
                   "Tabla and tanpura. Plates of glass. A choir of you. Rooms that loop forever.",
              say="A spectrum, held and refracted into its colours. Strings with a "
@@ -964,7 +958,7 @@ def render_chapter(args):
         elif c["kind"] == "sunrise":
             leds, frz = splash_leds((t * 1000) % 4200)
         elif c["kind"] == "menu":
-            n = int(t / 1.2) % 29 + 2  # 2..30: mode 1 is retired
+            n = int(t / 1.2) % 30 + 1  # 1..30
             leds = binary_leds((n - 1) % 15 + 1, n <= 15)
         elif c["kind"] == "buffer":
             r = c["rows"][active] if active is not None else c["rows"][0]

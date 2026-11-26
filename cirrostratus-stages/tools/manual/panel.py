@@ -76,9 +76,9 @@ def fade(c, amount):
     return tuple(int(v + (PANEL[i] - v) * amount) for i, v in enumerate(c))
 
 
-def draw(path, cols=None, rings=(), badges=(), dim=(), title=True):
+def draw(path, cols=None, rings=(), badges=(), dim=(), title=True, bg=(255, 255, 255)):
     cols = cols or [{} for _ in range(6)]
-    img = Image.new("RGB", (int(W * S + 2 * MARGIN), int(H * S + 2 * MARGIN)), (255, 255, 255))
+    img = Image.new("RGB", (int(W * S + 2 * MARGIN), int(H * S + 2 * MARGIN)), bg)
     d = ImageDraw.Draw(img)
     x0, y0 = P(X0, Y0)
     x1, y1 = P(X0 + W, Y0 + H)

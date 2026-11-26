@@ -70,6 +70,12 @@ more mode next to them.
 The module updates from an audio file. The updater is built in and can't be
 damaged by a failed attempt, so you can always try again.
 
+**Where:** the Cirrostratus releases page,
+github.com/femifleming/cirrostratus/releases, or the repository's
+`cirrostratus-stages/firmware/` folder. (fletchfoorth used to have its own
+repository; since 1.3.1 it lives in Cirrostratus, next to the Monsoon
+firmware.)
+
 **You need:** a computer or phone with a headphone jack (a wired USB headphone
 adapter works, Bluetooth doesn't), a 3.5 mm patch cable, and
 `fletchfoorth-v1.3.1.wav` (or `fletchfoorth-v1.3.1-flipped.wav` for a module mounted
@@ -508,7 +514,7 @@ go: your gesture loops.
 |---|---|
 | Output | −8 to +8 V at most; randoms 0 to 8 V or ±5 V; oscillators and effects ±5 V; chaos and stair gates 8 V (times the amplitude); transient, compare and quantise triggers 5 V (compare up to 8 V) |
 | Processing | 31,250 samples a second per segment (Effects process their left neighbour at that rate); CV and knobs read 3,906 times a second; cords once per block (3,906 a second) |
-| CPU | measured on an emulated Cortex-M4: 651 instructions per sample for the default set, 1,156 for the heaviest (six Fold or six Morph oscillators), 1,108 for six effects (six choruses); the chip has 2,304 cycles per sample, and running from flash it needs more than one cycle per instruction |
+| CPU | measured on an emulated Cortex-M4: 651 instructions per sample for the default set, 1,156 for the heaviest (six Fold or six Morph oscillators), 1,108 for six effects (six choruses); no single block above 1,220, with the controls jittering as the module's inputs do; the chip has 2,304 cycles per sample, and running from flash it needs more than one cycle per instruction |
 | Overload light | if the processing ever misses its deadline (the DAC would play a stale block: a gritty, chopped sound), all six **button lights flicker red** for half a second. (Not for the moment after a settings save: every change is saved to flash when you let go of the button, and the chip can't run anything while it writes flash, so a block or two goes missing there, as on stock Stages.) If you see it, the set of segments is too heavy for the chip: please report which types and flavours were running, and what the load meter shows |
 | Load meter | hold buttons 5 and 6 together for 1 s: the slider lights show the share of the chip's time the engine uses (interrupts that land in it included), measured with the chip's own cycle counter over the last 65 ms. Each light is a sixth; the last lit one glows dimmer for a part. All six full = out of time |
 | Buffering | the engine runs up to three blocks of 8 samples ahead of the outputs (0.8 ms), so one slow block doesn't miss its deadline (Stages had one block) |
@@ -517,8 +523,9 @@ go: your gesture loops.
 | Chaining | each module runs its own six segments; fletchfoorth doesn't chain |
 | Tests | 713 host checks on the real engine code (pitch, V/oct, envelope times, rates, ranges, every flavour; scales to the cent, filter, ring, comb pitch, echo time, every cord, the stair, the weather, Gendy rows, dream drift; the wave bank's tables and, by FFT at C2, C4 and C6, how far below the notes everything between the harmonics sits; a storm of every type, flavour and option with cords and thrown controls) and a check that the update file decodes to exactly the firmware |
 
-fletchfoorth has so far been tested on the computer and an emulated
-processor, not yet on a real Stages.
+fletchfoorth runs on real Stages modules: the overload light and the load
+meter came out of the first runs on one (1.2 to 1.3.1), and every version is
+also tested on the computer and on an emulated processor first.
 
 ---
 
@@ -532,4 +539,5 @@ processor, not yet on a real Stages.
   and the wave-rider.
 - **Iannis Xenakis**: the random walk and Gendy.
 
-fletchfoorth is MIT-licensed.
+fletchfoorth is MIT-licensed, and part of Cirrostratus
+(github.com/femifleming/cirrostratus, folder `cirrostratus-stages/`).

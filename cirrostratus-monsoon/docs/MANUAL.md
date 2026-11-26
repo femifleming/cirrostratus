@@ -52,7 +52,7 @@ skipped, and the effect glides out and back in instead of cutting.
 mode keeps its number, so bank 1 now runs from 2 to 15 (POSITION's bottom
 end lands on 2 · SPECTRAL), and your settings, calibration and save slots
 all carry over. A module that was sitting in GRAINS wakes up in SPECTRAL;
-a slot saved from GRAINS is simply skipped. Every remaining mode and option
+a slot saved from GRAINS is simply skipped. (Since 1.5.2 mode 1 is SPRING.) Every remaining mode and option
 was then put through a long check on an emulated STM32F405 built exactly
 like the firmware: each one at ordinary settings, flat out, fully dry
 (the input comes through within 1 LSB in every mode) and at all 16 corners
@@ -100,7 +100,10 @@ The rest of this manual is the long-range forecast.
 
 ## 1. Installing (getting the cloud up there)
 
-You get:
+The files are on the Cirrostratus releases page,
+github.com/femifleming/cirrostratus/releases (the same repository holds
+Cirrostratus for the Monsoon in `cirrostratus-monsoon/` and fletchfoorth for
+Stages in `cirrostratus-stages/`). You get:
 
 | File | What for |
 |---|---|
@@ -455,8 +458,8 @@ for that mode.
 | Save slots | 4 × 128 KB of flash |
 | Settings | calibration, mode, per-mode option + envelope routing, mono bass, buffer quality, FFT size |
 
-The source, the 225 tests, the CPU benchmark and the emulator check live
-in the repository: `make -C host test`, `tools/bench/run.sh`,
+The source, the 231 tests, the CPU benchmark and the emulator check live
+in the repository's `cirrostratus-monsoon/` folder: `make -C host test`, `tools/bench/run.sh`,
 `tools/bench/verify.sh` (every mode and option on the emulated chip,
 compared with the same run on a computer).
 
