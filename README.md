@@ -19,7 +19,7 @@ It is built on [BRIBESTAGES](https://github.com/thisisbribery/bribestages) (qiem
 
 **Manual:** [`docs/fletchfoorth-manual.pdf`](docs/fletchfoorth-manual.pdf), with a drawing of the panel for every section (also readable as [`docs/fletchfoorth-manual.md`](docs/fletchfoorth-manual.md)).
 
-> Tested on the host (111 tests on the real engine code) and on an emulated Cortex-M4 for CPU, and the update file is checked to decode to exactly the firmware. **Not yet run on a real Stages.**
+> Tested on the host (267 tests on the real engine code) and on an emulated Cortex-M4 for CPU, and the update file is checked to decode to exactly the firmware. **Not yet run on a real Stages.**
 
 ## Download
 

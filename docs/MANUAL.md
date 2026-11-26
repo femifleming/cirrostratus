@@ -110,7 +110,7 @@ Each segment works the same way, whatever its type:
 
 | Control | Does |
 |---|---|
-| **Slider** (+ the CV jack) | the main control: rate, pitch, attack… (each type below) |
+| **Slider** (+ the CV jack, + a cord) | the main control: rate, pitch, attack… (each type below). A cord from the left neighbour adds to the CV jack (section 10) |
 | **Knob** | the second control: slew, timbre, decay… |
 | **Gate jack** | clock, trigger, sync, freeze or record, depending on the type |
 | **Out jack** | the segment's output |
@@ -289,7 +289,10 @@ waveforms).
 
 The CV jack becomes an input. Stages reads it about 3,900 times a second, so
 audio comes in lo-fi: that's part of the sound. Here the slider works alone
-(the CV jack is the input, not a modulation).
+(the CV jack is the input, not a modulation). A cord into a Processor adds
+the left neighbour to that input: a hall cord from a Random into a Quantise
+is a melody with no cables. For audio at the full rate, use an Effect
+(section 9).
 
 | # | Flavour | Slider | Knob | Hold + knob | Gate | Extra option |
 |---|---|---|---|---|---|---|
@@ -476,8 +479,8 @@ go: your gesture loops.
 
 | | |
 |---|---|
-| Output | 1.0 = 8 V; randoms 0 to 8 V or ±5 V; oscillators ±5 V; gates 8 V (times the amplitude) |
-| Processing | 31,250 samples a second per segment; CV and knobs read 3,906 times a second |
+| Output | −8 to +8 V at most; randoms 0 to 8 V or ±5 V; oscillators and effects ±5 V; chaos and stair gates 8 V (times the amplitude); transient, compare and quantise triggers 5 V (compare up to 8 V) |
+| Processing | 31,250 samples a second per segment (Effects process their left neighbour at that rate); CV and knobs read 3,906 times a second; cords once per block (3,906 a second) |
 | CPU | measured on an emulated Cortex-M4: 733 instructions per sample for the default set, 1,287 for the heaviest (six additive oscillators), 1,121 for six effects (six choruses); the chip has 2,304 cycles per sample |
 | Memory | fletchfoorth uses the memory the normal Stages engines use; they rest while it runs (19.9 KB of their 23.6 KB; the wave bank's 16 waves are 128 points each, enough for 64 harmonics) |
 | Settings | stored in their own flash pages (the last 4 KB), untouched by firmware updates and by the other modes |
