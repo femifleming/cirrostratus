@@ -25,7 +25,7 @@ lower buffer quality (3.7).
 #### 2 · SPECTRAL — spectral freeze / resynthesis
 *Forecast: a held moment, refracted into its colours.*
 
-2048-point phase vocoder with peak-locked partials (64 ms latency).
+2048-point phase vocoder with peak-locked partials (64 ms latency; 256–2048 with the FFT size setting, 3.8).
 
 | Control | |
 |---|---|

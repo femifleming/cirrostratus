@@ -109,6 +109,19 @@ class Engine {
   void set_buffer_quality(uint8_t q);
   uint8_t buffer_quality() const { return buffer_quality_; }
 
+  // Master FFT size (mode.h, 0 = each mode's own) for the spectral modes;
+  // the same scheme: changing it re-inits such a mode, a loaded slot plays
+  // at the size it was saved with, and a size that doesn't fit in memory
+  // falls back to the mode's own.
+  void set_fft_setting(uint8_t s);
+  uint8_t fft_setting() const { return fft_setting_; }
+  // The running mode's own FFT size (0: not a spectral mode).
+  size_t native_fft_size() const { return current_->native_fft_size(); }
+  // The FFT size the running mode uses (0: not a spectral mode).
+  size_t fft_size() const {
+    return current_->uses_fft_size() ? current_->FftSize() : 0;
+  }
+
   // Mute the wet path (used while flash is being written).
   void set_silence(bool s) { silence_ = s; }
 
@@ -147,6 +160,7 @@ class Engine {
   bool init_failed_;
   bool shed_;
   volatile uint8_t buffer_quality_;
+  volatile uint8_t fft_setting_;
 
   const uint8_t* pending_load_data_;
   size_t pending_load_size_;

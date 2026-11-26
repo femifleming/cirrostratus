@@ -157,6 +157,11 @@ int main() {
   // one buffer quality.
   engine.set_buffer_quality(BENCH_QUALITY);
 #endif
+#ifdef BENCH_FFT
+  // BENCH_DEFS="-DBENCH_FFT=1" tools/bench/run.sh: the spectral modes at
+  // one FFT setting (1 256, 2 512, 3 1024, 4 2048).
+  engine.set_fft_setting(BENCH_FFT);
+#endif
   for (int scenario = 0; scenario < 2; ++scenario) {
     for (int m = 0; m < MODE_LAST; ++m) {
 #ifdef BENCH_ONLY
@@ -164,6 +169,9 @@ int main() {
 #endif
 #ifdef BENCH_QUALITY
       if (!engine.mode_instance((ModeId)m)->uses_buffer_quality()) continue;
+#endif
+#ifdef BENCH_FFT
+      if (!engine.mode_instance((ModeId)m)->uses_fft_size()) continue;
 #endif
 #ifndef BENCH_OPTION
 #define BENCH_OPTION 0

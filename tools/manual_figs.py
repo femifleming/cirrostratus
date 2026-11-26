@@ -127,6 +127,8 @@ GENERAL = {
                      leds=[OFF, GREEN, GREEN, OFF], gi=8),
     "quality": dict(badges={"write": "hold", "disp": "tap", "freeze": "step"},
                     leds=bv.bq_leds(1, pending=True), gi=9),
+    "fft": dict(badges={"disp": "hold", "freeze": "tap / step", "write": "apply"},
+                leds=[AMBER, AMBER, OFF, OFF], gi=9),
     "calibrate": dict(badges={"disp": "1", "write": "1 2 3", "voct": "2 3"},
                       leds=[GREEN, GREEN, OFF, OFF], gi=2),
     "output": dict(badges={"k0": "WET", "out_l": "OUT"}, hl=["out_r", "freeze", "write"],

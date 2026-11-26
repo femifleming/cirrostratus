@@ -5,7 +5,15 @@
 namespace monsoon {
 
 bool SpecDelayMode::Init(Arena* arena) {
-  // The delay memory first: it takes most of the biggest region.
+  kFftSize = FftSize();
+  kHop = kFftSize / 2;
+  kBins = kFftSize / 2;
+  kMaxFrames = 96 * 256 / kHop;
+  // At another FFT size the STFT goes first (it is bigger at 1024 / 2048),
+  // and the delay memory takes what is left; at 512 the delay memory first,
+  // as always (it takes most of the biggest region).
+  const bool stft_first = kFftSize != native_fft_size();
+  if (stft_first && !stft_.Init(arena, kFftSize, kHop, 2, this)) return false;
   const size_t frame_bytes = kBins * 2 * sizeof(int16_t);
   size_t fit = (arena->largest_free() - 64) / frame_bytes;
   frames_ = fit < kMaxFrames ? fit : kMaxFrames;
@@ -14,7 +22,9 @@ bool SpecDelayMode::Init(Arena* arena) {
   scale_ = arena->Allocate<float>(frames_);
   log_pos_ = arena->Allocate<float>(kBins);
   if (!memory_ || !scale_ || !log_pos_) return false;
-  if (!stft_.Init(arena, kFftSize, kHop, 2, this)) return false;
+  if (!stft_first && !stft_.Init(arena, kFftSize, kHop, 2, this)) {
+    return false;
+  }
   const float inv = 1.0f / log2f(static_cast<float>(kBins - 1));
   log_pos_[0] = 0.0f;
   for (size_t k = 1; k < kBins; ++k) {

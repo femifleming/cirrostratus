@@ -10,7 +10,6 @@ namespace monsoon {
 
 using namespace spectral_util;
 
-static const float kBinHz = kSampleRate / MirrorMode::kFftSize;
 
 // The warp runs once per partial, so it can afford tighter approximations
 // than spectral_util's (pitch errors there were ~0.7 %).
@@ -38,6 +37,11 @@ static inline float Exp2(float x) {
 }
 
 bool MirrorMode::Init(Arena* arena) {
+  kFftSize = FftSize();
+  kHop = kFftSize / 4;
+  kBins = kFftSize / 2;
+  kBinHz = kSampleRate / static_cast<float>(kFftSize);
+  frame_ratio_ = static_cast<float>(kHop) / 256.0f;
   if (!stft_.Init(arena, kFftSize, kHop, 1, this)) return false;
   mag_ = arena->Allocate<float>(kBins);
   freq_ = arena->Allocate<float>(kBins);
@@ -103,7 +107,9 @@ void MirrorMode::Feedback(float fbk) {
   }
   float out_e = 0.0f;
   for (size_t k = 1; k < h; ++k) out_e += out_mag_[k] * out_mag_[k];
-  float g = 0.95f * fbk;
+  // Per frame: the same trail times at every FFT size.
+  float g = PerFrame(0.95f * fbk, frame_ratio_);
+  const float g2 = frame_ratio_ == 1.0f ? 0.9025f * fbk * fbk : g * g;
   if (out_e > src_energy_) g *= sqrtf(src_energy_ / out_e);
   float e = 0.0f;
   fb_mag_[0] = fb_freq_[0] = 0.0f;
@@ -114,7 +120,6 @@ void MirrorMode::Feedback(float fbk) {
     fb_freq_[k] = fed ? pfreq_[k] : freq_[k];
     e += fb_mag_[k] * fb_mag_[k];
   }
-  const float g2 = 0.9025f * fbk * fbk;
   ref_energy_ = in_e > ref_energy_ * g2 ? in_e : ref_energy_ * g2;
   if (e > 2.0f * ref_energy_) {
     const float k = sqrtf(2.0f * ref_energy_ / e);
@@ -141,6 +146,7 @@ void MirrorMode::Transform(float* in, float* out[2], size_t fft_size) {
   float retain = c.density * 0.97f;
   if (c.density > 0.5f) retain = 0.485f + (c.density - 0.5f) * 1.01f;
   if (retain > 0.995f) retain = 0.995f;
+  retain = PerFrame(retain, frame_ratio_);
   for (size_t k = 1; k < h; ++k) {
     float r = re[k], i = im[k];
     float m = sqrtf(r * r + i * i);

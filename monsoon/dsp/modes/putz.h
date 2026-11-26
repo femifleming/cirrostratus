@@ -47,12 +47,13 @@ namespace monsoon {
 
 class PutzMode : public Mode, public StftClient {
  public:
-  static const size_t kFftSize = 1024;
-  static const size_t kHop = 512;
-  static const size_t kBins = kFftSize / 2;
   static const int kHarmonics = 8;
 
   const char* name() const { return "putz"; }
+  // 1024 (hop N/2), or the FFT setting: 256..1024 (2048 needs ~124 KB of
+  // the ~128 KB arena: it doesn't fit).
+  size_t native_fft_size() const { return 1024; }
+  size_t max_fft_size() const { return 1024; }
   bool Init(Arena* arena);
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
@@ -80,6 +81,15 @@ class PutzMode : public Mode, public StftClient {
   float* gain_;       // smoothed gain per bin
   float* win_min_;    // minimum of smooth_ in the current ~1 s window
   float* prev_min_;   // ... and in the previous one
+  // Run-time (the FFT setting), named as the constants they were.
+  size_t kFftSize, kHop, kBins;
+  // Per-frame rates, so the times are the same at every FFT size
+  // (hop / 512 = 1 at the native size: exactly the old numbers).
+  float frame_ratio_;
+  float smooth_a_;       // power smoothing (0.27)
+  float tail_keep_;      // RVB tail follower (0.963)
+  float protect_keep_;   // transient gate release (0.5)
+  uint32_t win_len_;     // minimum-statistics window, frames (94, ~1 s)
   uint32_t win_frames_;
   uint32_t learn_frames_;
   bool learned_;

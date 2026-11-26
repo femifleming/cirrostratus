@@ -75,7 +75,7 @@ MONSOON_TEST(quell_density_zero_is_transparent) {
   }
   auto out = Run(in, Settings(0.0f));
   // Compare against the input delayed by the STFT latency.
-  const size_t lat = QuellMode::kFftSize + QuellMode::kHop;
+  const size_t lat = 1024 + 256;  // FFT + hop at the native size
   double err = 0, ref = 0;
   for (size_t i = 48000; i < in.size(); ++i) {
     double d = out[i].l - in[i - lat].l;

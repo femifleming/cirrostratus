@@ -29,11 +29,11 @@ namespace monsoon {
 
 class StretchMode : public Mode {
  public:
-  static const size_t kFftSize = 2048;
-  static const size_t kHop = 683;  // ~N/3: 3x overlap, Hann^2 sums to 1.5
-  static const size_t kBins = kFftSize / 2;
+  static const size_t kNativeHop = 683;  // ~N/3 at 2048
 
   const char* name() const { return "stretch"; }
+  // 2048 (hop ~N/3), or the FFT setting: 256..2048.
+  size_t native_fft_size() const { return 2048; }
   bool Init(Arena* arena);
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
@@ -55,11 +55,9 @@ class StretchMode : public Mode {
   bool uses_buffer_quality() const { return true; }
   float buffer_seconds() const { return buffer_.seconds(); }
   const float* inst(int ch) const { return inst_[ch]; }
-  // Bins above this (20.0 kHz) are not processed.
-  static const size_t kTopBin = 854;
   size_t latency() const { return kFftSize + kHop; }
-  // Static stretch-factor mapping: frames advance by kHop / factor.
-  static float AdvancePerHop(float size);
+  // Static stretch-factor mapping: frames advance by hop / factor.
+  static float AdvancePerHop(float size, float hop = kNativeHop);
 
  private:
   // Windowed analysis of the buffer at `start` into spectrum_.
@@ -67,6 +65,15 @@ class StretchMode : public Mode {
   void StoreReference(int ch);
   void Synthesize(int ch, float dist, bool update_ref, bool reset_ref);
   void OverlapAdd(int ch, size_t out_start);
+
+  // Run-time (the FFT setting), named as the constants they were.
+  size_t kFftSize;
+  size_t kHop;     // ~N/3: 3x overlap, Hann^2 sums to 1.5
+  size_t kBins;
+  size_t kTopBin;  // bins above this (20.0 kHz) are not processed
+  float frame_ratio_;   // hop / 683: per-hop rates and counts scale by it
+  uint32_t ref_hops_long_, ref_hops_short_;  // 96 / 24 hops at 2048
+  float max_baseline_;  // 1536 samples at 2048
 
   SampleBuffer buffer_;
   int channels_;

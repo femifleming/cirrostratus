@@ -27,6 +27,14 @@ inline int QualityLengthFactor(uint8_t q) {
   return QualityDecimation(q) * (QualityEightBit(q) ? 2 : 1);
 }
 
+// FFT size (the master setting on the FFT page) for the spectral modes:
+//   0 each mode's own size (as before 1.4)   1 256   2 512   3 1024   4 2048
+// A mode clamps it to the sizes it supports (see Mode::FftSize).
+const uint8_t kNumFftSettings = 5;
+inline size_t FftSettingSize(uint8_t s) {
+  return s > 0 && s < kNumFftSettings ? static_cast<size_t>(128) << s : 0;
+}
+
 class Mode {
  public:
   virtual ~Mode() { }
@@ -101,9 +109,30 @@ class Mode {
   }
   uint8_t buffer_quality() const { return buffer_quality_; }
 
+  // FFT size (see above). Same scheme: set by the engine before Init; a
+  // spectral mode returns its own size here (0 = not spectral) and reads
+  // FftSize() in Init.
+  virtual size_t native_fft_size() const { return 0; }
+  bool uses_fft_size() const { return native_fft_size() != 0; }
+  void set_fft_setting(uint8_t s) {
+    fft_setting_ = s < kNumFftSettings ? s : 0;
+  }
+  uint8_t fft_setting() const { return fft_setting_; }
+  // The largest size that fits next to the rest of the mode.
+  virtual size_t max_fft_size() const { return 2048; }
+  // The size to run at: the setting (256 .. max_fft_size()), or the native
+  // size.
+  size_t FftSize() const {
+    size_t n = FftSettingSize(fft_setting_);
+    if (n == 0) return native_fft_size();
+    const size_t hi = max_fft_size();
+    return n > hi ? hi : n;
+  }
+
  protected:
   uint8_t init_option_ = 0;
   uint8_t buffer_quality_ = 0;
+  uint8_t fft_setting_ = 0;
 };
 
 }  // namespace monsoon

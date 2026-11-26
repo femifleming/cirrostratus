@@ -108,7 +108,7 @@ of the "build_4" Monsoon firmwares.
 ### After landing
 
 - Your **V/OCT calibration comes along** from the stock firmware
-  automatically. Never calibrated? See 3.8.
+  automatically. Never calibrated? See 3.9.
 - **Coming from Cirrostratus 1.0 or 1.1?** Settings, per-mode options,
   envelope routings and all four save slots carry over untouched. Mono bass
   starts on; buffer quality starts at 48 kHz 16-bit (exactly as before).
@@ -273,8 +273,10 @@ STRETCH, CAPTURE, TAPE, BARBERPOLE** and **BLOOM**. Store the audio at a
 lower sample rate and/or 8-bit and the same memory holds up to six times
 as much sound.
 
-**Hold WRITE, tap DISP** (within a second, before the save page opens).
-**FREEZE** steps through the six settings, the LEDs show the one you're on:
+**Hold WRITE, tap DISP** (it doesn't matter how long you've held WRITE).
+An amber light sweeps across the four LEDs: you're on the page, and LED 4
+stays amber while you are. **FREEZE** steps through the six settings, LEDs
+1–3 show the one you're on:
 
 | LEDs | Setting | Length | Sound |
 |---|---|---|---|
@@ -286,7 +288,8 @@ as much sound.
 | ●●● red | 16 kHz 8-bit | 6× | both: lo-fi, longest |
 
 LED 4 blinks amber while the choice differs from the current one. **WRITE**
-applies it and leaves; **DISP** (or 6 s) leaves without changing anything.
+applies it: all four LEDs flash its colour, then the page closes. **DISP**
+(or 6 s) leaves without changing anything.
 Applying restarts the running mode's buffer empty, so do it before you
 record. Modes without a buffer don't notice.
 
@@ -310,7 +313,46 @@ down), so nothing folds back. TAPE's rate setting simply runs the tape 2× or
 quality it was recorded with** and plays back at it, whatever the setting;
 the next time the mode restarts it follows the setting again.
 
-### 3.8 Teaching it volts (V/OCT calibration)
+### 3.8 FFT size (spectral resolution)
+
+<img class="panel" src="img/fft.png" width="300" align="right" alt="Monsoon panel: fft">
+
+One master setting for the modes that work in the frequency domain:
+**SPECTRAL** (and its SMEAR option), **CROSS, STRETCH, PUTZ, QUELL,
+SPECDELAY** and **MIRROR**. Each has its own FFT size, the one it has
+always had; this page lets you run them all at one size instead.
+
+**Hold DISP, tap FREEZE**: a green light sweeps back across the LEDs and
+the page is open. **FREEZE** steps through the settings, the LEDs show the
+size as a bar:
+
+| LEDs | Setting | Window | Sound |
+|---|---|---|---|
+| green bar | each mode's own | (shows the running mode's) | as always (the default) |
+| ● amber | 256 | 5 ms | sharp in time, coarse in pitch: transients stay crisp, partials blur into bands, smears turn grainy and robotic |
+| ●● amber | 512 | 11 ms | |
+| ●●● amber | 1024 | 21 ms | |
+| ●●●● amber | 2048 | 43 ms | fine in pitch, soft in time: single partials, smooth glassy freezes, attacks wash out |
+
+The bar blinks while the choice differs from the current one. **WRITE**
+applies it (all four LEDs flash), **DISP** (or 6 s) leaves without
+changing anything. Applying restarts the running spectral mode (a frozen
+spectrum is cleared); other modes don't notice. Every time constant (blur,
+envelope followers, decays, delay times) is converted, so a knob does the
+same thing at every size, only the resolution changes.
+
+Own sizes: SPECTRAL, CROSS, STRETCH 2048; PUTZ, QUELL, MIRROR 1024;
+SPECDELAY and SMEAR 512. PUTZ and SPECDELAY go up to 1024 (at 2048 they
+don't fit in memory next to the rest of the mode) and stay there if you
+pick 2048. At 256 the lowest bin is 187 Hz wide, so the very bottom
+(below ~90 Hz) thins out in the resynthesising modes.
+
+A **save slot remembers the FFT size** it was saved with (a frozen
+spectrum only fits its own size) and plays back at it; the next time the
+mode restarts it follows the setting again. The CPU cost is about the same
+at every size (measured: within 5 % of each mode's own).
+
+### 3.9 Teaching it volts (V/OCT calibration)
 
 <img class="panel" src="img/calibrate.png" width="300" align="right" alt="Monsoon panel: calibrate">
 
@@ -398,7 +440,7 @@ lower buffer quality (3.7).
 #### 2 · SPECTRAL — spectral freeze / resynthesis
 *Forecast: a held moment, refracted into its colours.*
 
-2048-point phase vocoder with peak-locked partials (64 ms latency).
+2048-point phase vocoder with peak-locked partials (64 ms latency; 256–2048 with the FFT size setting, 3.8).
 
 <img class="panel" src="img/mode02.png" width="300" align="right" alt="Monsoon panel: mode 2 SPECTRAL">
 
@@ -1056,14 +1098,14 @@ limiter follows). Zero latency, flat when everything is off.
 | Sample rate | 48 kHz (Clouds: 32 kHz) |
 | Processing | 32-bit float; buffers 16-bit (or 8-bit) mantissa + exponent per 32 samples, stored at 48, 24 or 16 kHz (buffer quality, 3.7) |
 | Interpolation | Hermite everywhere it reads between samples |
-| FFT | ARM CMSIS-DSP real FFT, heavy work between interrupts |
+| FFT | ARM CMSIS-DSP real FFT, heavy work between interrupts; 256–2048 points (FFT size, 3.8) |
 | RAM per mode | about 130 KB (only the running mode holds memory) |
 | CPU | every mode measured on an emulated STM32F405 at ≤ ~2400 instructions per stereo frame including the output section |
 | Output | hard stereo, mono bass below 60 Hz (LR4, switchable), limiter, TPDF dither |
 | Save slots | 4 × 128 KB of flash |
-| Settings | calibration, mode, per-mode option + envelope routing, mono bass, buffer quality |
+| Settings | calibration, mode, per-mode option + envelope routing, mono bass, buffer quality, FFT size |
 
-The source, the 224 tests and the CPU benchmark live in the repository:
+The source, the 231 tests and the CPU benchmark live in the repository:
 `make -C host test`, `tools/bench/run.sh`. Cirrostratus has so far been
 tested on the host and an emulated STM32F405, not yet on a physical
 module.

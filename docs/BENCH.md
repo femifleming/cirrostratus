@@ -61,3 +61,19 @@ The lower rates add the anti-alias decimator (~80 per channel per frame) on the 
 Output-section parts (instructions per frame): FDN reverb 432, feedback-loop tamer 78, mono bass 52, limiter 32.
 
 PLATES recomputes its mode coefficients while BAL is moving (≈ +500 per frame during the 10 ms glide, not in the table: the bench holds BAL still), still well under budget.
+
+## FFT size (1.4)
+
+`BENCH_DEFS="-DBENCH_FFT=n"` runs the spectral modes at one FFT setting (1 = 256 … 4 = 2048; PUTZ and SPECDELAY stop at 1024). Typical / heavy insns per frame, 250-block warm-up; the worst ISR block doesn't change with the size (the FFTs run between interrupts):
+
+| Mode (own size) | own | 256 | 512 | 1024 | 2048 |
+|---|---|---|---|---|---|
+| spectral (2048) | 1448 / 1405 | 1440 / 1391 | 1439 / 1401 | 1440 / 1396 | 1448 / 1405 |
+| spectral SMEAR (512) | 1627 | 1627 | — | — | 1708 |
+| cross (2048) | 1480 / 1470 | 1462 / 1451 | 1470 / 1458 | 1466 / 1456 | 1480 / 1470 |
+| stretch (2048) | 1784 / 1873 | 1696 / 1772 | 1727 / 1809 | 1684 / 1769 | 1784 / 1873 |
+| quell (1024) | 1805 | 1833 | 1880 | 1805 | 1988 |
+| putz (1024) | 1453 | 1449 | 1463 | 1453 | 1453 (1024) |
+| specdelay (512) | 1135 / 1126 | 1129 / 1119 | 1135 / 1126 | 1135 / 1126 | 1135 / 1126 (1024) |
+| mirror (1024) | 2009 / 1938 | 2014 / 1948 | 2050 / 1980 | 2009 / 1938 | 2116 / 2042 |
+

@@ -25,9 +25,7 @@ namespace monsoon {
 
 class SpectralMode : public Mode, public LeanStftClient {
  public:
-  static const size_t kFftSize = LeanStft::kSize;
-  static const size_t kHop = LeanStft::kHop;
-  static const size_t kBins = kFftSize / 2;  // index 1 .. kBins-1 used
+  static const size_t kMaxBins = LeanStft::kMaxSize / 2;
 
   const char* name() const { return "spectral"; }
   bool Init(Arena* arena) __attribute__((cold));  // runs once: small
@@ -41,6 +39,10 @@ class SpectralMode : public Mode, public LeanStftClient {
   // Wingie smear: DENSITY blur, FREEZE hold, RVB the FDN reverb.
   uint8_t num_options() const { return 2; }
   bool option_requires_init() const { return true; }
+  // 2048 (SMEAR 512), or the FFT setting: 256..2048.
+  size_t native_fft_size() const {
+    return init_option_ == 1 ? SmearEngine::kNativeSize : LeanStft::kMaxSize;
+  }
   float reverb_amount(const Controls& c) const {
     return smear_on_ ? Clamp(c.rvb, 0.0f, 1.0f) : 0.0f;
   }
@@ -61,6 +63,12 @@ class SpectralMode : public Mode, public LeanStftClient {
       __attribute__((noinline));
   void Remember(int ch, bool tilt, float energy) __attribute__((noinline));
   void Diffuse(float* spectrum, float amount) __attribute__((noinline));
+
+  // Run-time (the FFT setting), named as the constants they were.
+  size_t kFftSize, kHop;
+  size_t kBins;      // index 1 .. kBins-1 used
+  float kBinHz;
+  size_t kFbBins;    // FBK keeps the bins below 22.5 kHz
 
   LeanStft stft_;
   SmearEngine smear_;
@@ -88,7 +96,7 @@ class SpectralMode : public Mode, public LeanStftClient {
   bool frame_hold_;
   bool frame_grab_;
   Random rng_;
-  uint32_t keep_[kBins / 32];  // bins kept by partial thinning
+  uint32_t keep_[kMaxBins / 32];  // bins kept by partial thinning
 };
 
 }  // namespace monsoon

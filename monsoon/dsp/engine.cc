@@ -137,6 +137,7 @@ bool Engine::Init(void* main_mem, size_t main_size,
   feedback_.Init(0.0f);
   silence_ = false;
   buffer_quality_ = 0;
+  fft_setting_ = 0;
   pending_load_data_ = NULL;
   pending_load_size_ = 0;
 
@@ -149,6 +150,7 @@ bool Engine::Init(void* main_mem, size_t main_size,
   current_ = kModes[active_mode_];
   current_->set_init_option(0);
   current_->set_buffer_quality(0);
+  current_->set_fft_setting(0);
   init_failed_ = !current_->Init(&arena_);
   state_ = STATE_FADING_IN;
   fade_ = 0.0f;
@@ -182,11 +184,25 @@ void Engine::set_buffer_quality(uint8_t q) {
   }
 }
 
+void Engine::set_fft_setting(uint8_t s) {
+  if (s >= kNumFftSettings) s = 0;
+  fft_setting_ = s;
+  if (current_->uses_fft_size() && current_->fft_setting() != s &&
+      (state_ == STATE_RUNNING || state_ == STATE_FADING_IN)) {
+    state_ = STATE_FADING_OUT;
+  }
+}
+
 // The slot header's version field carries the buffer quality the slot was
-// recorded with in its high byte (0 = 48 kHz 16-bit, as v1.0/v1.1 wrote).
+// recorded with in bits 8-11 (0 = 48 kHz 16-bit, as v1.0/v1.1 wrote) and
+// the FFT setting in bits 12-15 (0 = the mode's own size, as before 1.4).
 static uint8_t SlotQuality(const SlotHeader* h) {
-  uint8_t q = static_cast<uint8_t>(h->version >> 8);
+  uint8_t q = static_cast<uint8_t>((h->version >> 8) & 0x0f);
   return q < kNumBufferQualities ? q : 0;
+}
+static uint8_t SlotFft(const SlotHeader* h) {
+  uint8_t s = static_cast<uint8_t>((h->version >> 12) & 0x0f);
+  return s < kNumFftSettings ? s : 0;
 }
 
 void Engine::RequestLoad(const uint8_t* data, size_t size) {
@@ -210,7 +226,8 @@ size_t Engine::GetPersistentData(PersistentChunk* chunks) {
   slot_header.magic = kSlotMagic;
   slot_header.version = static_cast<uint16_t>(
       1 | (current_->uses_buffer_quality() ? current_->buffer_quality() << 8
-                                            : 0));
+                                            : 0) |
+      (current_->uses_fft_size() ? current_->fft_setting() << 12 : 0));
   slot_header.mode = static_cast<uint8_t>(active_mode_);
   slot_header.option = active_option_;
   slot_header.payload_size = static_cast<uint32_t>(payload);
@@ -228,6 +245,10 @@ void Engine::SetMorphSource(const uint8_t* data, size_t size) {
   if (size < sizeof(SlotHeader)) return;
   const SlotHeader* h = reinterpret_cast<const SlotHeader*>(data);
   if (h->magic != kSlotMagic || h->mode != active_mode_) return;
+  // Spectra of another size don't line up bin for bin.
+  if (current_->uses_fft_size() && SlotFft(h) != current_->fft_setting()) {
+    return;
+  }
   current_->SetMorphSource(data + sizeof(SlotHeader), h->payload_size);
 }
 
@@ -241,17 +262,30 @@ void Engine::Prepare() {
     current_ = kModes[active_mode_];
     current_->set_init_option(active_option_);
     uint8_t quality = buffer_quality_;
+    uint8_t fft = fft_setting_;
     if (pending_load_data_) {
       const SlotHeader* h =
           reinterpret_cast<const SlotHeader*>(pending_load_data_);
-      if (h->mode == active_mode_) quality = SlotQuality(h);
+      if (h->mode == active_mode_) {
+        quality = SlotQuality(h);
+        fft = SlotFft(h);
+      }
     }
     current_->set_buffer_quality(quality);
+    current_->set_fft_setting(fft);
     init_failed_ = !current_->Init(&arena_);
+    bool fell_back = false;
+    if (init_failed_ && fft != 0 && current_->uses_fft_size()) {
+      // That size doesn't fit next to the rest of the mode: its own does.
+      arena_.Reset();
+      current_->set_fft_setting(0);
+      init_failed_ = !current_->Init(&arena_);
+      fell_back = true;
+    }
     if (pending_load_data_) {
       const SlotHeader* h =
           reinterpret_cast<const SlotHeader*>(pending_load_data_);
-      if (!init_failed_ && h->mode == active_mode_) {
+      if (!init_failed_ && !fell_back && h->mode == active_mode_) {
         current_->LoadPersistentData(pending_load_data_ + sizeof(SlotHeader),
                                      h->payload_size);
       }

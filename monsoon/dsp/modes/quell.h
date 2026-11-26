@@ -43,11 +43,9 @@ namespace monsoon {
 
 class QuellMode : public Mode, public StftClient {
  public:
-  static const size_t kFftSize = 1024;
-  static const size_t kHop = 256;
-  static const size_t kBins = kFftSize / 2;
-
   const char* name() const { return "quell"; }
+  // 1024 (hop N/4), or the FFT setting: 256..2048.
+  size_t native_fft_size() const { return 1024; }
   bool Init(Arena* arena);
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
@@ -59,6 +57,10 @@ class QuellMode : public Mode, public StftClient {
   bool delta() const { return delta_; }
 
  private:
+  // Run-time (the FFT setting), named as the constants they were.
+  size_t kFftSize, kHop, kBins;
+  float level_log2_;   // log2(N / 1024): bin magnitudes grow with N
+
   TableStft stft_;
   float* log_mag_;     // kBins, log2 of magnitude
   float* prefix_;      // kBins + 1, prefix sums of log_mag_

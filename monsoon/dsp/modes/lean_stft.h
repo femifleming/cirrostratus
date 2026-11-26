@@ -1,6 +1,7 @@
 // A lean STFT for the spectral modes (SPECTRAL, CROSS).
 //
-// FFT 2048, hop 1024 (2x overlap) with sine windows on analysis and
+// FFT N (2048 unless the FFT setting says otherwise; 256..2048), hop N/2
+// (2x overlap) with sine windows on analysis and
 // synthesis: sin^2 + cos^2 = 1, so the overlap-add reconstructs exactly
 // with no gain correction. Compared with the shared Stft (4x overlap,
 // FastSin windows, ShyFFT layout conversion) this does half the FFTs, reads
@@ -11,7 +12,7 @@
 // textbook sign convention (phase = atan2(im, re)). The inverse includes 1/N.
 //
 // The audio interrupt only moves samples; all FFT work is in Prepare().
-// Latency: N + hop = 3072 samples (64 ms).
+// Latency: N + hop (3072 samples, 64 ms, at 2048).
 
 #ifndef MONSOON_DSP_MODES_LEAN_STFT_H_
 #define MONSOON_DSP_MODES_LEAN_STFT_H_
@@ -36,15 +37,17 @@ class LeanStftClient {
 
 class LeanStft {
  public:
-  static const size_t kSize = 2048;
-  static const size_t kHop = 1024;
-  static const size_t kRing = kSize + kHop;
+  static const size_t kMaxSize = 2048;
 
   enum Kind { PER_CHANNEL, JOINT_MONO_OUT };
 
-  bool Init(Arena* arena, Kind kind, LeanStftClient* client) {
+  bool Init(Arena* arena, Kind kind, LeanStftClient* client,
+            size_t size = kMaxSize) {
     kind_ = kind;
     client_ = client;
+    kSize = size;
+    kHop = size / 2;
+    kRing = kSize + kHop;
     const int outs = kind == PER_CHANNEL ? 2 : 1;
     const int specs = kind == PER_CHANNEL ? 1 : 2;
     for (int ch = 0; ch < 2; ++ch) {
@@ -119,6 +122,7 @@ class LeanStft {
   }
 
   size_t latency() const { return kSize + kHop; }
+  size_t size() const { return kSize; }
 
  private:
   // Out of line (one copy shared by SPECTRAL and CROSS): flash is tight.
@@ -154,6 +158,8 @@ class LeanStft {
     }
   }
 
+  // Run-time now (the FFT setting), named as the constants they were.
+  size_t kSize, kHop, kRing;
   Kind kind_;
   LeanStftClient* client_;
   float* in_[2];

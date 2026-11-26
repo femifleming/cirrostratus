@@ -5,7 +5,8 @@
 //
 // --in accepts a .wav path, or: music, noise, sine:<hz>, silence.
 // --sweep <param> sweeps a knob 0..1 over the render; --ramp <param>=a:b
-// moves it from a to b. --quality 0..5 sets the buffer quality (48k 16-bit ..
+// moves it from a to b. --fft 0..4 sets the FFT size of the spectral modes
+// (0 each mode's own, 1 256, 2 512, 3 1024, 4 2048). --quality 0..5 sets the buffer quality (48k 16-bit ..
 // 16k 8-bit).
 
 #include <cstdio>
@@ -35,7 +36,7 @@ int main(int argc, char** argv) {
   std::string mode_name = "grains", in_name = "music", out_name = "out.wav";
   std::string sweep;
   float secs = 10.0f, freeze_at = -1.0f, unfreeze_at = -1.0f, trig_every = 0.0f;
-  int option = 0, quality = 0;
+  int option = 0, quality = 0, fft = 0;
   std::vector<std::pair<std::string, std::pair<float, float>>> ramps;
   Controls base = DefaultControls();
   for (int i = 1; i < argc; ++i) {
@@ -51,6 +52,7 @@ int main(int argc, char** argv) {
     else if (a == "--trig-every") trig_every = std::atof(next().c_str());
     else if (a == "--sweep") sweep = next();
     else if (a == "--quality") quality = std::atoi(next().c_str());
+    else if (a == "--fft") fft = std::atoi(next().c_str());
     else if (a == "--ramp") {
       std::string kv = next();
       size_t eq = kv.find('='), co = kv.find(':');
@@ -82,6 +84,7 @@ int main(int argc, char** argv) {
   }
   if (mode < 0) { std::fprintf(stderr, "unknown mode %s\n", mode_name.c_str()); return 1; }
   module.engine().set_buffer_quality(uint8_t(quality));
+  module.engine().set_fft_setting(uint8_t(fft));
   module.SetMode(monsoon::ModeId(mode), option);
 
   std::vector<FloatFrame> in;

@@ -4,7 +4,14 @@
 (Jak Plugg's 12HP Mutable Instruments Clouds variant): 30 modes in two
 banks, a 48 kHz floating-point engine, and a clean output section.
 
-**Version 1.2.0.** A master **buffer quality** setting (hold WRITE, tap
+**Version 1.4.0.** A master **FFT size** setting (hold DISP, tap FREEZE)
+for the spectral modes (SPECTRAL and SMEAR, CROSS, STRETCH, PUTZ, QUELL,
+SPECDELAY, MIRROR): 256, 512, 1024 or 2048 points, or each mode's own size
+(the default, exactly 1.3). Their times (blur, followers, decays, delays)
+are converted, so only the resolution changes; save slots keep their size.
+**1.3.1** made GRAINS fit the CPU again (it glitched the whole output).
+
+**1.2.0:** A master **buffer quality** setting (hold WRITE, tap
 DISP): store audio at 48, 24 or 16 kHz, 16- or 8-bit, for up to 6× longer
 buffers in GRAINS, STRETCH, CAPTURE, TAPE, BARBERPOLE and BLOOM (GRAINS mono
 goes from 1.24 s to 7.3 s). The default is exactly 1.1.

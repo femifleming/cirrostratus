@@ -47,7 +47,11 @@ inline float SqExp2(float x) {
 
 }  // namespace
 
-bool SmearEngine::Init(Arena* arena) {
+bool SmearEngine::Init(Arena* arena, size_t size) {
+  kSize = size;
+  kHop = size / 4;
+  kRing = kSize + 2 * kHop;
+  kBins = kSize / 2;
   in_ = arena->Allocate<float>(kRing);
   out_ = arena->Allocate<float>(kRing);
   mag_ = arena->Allocate<float>(kBins);

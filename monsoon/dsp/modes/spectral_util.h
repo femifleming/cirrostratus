@@ -101,6 +101,13 @@ inline void LockPhases(size_t lo, size_t hi, size_t p, float peak_phase,
   }
 }
 
+// A per-frame retention r tuned for one frame rate, at frames `ratio` times
+// as long (the FFT setting changes the hop): r^ratio. Exactly r at ratio 1.
+inline float PerFrame(float r, float ratio) {
+  if (ratio == 1.0f) return r;
+  return r > 1e-6f ? FastExp2(FastLog2(r) * ratio) : 0.0f;
+}
+
 }  // namespace spectral_util
 }  // namespace monsoon
 

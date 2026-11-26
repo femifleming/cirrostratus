@@ -9,6 +9,15 @@ namespace monsoon {
 using namespace spectral_util;
 
 bool PutzMode::Init(Arena* arena) {
+  kFftSize = FftSize();
+  kHop = kFftSize / 2;
+  kBins = kFftSize / 2;
+  frame_ratio_ = static_cast<float>(kHop) / 512.0f;
+  smooth_a_ = 1.0f - PerFrame(0.73f, frame_ratio_);
+  if (frame_ratio_ == 1.0f) smooth_a_ = 0.27f;
+  tail_keep_ = PerFrame(0.963f, frame_ratio_);
+  protect_keep_ = PerFrame(0.5f, frame_ratio_);
+  win_len_ = static_cast<uint32_t>(94.0f / frame_ratio_ + 0.5f);
   if (!stft_.Init(arena, kFftSize, kHop, this)) return false;
   noise_ = arena->Allocate<float>(kBins);
   smooth_ = arena->Allocate<float>(kBins);
@@ -134,13 +143,14 @@ void PutzMode::Transform(float* spectrum[2], size_t fft_size) {
   const float alpha = 1.0f + 2.0f * density;
   const float gmin = FastExp2(-density * 4.98f);       // 0 .. -30 dB
   const float gmin2 = gmin * gmin;
-  const float beta = 1.0f - 0.85f * size;              // gain smoothing
+  const float beta = frame_ratio_ == 1.0f      // gain smoothing
+      ? 1.0f - 0.85f * size : 1.0f - PerFrame(0.85f * size, frame_ratio_);
   const float beta_up = beta * 2.0f > 1.0f ? 1.0f : beta * 2.0f;
   const bool knobs = bal_ != 0.0f || rvb_ > 0.001f;
   // Minimum statistics: the noise is the lowest smoothed power seen over
   // the current and the previous ~1 s window (94 hops), so the estimate
   // follows a rising noise floor within 2 s and ignores speech/music.
-  const bool new_window = ++win_frames_ >= 94;
+  const bool new_window = ++win_frames_ >= win_len_;
   if (new_window) win_frames_ = 0;
 
   float energy = 0.0f;
@@ -148,7 +158,7 @@ void PutzMode::Transform(float* spectrum[2], size_t fft_size) {
     const float p = re0[k] * re0[k] + im0[k] * im0[k] +
         re1[k] * re1[k] + im1[k] * im1[k];
     energy += p;
-    smooth_[k] += 0.27f * (p - smooth_[k]);
+    smooth_[k] += smooth_a_ * (p - smooth_[k]);
     if (learning_) {
       learn_sum_[k] += p;
     } else if (!learned_) {
@@ -163,7 +173,7 @@ void PutzMode::Transform(float* spectrum[2], size_t fft_size) {
     }
     // RVB's tail follower: the smoothed power's peak, falling 60 dB in
     // ~4 s.
-    const float tail = tail_[k] * 0.963f;
+    const float tail = tail_[k] * tail_keep_;
     tail_[k] = smooth_[k] > tail ? smooth_[k] : tail;
     // Power subtraction, as a magnitude gain, with a floor.
     float g = 1.0f;
@@ -183,7 +193,7 @@ void PutzMode::Transform(float* spectrum[2], size_t fft_size) {
   if (energy > 4.0f * prev_energy_ + 1e-12f) {
     protect_ = texture_;
   } else {
-    protect_ *= 0.5f;
+    protect_ *= protect_keep_;
   }
   prev_energy_ = energy;
 

@@ -25,9 +25,6 @@ namespace monsoon {
 
 class CrossMode : public Mode, public LeanStftClient {
  public:
-  static const size_t kFftSize = LeanStft::kSize;
-  static const size_t kHop = LeanStft::kHop;
-  static const size_t kBins = kFftSize / 2;
 
   const char* name() const { return "cross"; }
   bool Init(Arena* arena) __attribute__((cold));  // runs once: small
@@ -36,6 +33,8 @@ class CrossMode : public Mode, public LeanStftClient {
   void Prepare() { stft_.Prepare(); }
   bool frozen() const { return ctl_.freeze; }
   float reverb_amount(const Controls& c) const { return c.rvb; }
+  // 2048, or the FFT setting: 256..2048.
+  size_t native_fft_size() const { return LeanStft::kMaxSize; }
 
   // LeanStftClient.
   void TransformJoint(float* left, float* right);
@@ -45,6 +44,9 @@ class CrossMode : public Mode, public LeanStftClient {
  private:
   // Constant-Q box smoothing across bins (prefix sums in `prefix_`).
   void SmoothBins(const float* in, float* out, float q);
+
+  // Run-time (the FFT setting), named as the constants they were.
+  size_t kFftSize, kHop, kBins;
 
   LeanStft stft_;
   float* env_l_;       // time-smoothed modulator magnitudes (held on freeze)

@@ -19,7 +19,7 @@ MONSOON_TEST(stretch_factor_mapping) {
   float a9 = StretchMode::AdvancePerHop(0.9f);
   float a1 = StretchMode::AdvancePerHop(1.0f);
   std::printf("    advance/hop: %.2f (size 0), %.4f (0.9), %.4f (1.0)\n", a0, a9, a1);
-  const float hop = float(StretchMode::kHop);
+  const float hop = float(StretchMode::kNativeHop);
   CHECK(std::fabs(a0 - hop) < 1.0f, "1x at 0");
   CHECK(std::fabs(hop / a9 - 1000.0f) < 20.0f, "1000x at 0.9");
   CHECK(a1 == 0.0f, "standstill at 1");

@@ -9,6 +9,14 @@ namespace monsoon {
 using namespace spectral_util;
 
 __attribute__((cold)) bool QuellMode::Init(Arena* arena) {
+  kFftSize = FftSize();
+  kHop = kFftSize / 4;
+  kBins = kFftSize / 2;
+  // log2(N / 1024), exactly (0 at the native size).
+  int octaves = 0;
+  for (size_t n = kFftSize; n > 1024; n >>= 1) ++octaves;
+  for (size_t n = kFftSize; n < 1024; n <<= 1) --octaves;
+  level_log2_ = static_cast<float>(octaves);
   if (!stft_.Init(arena, kFftSize, kHop, this)) return false;
   log_mag_ = arena->Allocate<float>(kBins);
   prefix_ = arena->Allocate<float>(kBins + 1);
@@ -116,7 +124,7 @@ void QuellMode::Transform(float* spectrum[2], size_t fft_size) {
     // to -72 dBFS; off at zero.
     const float fbk = fbk_;
     const bool hard = fbk > 0.0f;
-    const float hard_thr = 9.0f - 12.0f * fbk;
+    const float hard_thr = 9.0f - 12.0f * fbk + level_log2_;
     // TEXTURE: attack 50 -> 3 ms, release 400 -> 40 ms (per 5.3 ms hop).
     const float hop_s = static_cast<float>(kHop) / kSampleRate;
     const float t = texture_;

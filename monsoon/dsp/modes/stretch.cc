@@ -2,6 +2,8 @@
 
 #include "monsoon/dsp/modes/stretch.h"
 
+#include "monsoon/dsp/modes/spectral_util.h"
+
 #include "monsoon/dsp/stft.h"
 
 namespace monsoon {
@@ -17,8 +19,7 @@ template<typename T> static inline T* Grab(Arena* arena, size_t n) {
 
 static const size_t kMaxBufferBytes = 118 * 1024;
 
-float StretchMode::AdvancePerHop(float size) {
-  const float hop = static_cast<float>(kHop);
+float StretchMode::AdvancePerHop(float size, float hop) {
   if (size < 0.9f) {
     // 1x at 0 .. 1000x at 0.9 (exponential).
     return hop / exp2f(size * (9.965784f / 0.9f));
@@ -31,6 +32,14 @@ float StretchMode::AdvancePerHop(float size) {
 
 bool StretchMode::Init(Arena* arena) {
   channels_ = init_option_ == 1 ? 1 : 2;
+  kFftSize = FftSize();
+  kHop = (kFftSize + 2) / 3;           // 683 at 2048
+  kBins = kFftSize / 2;
+  kTopBin = kFftSize * 854 / 2048;     // 20.0 kHz
+  frame_ratio_ = static_cast<float>(kHop) / static_cast<float>(kNativeHop);
+  ref_hops_long_ = static_cast<uint32_t>(96.0f / frame_ratio_ + 0.5f);
+  ref_hops_short_ = static_cast<uint32_t>(24.0f / frame_ratio_ + 0.5f);
+  max_baseline_ = 1536.0f * static_cast<float>(kFftSize) / 2048.0f;
   ring_size_ = kFftSize + 2 * kHop;
   // Biggest fixed allocations first.
   for (int ch = 0; ch < 2; ++ch) {
@@ -136,8 +145,8 @@ void StretchMode::Prepare() {
   const float hop = static_cast<float>(kHop);
   // BAL left scales the read speed from 1 through 0 (9 o'clock) to -1.
   const float bal = KnobBipolar(c.bal);
-  const float advance = bal < 0.0f ? AdvancePerHop(c.size) * (1.0f + 2.0f * bal)
-                                   : AdvancePerHop(c.size);
+  const float advance = bal < 0.0f ? AdvancePerHop(c.size, hop) * (1.0f + 2.0f * bal)
+                                   : AdvancePerHop(c.size, hop);
 
   // Read window placement, as a delay (frame end behind the write head).
   const float filled = static_cast<float>(buffer_.filled());
@@ -186,10 +195,11 @@ void StretchMode::Prepare() {
   // Reading backwards (BAL left) the content distance runs negative: the
   // checks below use its size, the frequency estimate its sign.
   const float adist = advance < 0.0f ? -dist : dist;
-  bool reset = !have_ref_ || adist < 0.0f || adist > 1536.0f;
+  bool reset = !have_ref_ || adist < 0.0f || adist > max_baseline_;
   // Standing still (infinite stretch): no motion to measure frequencies
   // from, so take an extra reference frame 16 samples earlier now and then.
-  if (have_ref_ && dist < 4.0f && dist > -4.0f && hops_since_ref_ >= 96) {
+  if (have_ref_ && dist < 4.0f && dist > -4.0f &&
+      hops_since_ref_ >= ref_hops_long_) {
     for (int ch = 0; ch < channels_; ++ch) {
       Analyse(ch, start - 16);
       StoreReference(ch);
@@ -197,14 +207,14 @@ void StretchMode::Prepare() {
     ref_written_ = written;
     ref_delay_ = d + 16.0f;
     dist = 16.0f;
-    hops_since_ref_ = 96;
+    hops_since_ref_ = ref_hops_long_;
   }
   // Prefer a long baseline (accurate); at extreme stretch factors the read
   // window may wrap before travelling far, so accept a short baseline once
   // the reference has aged.
   ++hops_since_ref_;
   bool update = !reset &&
-      (adist >= 96.0f || (adist >= 4.0f && hops_since_ref_ >= 24));
+      (adist >= 96.0f || (adist >= 4.0f && hops_since_ref_ >= ref_hops_short_));
   if (reset || update) {
     hops_since_ref_ = 0;
     ref_written_ = written;
@@ -321,7 +331,10 @@ void StretchMode::Synthesize(int ch, float dist, bool update_ref,
   uint16_t* synth = synth_phase_[ch];
 
   // Magnitude smear (DENSITY).
-  const float smooth = 1.0f - Clamp(c.density, 0.0f, 1.0f) * 0.97f;
+  const float smooth = frame_ratio_ == 1.0f
+      ? 1.0f - Clamp(c.density, 0.0f, 1.0f) * 0.97f
+      : 1.0f - spectral_util::PerFrame(Clamp(c.density, 0.0f, 1.0f) * 0.97f,
+                                       frame_ratio_);
   for (size_t k = 1; k < kTopBin; ++k) {
     float mag = sqrtf(re[k] * re[k] + im[k] * im[k]);
     smear[k] += smooth * (mag - smear[k]);

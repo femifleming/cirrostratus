@@ -23,13 +23,17 @@ template<typename T> static inline T* Grab(Arena* arena, size_t n) {
 
 using namespace spectral_util;
 
-static const float kExpected =
-    static_cast<float>(CrossMode::kHop) / CrossMode::kFftSize;
-static const float kToBins =
-    static_cast<float>(CrossMode::kFftSize) / CrossMode::kHop;
+// Hop = N/2 at every FFT size.
+static const float kExpected = 0.5f;
+static const float kToBins = 2.0f;
 
 bool CrossMode::Init(Arena* arena) {
-  if (!stft_.Init(arena, LeanStft::JOINT_MONO_OUT, this)) return false;
+  kFftSize = FftSize();
+  kHop = kFftSize / 2;
+  kBins = kFftSize / 2;
+  if (!stft_.Init(arena, LeanStft::JOINT_MONO_OUT, this, kFftSize)) {
+    return false;
+  }
   car_prev_ = Grab<float>(arena, kFftSize);
   if (!car_prev_) return false;
   float** arrays[] = {
@@ -147,8 +151,10 @@ void CrossMode::TransformJoint(float* l, float* r) {
 
   // Envelope follower speeds (per 21 ms frame), from TEXTURE.
   const float t = Clamp(c.texture, 0.0f, 1.0f);
-  const float a_up = 1.0f - t * 0.85f;
-  const float a_dn = 1.0f - (0.45f + 0.53f * t);
+  // (Frames are hop / 48 kHz apart: the same times at every FFT size.)
+  const float fr = static_cast<float>(kHop) / 1024.0f;
+  const float a_up = 1.0f - PerFrame(t * 0.85f, fr);
+  const float a_dn = 1.0f - PerFrame(0.45f + 0.53f * t, fr);
 
   // ---- Analysis.
   for (size_t k = 1; k < kBins; ++k) {

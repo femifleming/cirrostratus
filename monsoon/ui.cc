@@ -40,12 +40,13 @@ void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
   morph_slot_ = -1;
   env_cursor_ = 0;
   buffer_cursor_ = 0;
+  fft_cursor_ = 0;
   save_requested_ = false;
   settings_dirty_ = false;
   panic_until_ = 0;
   mono_bass_until_ = 0;
-  buffer_opened_ = 0;
-  buffer_applied_until_ = 0;
+  page_opened_ = 0;
+  applied_until_ = 0;
   save_by_hold_ = false;
   menu_lo_ = kMenuLo;
   menu_hi_ = kMenuHi;
@@ -59,6 +60,7 @@ void Ui::Init(Settings* settings, CvScaler* cv_scaler, Engine* engine,
   engine_->set_env_routing(settings_->env_routing(d.mode));
   engine_->set_mono_bass(settings_->mono_bass(), true);
   engine_->set_buffer_quality(d.buffer_quality);
+  engine_->set_fft_setting(d.fft_setting);
 }
 
 void Ui::Poll() {
@@ -85,14 +87,13 @@ void Ui::Poll() {
     page_ = previous_page_;
   }
   if ((page_ == UI_PAGE_LOAD || page_ == UI_PAGE_SAVE ||
-       page_ == UI_PAGE_ENV || page_ == UI_PAGE_BUFFER) &&
+       page_ == UI_PAGE_ENV || SettingPage()) &&
       now > page_timeout_) {
     if (page_ == UI_PAGE_ENV) settings_dirty_ = true;
     page_ = previous_page_;
   }
-  if (page_ == UI_PAGE_BUFFER && buffer_applied_until_ &&
-      now > buffer_applied_until_) {
-    buffer_applied_until_ = 0;
+  if (SettingPage() && applied_until_ && now > applied_until_) {
+    applied_until_ = 0;
     page_ = previous_page_;
   }
   if (page_ == UI_PAGE_MONO_BASS && now > mono_bass_until_) {
@@ -105,18 +106,27 @@ void Ui::OpenBufferPage(uint32_t now) {
   used_as_modifier_[SWITCH_WRITE] = true;
   used_as_modifier_[SWITCH_DISP] = true;
   buffer_cursor_ = settings_->data().buffer_quality;
-  buffer_opened_ = now;
-  buffer_applied_until_ = 0;
+  page_opened_ = now;
+  applied_until_ = 0;
   save_by_hold_ = false;
   page_ = UI_PAGE_BUFFER;
 }
 
+void Ui::OpenFftPage(uint32_t now) {
+  used_as_modifier_[SWITCH_DISP] = true;
+  used_as_modifier_[SWITCH_FREEZE] = true;
+  fft_cursor_ = settings_->data().fft_setting;
+  page_opened_ = now;
+  applied_until_ = 0;
+  page_ = UI_PAGE_FFT;
+}
+
 void Ui::OnPress(uint8_t id) {
   page_timeout_ = system_clock.milliseconds() + kPageTimeout;
-  if (buffer_applied_until_) {
+  if (applied_until_) {
     // Any press ends the "applied" confirmation and acts as usual.
-    buffer_applied_until_ = 0;
-    if (page_ == UI_PAGE_BUFFER) page_ = previous_page_;
+    applied_until_ = 0;
+    if (SettingPage()) page_ = previous_page_;
   }
   if (page_ == UI_PAGE_SPLASH) {
     page_ = previous_page_;
@@ -152,6 +162,14 @@ void Ui::OnPress(uint8_t id) {
       } else if (page_ == UI_PAGE_BUFFER) {
         buffer_cursor_ = (buffer_cursor_ + 1) % kNumBufferQualities;
         used_as_modifier_[SWITCH_FREEZE] = true;
+      } else if (page_ == UI_PAGE_FFT) {
+        fft_cursor_ = (fft_cursor_ + 1) % kNumFftSettings;
+        used_as_modifier_[SWITCH_FREEZE] = true;
+      } else if (switches_.pressed(SWITCH_DISP) &&
+                 (page_ == UI_PAGE_VU_METER || page_ == UI_PAGE_KNOBS)) {
+        // DISP held + FREEZE: FFT page.
+        previous_page_ = page_;
+        OpenFftPage(system_clock.milliseconds());
       }
       break;
 
@@ -240,7 +258,7 @@ void Ui::OnRelease(uint8_t id, uint32_t duration) {
   switch (id) {
     case SWITCH_FREEZE:
       if (!modifier && page_ != UI_PAGE_MODE_MENU && page_ != UI_PAGE_LOAD &&
-          page_ != UI_PAGE_ENV && page_ != UI_PAGE_BUFFER) {
+          page_ != UI_PAGE_ENV && !SettingPage()) {
         cv_scaler_->ToggleFreezeButton();
       }
       break;
@@ -250,7 +268,7 @@ void Ui::OnRelease(uint8_t id, uint32_t duration) {
         ApplyModeMenu();
         cv_scaler_->set_hold_position(false);
         page_ = previous_page_;
-      } else if (page_ == UI_PAGE_BUFFER) {
+      } else if (SettingPage()) {
         if (!modifier) page_ = previous_page_;  // cancel
       } else if (!modifier) {
         if (page_ == UI_PAGE_VU_METER) {
@@ -293,7 +311,15 @@ void Ui::OnRelease(uint8_t id, uint32_t duration) {
         engine_->set_buffer_quality(buffer_cursor_);
         // Stay a moment to show it took (all four LEDs flash the new
         // setting's colour), then back.
-        buffer_applied_until_ = system_clock.milliseconds() + 800;
+        applied_until_ = system_clock.milliseconds() + 800;
+      } else if (page_ == UI_PAGE_FFT) {
+        SettingsData* d = settings_->mutable_data();
+        if (d->fft_setting != fft_cursor_) {
+          d->fft_setting = fft_cursor_;
+          settings_dirty_ = true;
+        }
+        engine_->set_fft_setting(fft_cursor_);
+        applied_until_ = system_clock.milliseconds() + 800;
       } else if (page_ == UI_PAGE_CALIBRATION_1) {
         cv_scaler_->CalibrateC1();
         cv_scaler_->CalibrateOffsets();
@@ -568,13 +594,13 @@ void Ui::PaintLeds() {
         const bool eight = QualityEightBit(buffer_cursor_);
         const int lit = QualityDecimation(buffer_cursor_);
         const uint8_t r = eight ? 255 : 0, g = eight ? 0 : 255;
-        if (buffer_applied_until_) {
+        if (applied_until_) {
           if (fast_blink) {
             for (int i = 0; i < 4; ++i) leds_.set_status(i, r, g);
           }
           break;
         }
-        const uint32_t age = now - buffer_opened_;
+        const uint32_t age = now - page_opened_;
         if (age < 320) {
           leds_.set_status(static_cast<uint8_t>(age / 80), 255, 160);
           break;
@@ -584,6 +610,42 @@ void Ui::PaintLeds() {
           if (blink) leds_.set_status(3, 255, 160);
         } else {
           leds_.set_status(3, 255, 160);
+        }
+      }
+      break;
+
+    case UI_PAGE_FFT:
+      {
+        // Opening: a green sweep from LED 4 back to LED 1 (the buffer
+        // page's sweep is amber and runs the other way). Then the size as
+        // a bar: 1 LED 256, 2 = 512, 3 = 1024, 4 = 2048. Amber = that
+        // size for every spectral mode; green = each mode's own size (the
+        // bar shows the running mode's; all four dim if it has no FFT).
+        // The bar blinks while WRITE would change something. After WRITE:
+        // all four flash the applied colour.
+        const bool own = fft_cursor_ == 0;
+        const uint8_t r = own ? 0 : 255, g = own ? 255 : 160;
+        if (applied_until_) {
+          if (fast_blink) {
+            for (int i = 0; i < 4; ++i) leds_.set_status(i, r, g);
+          }
+          break;
+        }
+        const uint32_t age = now - page_opened_;
+        if (age < 320) {
+          leds_.set_status(static_cast<uint8_t>(3 - age / 80), 0, 255);
+          break;
+        }
+        size_t n = own ? engine_->native_fft_size() : FftSettingSize(fft_cursor_);
+        if (n == 0) {
+          for (int i = 0; i < 4; ++i) leds_.set_status(i, 0, 60);
+          break;
+        }
+        int lit = 0;
+        for (; n >= 256 && lit < 4; n >>= 1) ++lit;
+        const bool pending = fft_cursor_ != settings_->data().fft_setting;
+        if (!pending || blink) {
+          for (int i = 0; i < lit; ++i) leds_.set_status(i, r, g);
         }
       }
       break;

@@ -24,22 +24,23 @@ template<typename T> static inline T* Grab(Arena* arena, size_t n) {
 
 using namespace spectral_util;
 
-static const float kBinHz = kSampleRate / SpectralMode::kFftSize;
-static const size_t kPersistentFloats = SpectralMode::kBins * 4;
 // FBK keeps bins below 22.5 kHz as 16-bit fractions of the frame's peak
-// (the arena has under 4 KB left).
-static const size_t kFbBins = 960;
-// Phase advance of bin k per hop, in cycles per bin index.
-static const float kExpected =
-    static_cast<float>(SpectralMode::kHop) / SpectralMode::kFftSize;
-static const float kToBins =
-    static_cast<float>(SpectralMode::kFftSize) / SpectralMode::kHop;
+// (the arena has under 4 KB left): kFbBins, 960 at 2048.
+// Phase advance of bin k per hop, in cycles per bin index (hop = N/2 at
+// every size).
+static const float kExpected = 0.5f;
+static const float kToBins = 2.0f;
 
 bool SpectralMode::Init(Arena* arena) {
   smear_on_ = init_option_ == 1;
   frozen_ = false;
-  if (smear_on_) return smear_.Init(arena);
-  if (!stft_.Init(arena, LeanStft::PER_CHANNEL, this)) return false;
+  if (smear_on_) return smear_.Init(arena, FftSize());
+  kFftSize = FftSize();
+  kHop = kFftSize / 2;
+  kBins = kFftSize / 2;
+  kBinHz = kSampleRate / static_cast<float>(kFftSize);
+  kFbBins = kBins * 15 / 16;
+  if (!stft_.Init(arena, LeanStft::PER_CHANNEL, this, kFftSize)) return false;
   for (int ch = 0; ch < 2; ++ch) {
     prev_[ch] = Grab<float>(arena, kFftSize);
     mag_[ch] = Grab<float>(arena, kBins);
@@ -133,6 +134,7 @@ void SpectralMode::TransformChannel(int ch, float* s) {
   float retain = c.density < 0.5f
       ? c.density * 2.0f * 0.94f
       : 0.94f + (c.density - 0.5f) * 2.0f * 0.05f;
+  retain = PerFrame(retain, static_cast<float>(kHop) / 1024.0f);
   if (frame_grab_) retain = 0.0f;
 
   // ---- Analysis: magnitudes for every bin.
@@ -214,7 +216,10 @@ void SpectralMode::TransformChannel(int ch, float* s) {
     for (size_t k = 1; k < kBins; ++k) if (src_mag[k] > peak) peak = src_mag[k];
     // -80 dB at the bottom of the travel, -12 dB at the top.
     const float thr = peak * FastExp2((-80.0f + 68.0f * p) * 0.16609640f);
-    for (size_t k = 2; k + 1 < kBins; ++k) {
+    // Bin 1 is 23 Hz at 2048 (never kept, as always); at the smaller FFT
+    // sizes it holds bass notes (94 Hz wide at 512, 187 at 256).
+    const size_t k0 = kFftSize >= 2048 ? 2 : 1;
+    for (size_t k = k0; k + 1 < kBins; ++k) {
       const float m = src_mag[k];
       if (m >= thr && m >= src_mag[k - 1] && m > src_mag[k + 1]) {
         for (size_t j = k - 1; j <= k + 1; ++j) keep_[j >> 5] |= 1u << (j & 31);
@@ -412,7 +417,7 @@ size_t SpectralMode::GetPersistentData(PersistentChunk* chunks) {
 
 bool SpectralMode::LoadPersistentData(const uint8_t* data, size_t size) {
   if (smear_on_) return false;
-  if (size < kPersistentFloats * sizeof(float)) return false;
+  if (size < kBins * 4 * sizeof(float)) return false;
   const size_t bytes = kBins * sizeof(float);
   memcpy(mag_[0], data, bytes);
   memcpy(mag_[1], data + bytes, bytes);
@@ -425,7 +430,7 @@ bool SpectralMode::LoadPersistentData(const uint8_t* data, size_t size) {
 
 void SpectralMode::SetMorphSource(const uint8_t* data, size_t size) {
   if (smear_on_) return;
-  if (!data || size < kPersistentFloats * sizeof(float)) {
+  if (!data || size < kBins * 4 * sizeof(float)) {
     morph_mag_[0] = morph_mag_[1] = NULL;
     morph_freq_[0] = morph_freq_[1] = NULL;
     return;

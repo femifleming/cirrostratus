@@ -43,10 +43,10 @@ namespace monsoon {
 
 class SpecDelayMode : public Mode, public MonoStftClient {
  public:
-  static const size_t kFftSize = 512;
-  static const size_t kHop = 256;
-  static const size_t kBins = kFftSize / 2;  // slots per frame (1..255 used)
-  static const size_t kMaxFrames = 96;
+  // 512 (hop N/2), or the FFT setting: 256..1024 (at 2048 the STFT leaves
+  // too little memory for the delay).
+  size_t native_fft_size() const { return 512; }
+  size_t max_fft_size() const { return 1024; }
 
   const char* name() const { return "specdelay"; }
   bool Init(Arena* arena);
@@ -64,6 +64,11 @@ class SpecDelayMode : public Mode, public MonoStftClient {
   float Smear(float* re, float* im, float fbk, float rvb) KNOB_FX;
 
   MonoStft stft_;
+  // Run-time (the FFT setting), named as the constants they were.
+  size_t kFftSize, kHop;
+  size_t kBins;       // slots per frame (1..kBins-1 used)
+  size_t kMaxFrames;  // ~0.5 s of frames (96 at 512)
+
   int16_t* memory_;   // frames_ x kBins x (re, im)
   float* scale_;      // per frame
   float* log_pos_;    // log2(k) / log2(255) per bin

@@ -48,6 +48,7 @@ enum UiPage {
   UI_PAGE_ENV,
   UI_PAGE_MONO_BASS,
   UI_PAGE_BUFFER,
+  UI_PAGE_FFT,
   UI_PAGE_CALIBRATION_1,
   UI_PAGE_CALIBRATION_2,
   UI_PAGE_PANIC,
@@ -102,8 +103,8 @@ class Ui {
   uint32_t option_flash_until_;
   uint32_t panic_until_;
   uint32_t mono_bass_until_;
-  uint32_t buffer_opened_;        // when the buffer page opened (wipe)
-  uint32_t buffer_applied_until_; // > 0: showing the applied setting
+  uint32_t page_opened_;          // when the buffer / FFT page opened
+  uint32_t applied_until_;        // > 0: showing the applied setting
   bool save_by_hold_;             // the save page came from holding WRITE
 
   uint8_t menu_mode_;
@@ -118,8 +119,13 @@ class Ui {
   int8_t morph_slot_;
   uint8_t env_cursor_;
   uint8_t buffer_cursor_;
+  uint8_t fft_cursor_;
 
   void OpenBufferPage(uint32_t now);
+  void OpenFftPage(uint32_t now);
+  bool SettingPage() const {
+    return page_ == UI_PAGE_BUFFER || page_ == UI_PAGE_FFT;
+  }
 
   volatile bool save_requested_;
   volatile bool settings_dirty_;

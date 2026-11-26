@@ -47,11 +47,9 @@ namespace monsoon {
 
 class MirrorMode : public Mode, public MonoStftClient {
  public:
-  static const size_t kFftSize = 1024;
-  static const size_t kHop = 256;
-  static const size_t kBins = kFftSize / 2;
-
   const char* name() const { return "mirror"; }
+  // 1024 (hop N/4), or the FFT setting: 256..2048.
+  size_t native_fft_size() const { return 1024; }
   bool Init(Arena* arena);
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
@@ -68,6 +66,11 @@ class MirrorMode : public Mode, public MonoStftClient {
 
  private:
   __attribute__((noinline)) void Feedback(float fbk);
+
+  // Run-time (the FFT setting), named as the constants they were.
+  size_t kFftSize, kHop, kBins;
+  float kBinHz;
+  float frame_ratio_;  // hop / 256: frame-rate scaling of per-frame rates
 
   MonoStft stft_;
   float* mag_;        // smoothed / frozen magnitudes

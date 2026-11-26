@@ -31,12 +31,10 @@ namespace monsoon {
 
 class SmearEngine {
  public:
-  static const size_t kSize = 512;
-  static const size_t kHop = 128;
-  static const size_t kRing = kSize + 2 * kHop;   // two hops of slack for Prepare
-  static const size_t kBins = kSize / 2;   // 1 .. kBins-1 carry sound
+  static const size_t kNativeSize = 512;
 
-  bool Init(Arena* arena) __attribute__((cold));
+  // N = 512 unless the FFT setting says otherwise, hop N/4.
+  bool Init(Arena* arena, size_t size = kNativeSize) __attribute__((cold));
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
   void Prepare();
@@ -44,6 +42,11 @@ class SmearEngine {
 
  private:
   void Bins(float* x);
+
+  // Run-time (the FFT setting), named as the constants they were.
+  size_t kSize, kHop;
+  size_t kRing;   // N + two hops of slack for Prepare
+  size_t kBins;   // 1 .. kBins-1 carry sound
 
   float* in_;
   float* out_;
