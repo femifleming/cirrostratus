@@ -3,14 +3,17 @@
 
 Sixteen waveforms (the same shapes as fletchfoorth 1.1), each stored as a
 set of band-limited tables, one per octave ("mip levels"): level L holds
-harmonics up to 256 >> L. The oscillator picks the two levels around its
+harmonics up to 128 >> L. The oscillator picks the two levels around its
 pitch and crossfades them, so nothing it plays folds back below Nyquist.
 
 Tables are int16 in flash (no RAM), each with a guard point before it and
-two after (t[-1], t[N], t[N + 1]). Levels hold 8 points per harmonic (4 for
-the two brightest, which would not fit in flash otherwise), at least 128,
-read with linear interpolation: its images fall 36 dB below the harmonic
-that makes them at 8 points, 21 dB at 4.
+two after (t[-1], t[N], t[N + 1]). Every level holds at least 8 points per
+harmonic, 16 from 32 harmonics down (and at least 256 points, 128 for the
+four top octaves), read with
+linear interpolation: its images fall 36 dB or more below the harmonic that
+makes them. (1.2 also had a 256-harmonic level at 4 points per harmonic: its
+images were the aliases left at low notes. 128 harmonics reach 8.4 kHz at
+C2, 4.2 kHz at C1.)
 Levels that would hold exactly the same harmonics share one table.
 
   python3 tools/make_bank.py
@@ -19,8 +22,8 @@ Levels that would hold exactly the same harmonics share one table.
 import os
 import numpy as np
 
-LEVELS = 9            # harmonics 256, 128, ..., 1
-TOP = 256
+LEVELS = 8            # harmonics 128, 64, ..., 1
+TOP = 128
 M = 1 << 16           # analysis resolution
 FLOOR = 1e-4          # -80 dB: harmonics below this (re the loudest) are dropped
 NAMES = ["sine", "triangle", "saw", "square", "pulse 25 %", "pulse 10 %",
@@ -84,7 +87,7 @@ def main():
         tables = {}
         for level in range(LEVELS):
             h = min(TOP >> level, cap, TOP)
-            n = max(4 * h if h > 64 else 8 * h, 128)
+            n = max(16 * h if h <= 32 else 8 * h, 256 if h >= 8 else 128)
             if (h, n) not in tables:
                 cc = np.zeros(n // 2 + 1, dtype=complex)
                 cc[1:h + 1] = c[1:h + 1]
@@ -96,7 +99,7 @@ def main():
         row_o, row_b = [], []
         for level in range(LEVELS):
             h = min(TOP >> level, cap, TOP)
-            n = max(4 * h if h > 64 else 8 * h, 128)
+            n = max(16 * h if h <= 32 else 8 * h, 256 if h >= 8 else 128)
             if (h, n) not in placed:
                 # one guard point before, two after: the cubic read needs
                 # no wrapping

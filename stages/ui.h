@@ -93,6 +93,9 @@ class Ui {
     if (event) dobbel_flash_[i] = kDobbelFlashDuration;
   }
 
+  // The audio missed a block (CPU overload): the button lights flicker red.
+  void set_dobbel_overrun() { overrun_flash_ = 400; }
+
   void set_discrete_change(int segment) {
     discrete_change_time_[segment] = stmlib::system_clock.milliseconds();
   }
@@ -155,6 +158,7 @@ class Ui {
   int32_t drift_hold_;       // buttons 1 and 2 held together, ms
   int32_t drift_flash_;      // ms left of the dream-drift on/off flash
   bool drift_flash_on_;
+  volatile int32_t overrun_flash_;  // ms left of the CPU overload flicker
 
   Settings* settings_;
   ChainState* chain_state_;

@@ -142,7 +142,7 @@ struct Input {
 const int kLooperLength = 768;       // 12 s at 64 Hz
 const int kRiderLength = 256;
 const int kBankTables = 16;
-const int kBankLevels = 9;           // band-limited: harmonics 256, 128, ... 1
+const int kBankLevels = 8;           // band-limited: harmonics 128, 64, ... 1
 
 // The wave bank lives in flash (stages/dobbel_bank.cc, tools/make_bank.py).
 extern const int16_t kBankData[];  // each table has t[-1], t[N], t[N + 1]
@@ -298,6 +298,7 @@ class Engine {
   float last_slider_[kNumSegments];
   float last_pot_[kNumSegments];
   uint32_t last_config_;   // a checksum of the settings: any button gesture changes it
+  uint32_t drift_block_;   // counts blocks (the checksum is taken every 8th)
  public:
   inline float drift() const { return drift_; }
  private:

@@ -603,6 +603,82 @@ static double PowerAt(const std::vector<float>& v, float f) {
   return re * re + im * im;
 }
 
+// In-place radix-2 FFT (n a power of two).
+static void Fft(std::vector<double>& re, std::vector<double>& im) {
+  const size_t n = re.size();
+  for (size_t i = 1, j = 0; i < n; ++i) {
+    size_t bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { std::swap(re[i], re[j]); std::swap(im[i], im[j]); }
+  }
+  for (size_t len = 2; len <= n; len <<= 1) {
+    const double a = -2 * M_PI / len;
+    for (size_t i = 0; i < n; i += len) {
+      for (size_t k = 0; k < len / 2; ++k) {
+        const double c = cos(a * k), s = sin(a * k);
+        const double xr = re[i + k + len / 2] * c - im[i + k + len / 2] * s;
+        const double xi = re[i + k + len / 2] * s + im[i + k + len / 2] * c;
+        re[i + k + len / 2] = re[i + k] - xr; im[i + k + len / 2] = im[i + k] - xi;
+        re[i + k] += xr; im[i + k] += xi;
+      }
+    }
+  }
+}
+
+// Everything that isn't a harmonic of f0, against what is (dB).
+static double InharmonicDb(const std::vector<float>& v, float f0) {
+  const size_t n = 16384;
+  std::vector<double> re(n), im(n, 0.0);
+  double mean = 0;
+  for (size_t k = 0; k < n; ++k) mean += v[v.size() - n + k];
+  mean /= n;
+  for (size_t k = 0; k < n; ++k) {
+    const double t = static_cast<double>(k) / n;  // Blackman-Harris
+    const double w = 0.35875 - 0.48829 * cos(2 * M_PI * t) + 0.14128 * cos(4 * M_PI * t) -
+        0.01168 * cos(6 * M_PI * t);
+    re[k] = (v[v.size() - n + k] - mean) * w;
+  }
+  Fft(re, im);
+  double harm = 0, rest = 0;
+  for (size_t k = 2; k < n / 2; ++k) {
+    const double f = k * kSampleRate / n;
+    const double p = re[k] * re[k] + im[k] * im[k];
+    const double h = f / f0;
+    if (fabs(h - round(h)) * f0 < 10.0) harm += p; else rest += p;
+  }
+  return 10 * log10(rest / harm + 1e-30);
+}
+
+static void TestOscillatorsAreClean() {
+  // Morph (between saw and square), the bank (around the saw) and Fold at
+  // C2, C4 and C6: all that's left between the harmonics. (1.1: down to
+  // -12 dB for the bank, -22 for Morph, +1 for Fold; 1.2: -46 at C2.)
+  struct Case { int flavour; float pot; const char* name; float limit; };
+  const Case cases[] = {
+    { OSC_MORPH, 0.6f, "morph", -55.0f },
+    { OSC_BANK, 0.3f, "bank", -55.0f },
+    { OSC_FOLD, 0.6f, "fold", -30.0f },
+  };
+  const float notes[] = { 36.0f, 60.0f, 84.0f };
+  for (const Case& c : cases) {
+    printf("    %-6s", c.name);
+    for (float note : notes) {
+      Rig r;
+      r.Set(0, TYPE_OSCILLATOR, c.flavour);
+      r.Slider(0, (note - 24.0f) / 72.0f);
+      r.in[0].pot = c.pot;
+      r.config.segment[0].aux[TYPE_OSCILLATOR] = 128;
+      std::vector<float> v = r.Run(0, 0.7f);
+      const float f0 = 440.0f * powf(2.0f, (note - 69.0f) / 12.0f + 0.0039f / 12.0f);
+      const double db = InharmonicDb(v, f0);
+      printf("  C%d %6.1f dB", static_cast<int>(note) / 12 - 1, db);
+      CHECK(db < c.limit, "%s at note %g: %.1f dB between the harmonics", c.name, note, db);
+    }
+    printf("\n");
+  }
+}
+
 static void TestOscillatorsDontAlias() {
   // A saw-like bank wave, the morph's square and the folder at C6 (1047 Hz):
   // an alias of harmonic h lands at h * f0 folded about Nyquist. Probe a few
@@ -1079,6 +1155,7 @@ int main(int argc, char** argv) {
   TestConfig();
   TestBank();
   TestOscillatorsDontAlias();
+  TestOscillatorsAreClean();
   TestEveryFlavourRuns();
   TestOscillatorPitch();
   TestDifferencePair();

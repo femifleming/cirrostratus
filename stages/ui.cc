@@ -101,6 +101,7 @@ void Ui::Init(Settings* settings, ChainState* chain_state, CvReader* cv_reader) 
   drift_hold_ = 0;
   drift_flash_ = 0;
   drift_flash_on_ = false;
+  overrun_flash_ = 0;
 }
 
 void Ui::Poll() {
@@ -782,6 +783,7 @@ bool Ui::PollDobbel(uint8_t pressed) {
 // yellow/red alternating). Slider LED: the output level, or the aux value
 // while hold + pot sets it.
 void Ui::UpdateDobbelLEDs(uint32_t ms) {
+  if (overrun_flash_ > 0) --overrun_flash_;
   const uint8_t pwm = ms & 0xf;
   const bool blink = (ms >> 7) & 1;
   const dobbel::Config& config = settings_->dobbel();
@@ -843,6 +845,10 @@ void Ui::UpdateDobbelLEDs(uint32_t ms) {
     }
     if (drift_flash_ > 0) {   // dream drift on (green) / off (red)
       color = drift_flash_on_ ? LED_COLOR_GREEN : LED_COLOR_RED;
+      brightness = 0xf;
+    }
+    if (overrun_flash_ > 0) {  // the audio missed a block: fast red flicker
+      color = (ms >> 5) & 1 ? LED_COLOR_RED : LED_COLOR_OFF;
       brightness = 0xf;
     }
     leds_.set(LED_GROUP_UI + i,

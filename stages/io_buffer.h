@@ -75,6 +75,7 @@ class IOBuffer {
     io_block_ = 0;
     render_block_ = kNumBlocks / 2;
     io_frame_ = 0;
+    underruns_ = 0;
   }
 
   inline void Process(ProcessFn* fn) {
@@ -91,10 +92,16 @@ class IOBuffer {
     io_frame_ += size;
     if (io_frame_ >= kBlockSize) {
       io_frame_ -= kBlockSize;
+      // The next block should be rendered by now (the main loop then waits
+      // on this one): if not, the DAC is about to play a stale block.
+      if (render_block_ != io_block_) ++underruns_;
       io_block_ = (io_block_ + 1) % kNumBlocks;
     }
     return s;
   }
+
+  // Blocks the processing didn't finish in time (since Init).
+  inline uint32_t underruns() const { return underruns_; }
 
   inline bool new_block() const {
     return io_frame_ == 0;
@@ -106,6 +113,7 @@ class IOBuffer {
   size_t io_frame_;
   volatile size_t io_block_;
   volatile size_t render_block_;
+  volatile uint32_t underruns_;
 
   DISALLOW_COPY_AND_ASSIGN(IOBuffer);
 };

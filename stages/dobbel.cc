@@ -122,7 +122,7 @@ inline float Gauss() {
 }
 
 // The levels for a phase increment dt: level L holds harmonics up to
-// 256 >> L, so it is safe while (256 >> L) * dt <= 0.5. Crossfading the
+// 128 >> L, so it is safe while (128 >> L) * dt <= 0.5. Crossfading the
 // first safe level with the next one down keeps the brightness continuous
 // as the pitch moves, and nothing folds back below Nyquist.
 struct Mip {
@@ -132,7 +132,7 @@ struct Mip {
 
 inline Mip BankMip(float dt) {
   Mip m;
-  const float x = Log2(dt * 512.0f);
+  const float x = Log2(dt * 256.0f);
   if (x <= 0.0f) {
     m.lo = m.hi = 0;
     m.w = 1.0f;
@@ -332,6 +332,7 @@ void Engine::Init(Memory* memory) {
     last_slider_[i] = last_pot_[i] = -1.0f;
   }
   last_config_ = 0;
+  drift_block_ = 0;
 }
 
 void Engine::Reset(int i, uint8_t type, uint8_t flavour) {
@@ -475,12 +476,15 @@ void Engine::Drift(const Config& c, const Input* input, size_t size) {
       last_pot_[i] = input[i].pot;
     }
   }
-  uint32_t sum = 2166136261u;   // FNV-1a over the settings
-  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(c.segment);
-  for (size_t k = 0; k < sizeof(c.segment); ++k) sum = (sum ^ bytes[k]) * 16777619u;
-  if (sum != last_config_) {
-    touched = true;
-    last_config_ = sum;
+  // FNV-1a over the settings, every 8th block (2 ms) to save the CPU
+  if ((++drift_block_ & 7) == 0) {
+    uint32_t sum = 2166136261u;
+    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(c.segment);
+    for (size_t k = 0; k < sizeof(c.segment); ++k) sum = (sum ^ bytes[k]) * 16777619u;
+    if (sum != last_config_) {
+      touched = true;
+      last_config_ = sum;
+    }
   }
   const float block = static_cast<float>(size);
   if (touched || !c.drift) idle_ = 0;
@@ -561,11 +565,16 @@ void Engine::Process(
       case TYPE_PROCESSOR: ProcessProcessor(i, config, in, out, size); break;
       default: ProcessEffect(i, config, in, out, size); break;
     }
-    for (size_t n = 0; n < size; ++n) {   // -8 to +8 V, whatever came in
-      out[n] = Clamp(out[n], -1.0f, 1.0f);
-    }
-    for (size_t n = 0; n < size; ++n) {
-      block_out_[i][n] = out[n];
+    if (type == TYPE_PROCESSOR || type == TYPE_EFFECT) {
+      // -8 to +8 V, whatever came in (the other types stay inside by
+      // construction, and the DAC clamps too)
+      for (size_t n = 0; n < size; ++n) {
+        const float o = Clamp(out[n], -1.0f, 1.0f);
+        out[n] = o;
+        block_out_[i][n] = o;
+      }
+    } else {
+      for (size_t n = 0; n < size; ++n) block_out_[i][n] = out[n];
     }
     segment_[i].out = out[size - 1];
   }
@@ -1078,101 +1087,122 @@ void Engine::ProcessOscillator(
   }
   const float tri_gain = kBankGain[1];
   const float saw_gain = kBankGain[2];
-  // The folder's depth: x1 to x7, eased off in the top octaves so its
-  // harmonics stay mostly below 47 kHz (about 10 per unit of depth).
-  float fold_gain = 1.0f;
-  float fold_mid = 0.0f;
-  if (s.flavour == OSC_FOLD) {
-    fold_gain += Clamp(in.pot, 0.0f, 1.0f) * 6.0f;
-    const float fold_limit = 0.15f / (dt > dt_from ? dt : dt_from);
-    if (fold_gain > fold_limit) fold_gain = fold_limit > 1.0f ? fold_limit : 1.0f;
-    fold_mid = fold_gain * 0.5f / Cos(0.5f * dt);
-  }
-  // additive: whole harmonics, the fading last one, none above 14 kHz
-  const float harmonics = 1.0f + b_for_additive(in.pot) * 15.0f;
-  int top = static_cast<int>(14000.0f / f);
-  if (top > 16) top = 16;
-  if (top < 1) top = 1;
-  int whole = static_cast<int>(harmonics);
-  float last_weight = harmonics - whole;
-  if (whole >= top) {
-    whole = top;
-    last_weight = 0.0f;
-  }
-  // rider: one full table every 0.05-10 s
-  const float rider_inc = kRiderLength * kInvSampleRate /
-      ExpMap(Clamp(in.pot, 0.0f, 1.0f), 0.05f, 10.0f);
   const float b = Clamp(in.pot, 0.0f, 1.0f);
   const bool voice = c.alt(i);
-  const int gendy_run = s.flavour == OSC_GENDY ? RunPosition(i, c) : 0;
-  const float attack_coef = OnePoleCoefficient(0.002f);
-  const float release_coef = OnePoleCoefficient(0.3f);
 
-  for (size_t n = 0; n < size; ++n) {
-    // The gate: hard sync, or in voice mode the built-in VCA's envelope.
-    if (in.patched && (in.gate[n] & GATE_FLAG_RISING) && !voice) {
-      s.phase = 0.0f;
-    }
-    if (voice) {
+  // Pass 1: the phase of every sample, and the voice's VCA. The gate is hard
+  // sync, or in voice mode the built-in VCA's envelope.
+  float phase[kMaxBlockSize];
+  float dts[kMaxBlockSize];
+  float gain[kMaxBlockSize];
+  const float scale = s.flavour == OSC_RIDER ? 1.0f : kAudioPeak;
+  if (voice) {
+    const float attack_coef = OnePoleCoefficient(0.002f);
+    const float release_coef = OnePoleCoefficient(0.3f);
+    for (size_t n = 0; n < size; ++n) {
       const bool open = !in.patched || (in.gate[n] & GATE_FLAG_HIGH);
       if (in.patched && (in.gate[n] & GATE_FLAG_RISING)) s.event = 1;
       s.voice += ((open ? 1.0f : 0.0f) - s.voice) * (open ? attack_coef : release_coef);
-    } else {
-      s.voice = 1.0f;
+      gain[n] = s.voice * scale;
     }
+  } else {
+    s.voice = 1.0f;
+    for (size_t n = 0; n < size; ++n) gain[n] = scale;
+  }
+  {
+    float ph = s.phase;
+    const bool sync = in.patched && !voice;
+    for (size_t n = 0; n < size; ++n) {
+      if (sync && (in.gate[n] & GATE_FLAG_RISING)) ph = 0.0f;
+      const float dtn = dt_from + dt_step * static_cast<float>(n + 1);
+      phase[n] = ph;
+      dts[n] = dtn;
+      ph += dtn;
+      if (ph >= 1.0f) ph -= 1.0f;
+    }
+    s.phase = ph;
+  }
 
-    const float dtn = dt_from + dt_step * static_cast<float>(n + 1);
-    float p = s.phase;
-    float y = 0.0f;
-    bool already_scaled = false;
-    switch (s.flavour) {
-      case OSC_MORPH: {
-          // sine -> triangle -> saw -> square -> narrow pulse, all read from
-          // the band-limited bank (square and pulse are two saws apart)
-          const float m = b * 3.999f;
-          const int k = static_cast<int>(m);
-          const float frac = m - k;
-          switch (k) {
-            case 0: {
-                const float sine = Sin(p);
-                const float tri = -ReadBank(wave_a, Wrap(p + 0.25f)) * tri_gain;
-                y = sine + (tri - sine) * frac;
+  // Pass 2: each flavour in its own loop, into out[].
+  switch (s.flavour) {
+    case OSC_MORPH: {
+        // sine -> triangle -> saw -> square -> narrow pulse, all read from
+        // the band-limited bank (square and pulse are two saws apart)
+        const float m = b * 3.999f;
+        const int k = static_cast<int>(m);
+        const float frac = m - k;
+        switch (k) {
+          case 0:
+            for (size_t n = 0; n < size; ++n) {
+              const float p = phase[n];
+              const float sine = Sin(p);
+              const float tri = -ReadBank(wave_a, Wrap(p + 0.25f)) * tri_gain;
+              out[n] = sine + (tri - sine) * frac;
+            }
+            break;
+          case 1:
+            for (size_t n = 0; n < size; ++n) {
+              const float p = phase[n];
+              const float tri = -ReadBank(wave_a, Wrap(p + 0.25f)) * tri_gain;
+              const float saw = ReadBank(wave_b, p) * saw_gain;
+              out[n] = tri + (saw - tri) * frac;
+            }
+            break;
+          case 2:
+            for (size_t n = 0; n < size; ++n) {
+              const float p = phase[n];
+              const float saw = ReadBank(wave_b, p);
+              const float shifted = ReadBank(wave_b, Wrap(p + 0.5f));
+              // saw + (square - saw) * frac, square = shifted - saw
+              out[n] = (saw + (shifted - 2.0f * saw) * frac) * saw_gain;
+            }
+            break;
+          default: {
+              // the last quarter narrows the square's pulse
+              const float pw = 0.5f - 0.42f * frac;
+              const float offset = 1.0f - pw;
+              const float dc = 2.0f * pw - 1.0f;
+              for (size_t n = 0; n < size; ++n) {
+                const float p = phase[n];
+                out[n] = (ReadBank(wave_b, Wrap(p + offset)) - ReadBank(wave_b, p)) *
+                    saw_gain + dc;
               }
-              break;
-            case 1: {
-                const float tri = -ReadBank(wave_a, Wrap(p + 0.25f)) * tri_gain;
-                const float saw = ReadBank(wave_b, p) * saw_gain;
-                y = tri + (saw - tri) * frac;
-              }
-              break;
-            case 2: {
-                const float saw = ReadBank(wave_b, p) * saw_gain;
-                const float square = ReadBank(wave_b, Wrap(p + 0.5f)) * saw_gain - saw;
-                y = saw + (square - saw) * frac;
-              }
-              break;
-            default: {
-                // the last quarter narrows the square's pulse
-                const float pw = 0.5f - 0.42f * frac;
-                y = (ReadBank(wave_b, Wrap(p + 1.0f - pw)) - ReadBank(wave_b, p)) *
-                    saw_gain + 2.0f * pw - 1.0f;
-              }
-              break;
-          }
+            }
+            break;
         }
-        break;
+      }
+      break;
 
-      case OSC_BANK: {
-          // Sixteen waveforms; the pot scans them, crossfading neighbours.
-          const float a0 = ReadBank(wave_a, p);
-          const float a1 = bank_frac > 0.0f ? ReadBank(wave_b, p) : a0;
-          y = (a0 + (a1 - a0) * bank_frac) * kInv32000;
+    case OSC_BANK:
+      // Sixteen waveforms; the pot scans them, crossfading neighbours.
+      if (bank_frac > 0.0f) {
+        for (size_t n = 0; n < size; ++n) {
+          const float a0 = ReadBank(wave_a, phase[n]);
+          const float a1 = ReadBank(wave_b, phase[n]);
+          out[n] = (a0 + (a1 - a0) * bank_frac) * kInv32000;
         }
-        break;
+      } else {
+        for (size_t n = 0; n < size; ++n) {
+          out[n] = ReadBank(wave_a, phase[n]) * kInv32000;
+        }
+      }
+      break;
 
-      case OSC_ADDITIVE: {
-          // 1 to 16 harmonics at 1/k (Chebyshev recurrence: sin(k p) from
-          // sin and cos of p), none above 14 kHz.
+    case OSC_ADDITIVE: {
+        // 1 to 16 harmonics at 1/k (Chebyshev recurrence: sin(k p) from
+        // sin and cos of p), the fading last one, none above 14 kHz.
+        const float harmonics = 1.0f + b_for_additive(in.pot) * 15.0f;
+        int top = static_cast<int>(14000.0f / f);
+        if (top > 16) top = 16;
+        if (top < 1) top = 1;
+        int whole = static_cast<int>(harmonics);
+        float last_weight = harmonics - whole;
+        if (whole >= top) {
+          whole = top;
+          last_weight = 0.0f;
+        }
+        for (size_t n = 0; n < size; ++n) {
+          const float p = phase[n];
           const float cs2 = 2.0f * Cos(p);
           float s_prev = 0.0f;
           float s_k = Sin(p);
@@ -1185,60 +1215,76 @@ void Engine::ProcessOscillator(
             s_k = s_next;
           }
           sum += s_k * kHarmonicWeight[k] * last_weight;
-          y = sum * 0.6f;
+          out[n] = sum * 0.6f;
         }
-        break;
+      }
+      break;
 
-      case OSC_PAIR: {
-          // Two sines; between them the ear hears a third, lower tone.
-          const float ratio = 1.0f + b * 0.5f;
-          s.phase2 += dtn * ratio;
+    case OSC_PAIR: {
+        // Two sines; between them the ear hears a third, lower tone.
+        const float ratio = 1.0f + b * 0.5f;
+        for (size_t n = 0; n < size; ++n) {
+          s.phase2 += dts[n] * ratio;
           if (s.phase2 >= 1.0f) s.phase2 -= 1.0f;
-          y = 0.5f * (Sin(p) + Sin(s.phase2));
+          out[n] = 0.5f * (Sin(phase[n]) + Sin(s.phase2));
         }
-        break;
+      }
+      break;
 
-      case OSC_FOLD: {
-          // Folded at twice the rate (the half-way sample, then this one),
-          // then back down through a half-band filter. The half-way sine
-          // comes from its neighbours:
-          // sin(a) + sin(b) = 2 sin((a + b) / 2) cos((b - a) / 2).
-          const float sine = Sin(p);
-          const float z_mid = Fold((s.fold_sin + sine) * fold_mid);
+    case OSC_FOLD: {
+        // Folded at twice the rate (the half-way sample, then this one),
+        // then back down through a half-band filter. The half-way sine
+        // comes from its neighbours:
+        // sin(a) + sin(b) = 2 sin((a + b) / 2) cos((b - a) / 2).
+        // The folder's depth: x1 to x7, eased off in the top octaves so its
+        // harmonics stay mostly below 47 kHz (about 10 per unit of depth).
+        float fold_gain = 1.0f + b * 6.0f;
+        const float fold_limit = 0.15f / (dt > dt_from ? dt : dt_from);
+        if (fold_gain > fold_limit) fold_gain = fold_limit > 1.0f ? fold_limit : 1.0f;
+        const float fold_mid = fold_gain * 0.5f / Cos(0.5f * dt);
+        float last = s.fold_sin;
+        int pos = s.fold_pos;
+        for (size_t n = 0; n < size; ++n) {
+          const float sine = Sin(phase[n]);
+          const float z_mid = Fold((last + sine) * fold_mid);
           const float z_now = Fold(sine * fold_gain);
-          s.fold_sin = sine;
+          last = sine;
           // a ring written twice, so the window z[0..18] is never split
-          int pos = s.fold_pos - 1;
-          if (pos < 0) pos += 19;
+          if (--pos < 0) pos += 19;
           s.fold_z[pos] = s.fold_z[pos + 19] = z_mid;
           if (--pos < 0) pos += 19;
           s.fold_z[pos] = s.fold_z[pos + 19] = z_now;
-          s.fold_pos = pos;
           const float* z = s.fold_z + pos;  // z[0] newest
-          y = 0.5f * z[9] +
+          out[n] = 0.5f * z[9] +
               0.307808409f * (z[8] + z[10]) - 0.077682721f * (z[6] + z[12]) +
               0.025546120f * (z[4] + z[14]) - 0.006282386f * (z[2] + z[16]) +
               0.000526214f * (z[0] + z[18]);
         }
-        break;
+        s.fold_sin = last;
+        s.fold_pos = pos;
+      }
+      break;
 
-      case OSC_FM: {
-          // The left neighbour is the modulator (an oscillator for FM, a
-          // random or envelope for slow phase bending); pot = depth.
-          const float m = i > 0 ? block_out_[i - 1][n] * kInvAudioPeak : 0.0f;
-          y = Sin(Wrap(p + b * 2.0f * m));
-        }
-        break;
+    case OSC_FM:
+      // The left neighbour is the modulator (an oscillator for FM, a
+      // random or envelope for slow phase bending); pot = depth.
+      for (size_t n = 0; n < size; ++n) {
+        const float m = i > 0 ? block_out_[i - 1][n] * kInvAudioPeak : 0.0f;
+        out[n] = Sin(Wrap(phase[n] + b * 2.0f * m));
+      }
+      break;
 
-      case OSC_GENDY: {
-          // Xenakis' dynamic stochastic synthesis: 12 breakpoints whose
-          // heights and spacing take a random walk; pot = how far. Side by
-          // side, Gendy segments play the first one's breakpoints, each at
-          // its own pitch: one waveform, moving as a cloud.
-          Segment& g = gendy_run > 0 ? segment_[i - gendy_run] : s;
+    case OSC_GENDY: {
+        // Xenakis' dynamic stochastic synthesis: 12 breakpoints whose
+        // heights and spacing take a random walk; pot = how far. Side by
+        // side, Gendy segments play the first one's breakpoints, each at
+        // its own pitch: one waveform, moving as a cloud.
+        const int gendy_run = RunPosition(i, c);
+        Segment& g = gendy_run > 0 ? segment_[i - gendy_run] : s;
+        for (size_t n = 0; n < size; ++n) {
           const int k = s.gendy_index;
           const int k2 = (k + 1) % 12;
-          s.phase2 += dtn * g.gendy_sum * s.gendy_inv;
+          s.phase2 += dts[n] * g.gendy_sum * s.gendy_inv;
           bool advanced = false;
           if (s.phase2 >= 1.0f) {
             s.phase2 -= 1.0f;
@@ -1263,15 +1309,21 @@ void Engine::ProcessOscillator(
           }
           const int a = s.gendy_index;
           const int a2 = (a + 1) % 12;
-          y = g.gendy_amp[a] + (g.gendy_amp[a2] - g.gendy_amp[a]) * s.phase2;
+          float y = g.gendy_amp[a] + (g.gendy_amp[a2] - g.gendy_amp[a]) * s.phase2;
           y -= s.dc;
           s.dc += y * 0.0005f;
+          out[n] = y;
         }
-        break;
+      }
+      break;
 
-      case OSC_RIDER: {
-          // Writes the left neighbour (segment 1: its own CV jack) into its
-          // waveform, one full table every 0.05-10 s (pot); gate = freeze.
+    case OSC_RIDER: {
+        // Writes the left neighbour (segment 1: its own CV jack) into its
+        // waveform, one full table every 0.05-10 s (pot); gate = freeze.
+        // (Already in output units: 1.0 = 8 V.)
+        const float rider_inc = kRiderLength * kInvSampleRate /
+            ExpMap(b, 0.05f, 10.0f);
+        for (size_t n = 0; n < size; ++n) {
           const bool freeze = in.patched && (in.gate[n] & GATE_FLAG_HIGH);
           if (!freeze) {
             const float source = i > 0 ? block_out_[i - 1][n] : in.cv_raw;
@@ -1284,23 +1336,24 @@ void Engine::ProcessOscillator(
               s.event = 1;
             }
           }
-          const float x = p * kRiderLength;
+          const float x = phase[n] * kRiderLength;
           const int j = static_cast<int>(x);
           const float fx = x - j;
           const int16_t* t = memory_->rider[i];
           const float v = (t[j] + (t[(j + 1) & (kRiderLength - 1)] - t[j]) * fx) * kInv32767;
           s.dc += (v - s.dc) * 0.0002f;
-          y = Clamp(v - s.dc, -1.0f, 1.0f);
-          already_scaled = true;  // already in output units (1.0 = 8 V)
+          out[n] = Clamp(v - s.dc, -1.0f, 1.0f);
         }
-        break;
-    }
+      }
+      break;
+  }
 
-    s.phase += dtn;
-    if (s.phase >= 1.0f) s.phase -= 1.0f;
-    const float o = (already_scaled ? y : y * kAudioPeak) * s.voice;
+  // Pass 3: level and VCA. (block_norm_ may overshoot 0-1 by the few
+  // percent of a band-limited edge's ringing; its readers allow for it.)
+  for (size_t n = 0; n < size; ++n) {
+    const float o = out[n] * gain[n];
     out[n] = o;
-    block_norm_[i][n] = 0.5f + 0.5f * Clamp(o * kInvAudioPeak, -1.0f, 1.0f);
+    block_norm_[i][n] = 0.5f + 0.5f * kInvAudioPeak * o;
   }
   s.norm = voice ? s.voice : 1.0f;
 }
