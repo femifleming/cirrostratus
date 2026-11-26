@@ -18,7 +18,7 @@
 //                     amber = off. Stored in the settings.
 //   WRITE hold + DISP    buffer page (tap DISP within a second of pressing
 //                     WRITE): the master buffer quality for every mode
-//                     that records (GRAINS, STRETCH, CAPTURE, TAPE,
+//                     that records (STRETCH, CAPTURE, TAPE,
 //                     BARBERPOLE, BLOOM). FREEZE steps through
 //                     48k/24k/16k 16-bit, then 48k/24k/16k 8-bit. LEDs:
 //                     1-3 lit = 48/24/16 kHz, green = 16-bit, red = 8-bit;

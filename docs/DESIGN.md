@@ -72,10 +72,10 @@ Engine services a mode may map a knob to (`Mode::feedback_amount(c)`,
 skipped):
 - Feedback loop: wet → 25 Hz HP → ResonanceTamer (two adaptive notches;
   depth rises with how much of the loop's energy sits in narrow peaks) →
-  soft clip → mode input. Gain curve: smoothstep(amount). FBK in GRAINS,
+  soft clip → mode input. Gain curve: smoothstep(amount). FBK in
   CONVOLVE and BLOOM.
 - FDN: 8 lines, 16-bit (≈ 15 k samples, 32 KB of CCM), modulated, T60
-  0.5–16.5 s, amount sets send and decay. RVB in GRAINS, DIFFERENCE, CROSS,
+  0.5–16.5 s, amount sets send and decay. RVB in DIFFERENCE, CROSS,
   CAPTURE, GENDY, PLATES, FALTUNG, LEITNER, TANTRI, ENSEMBLE, CHOIR,
   FOLDER, GAMELAN, MIRROR (dry voices and mono modes with no space of their
   own; several were chosen over a mode-specific idea to fit the flash).
@@ -90,7 +90,7 @@ RVB 0 = v1.0 exactly (checked against v1.0 fingerprints in host/tests_v11.cc).
 
 | Mode | BAL (left / right of noon) | FBK | RVB |
 |---|---|---|---|
-| 1 GRAINS | noon = plain. Left: spray (grains scatter around the path, up to half the buffer away). Right: more and more grains play backwards, all of them at full | feedback: the cloud back into itself, Clouds style, with the howl tamer on duty | the 8-line FDN reverb: send and length together, 0.5 → 16 s |
+| 1 GRAINS (retired in 1.5) | noon = plain. Left: spray (grains scatter around the path, up to half the buffer away). Right: more and more grains play backwards, all of them at full | feedback: the cloud back into itself, Clouds style, with the howl tamer on duty | the 8-line FDN reverb: send and length together, 0.5 → 16 s |
 | 2 SPECTRAL | Turning it shifts every partial by the same number of Hz (not a ratio), so harmonic sounds go inharmonic. Left shifts down, right shifts up, exponential: a few Hz near noon, ±1 kHz at the ends | regeneration | phase diffusion: random phases blend in, coherent → a whispered wash in the same colours |
 | 3 CONVOLVE | Left: only the attacks of the input reach the IR. Right: only the body (attacks ducked, so hits swell instead of crack). It shapes the input before everything, so captures hear it too | feedback (the module's feedback loop, with its howl tamer): the IR rings on much longer | IR smear |
 | 4 RESONATOR | Left: detune, the strings spread up to ±25 cents (beating, a chorus of strings). Right: stretch, intervals widen up to +10 % (an octave ~+120 cents: piano-like, then bell-like) | sympathetic coupling | body |
@@ -123,7 +123,7 @@ RVB 0 = v1.0 exactly (checked against v1.0 fingerprints in host/tests_v11.cc).
 
 ## Modes
 
-### 1 GRAINS — trajectory grains
+### 1 GRAINS — trajectory grains (retired in 1.5: the number stays reserved, the code is gone)
 Buffer: SampleBuffer, stereo (options 0–3) or mono (4–7), ≤ 118 KB,
 records continuously unless frozen.
 - POSITION: centre of the trajectory (0 = newest audio, 1 = oldest).

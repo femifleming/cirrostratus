@@ -136,7 +136,7 @@ void Ui::OnPress(uint8_t id) {
   switch (id) {
     case SWITCH_FREEZE:
       if (page_ == UI_PAGE_MODE_MENU) {
-        if (menu_mode_ >= MODE_LAST) menu_mode_ = ModeFromPosition();
+        if (!ModeExists(menu_mode_)) menu_mode_ = ModeFromPosition();
         uint8_t n = engine_->num_options(static_cast<ModeId>(menu_mode_));
         menu_option_ = (menu_option_ + 1) % n;
         option_flash_until_ = system_clock.milliseconds() + 1500;
@@ -344,16 +344,21 @@ uint8_t Ui::ModeFromPosition() const {
   // kMenuLo..kMenuHi, widened whenever the slider goes further.
   float p = cv_scaler_->raw_position();
   float q = (p - menu_lo_) / (menu_hi_ - menu_lo_);
-  int zone = static_cast<int>(q * kModesPerBank);
+  // Bank 1 has 14 modes since GRAINS (mode 1) went: its zones are 2..15,
+  // so every mode keeps its number (and its place at the top end).
+  int first = menu_bank_ * kModesPerBank;
+  int last = first + kModesPerBank;
+  if (first < MODE_FIRST) first = MODE_FIRST;
+  if (last > MODE_LAST) last = MODE_LAST;
+  const int count = last - first;
+  int zone = static_cast<int>(q * count);
   if (zone < 0) zone = 0;
-  if (zone >= kModesPerBank) zone = kModesPerBank - 1;
-  int m = menu_bank_ * kModesPerBank + zone;
-  if (m >= MODE_LAST) m = MODE_LAST - 1;
-  return static_cast<uint8_t>(m);
+  if (zone >= count) zone = count - 1;
+  return static_cast<uint8_t>(first + zone);
 }
 
 void Ui::ApplyModeMenu() {
-  if (menu_mode_ >= MODE_LAST) menu_mode_ = ModeFromPosition();
+  if (!ModeExists(menu_mode_)) menu_mode_ = ModeFromPosition();
   SettingsData* d = settings_->mutable_data();
   bool mode_changed = menu_mode_ != engine_->mode();
   if (mode_changed) {

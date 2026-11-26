@@ -38,7 +38,7 @@ bool IsStub(ModeId m) {
 // jump, PITCH sweeps ±48 st, gates chatter.
 MONSOON_TEST(stress_every_option_with_fast_cv) {
   int checked = 0;
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     Module probe;
     int options = probe.engine().num_options(ModeId(mode));
     for (int o = 0; o < options; ++o) {
@@ -73,7 +73,7 @@ MONSOON_TEST(stress_every_option_with_fast_cv) {
 // After loud abuse, silence in must decay to silence out (no stuck DC, no
 // self-oscillation left running) when freeze is off and feedback is down.
 MONSOON_TEST(stress_silence_after_abuse) {
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     Module m;
     CHECK(m.SetMode(ModeId(mode)), "init");
     auto loud = Noise(3.0f, 0.9f);
@@ -114,7 +114,7 @@ MONSOON_TEST(stress_mode_switch_storm) {
   r.Seed(5);
   float worst = 0.0f;
   for (int k = 0; k < 600; ++k) {
-    ModeId target = ModeId(r.Next() % MODE_LAST);
+    ModeId target = ModeId(MODE_FIRST + r.Next() % (MODE_LAST - MODE_FIRST));
     uint8_t opt = uint8_t(r.Next() % m.engine().num_options(target));
     m.engine().RequestMode(target, opt);
     auto out = m.Render(in, [&](size_t) {
@@ -141,7 +141,7 @@ MONSOON_TEST(stress_mode_switch_storm) {
 // keep the arena within budget.
 MONSOON_TEST(stress_save_load_every_option) {
   int saved = 0;
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     Module probe;
     int options = probe.engine().num_options(ModeId(mode));
     for (int o = 0; o < options; ++o) {
@@ -168,7 +168,7 @@ MONSOON_TEST(stress_save_load_every_option) {
             Engine::mode_name(ModeId(mode)), o, slot.size());
       Module b;
       // Start in a different mode so the load has to switch.
-      b.SetMode(ModeId((mode + 1) % MODE_LAST));
+      b.SetMode(ModeId(mode + 1 < MODE_LAST ? mode + 1 : MODE_FIRST));
       b.engine().RequestLoad(slot.data(), slot.size());
       auto out = b.Render(Silence(0.5f), [](size_t) { return DefaultControls(); });
       CHECK(b.engine().mode() == mode && b.engine().option() == o,
@@ -185,7 +185,7 @@ MONSOON_TEST(stress_save_load_every_option) {
     for (size_t i = 0; i < junk.size(); ++i) junk[i] = uint8_t(i * 37 + 11);
     b.engine().RequestLoad(junk.data(), junk.size());
     b.Render(Silence(0.2f), [](size_t) { return DefaultControls(); });
-    CHECK(b.engine().mode() == MODE_GRAINS, "junk slot was loaded");
+    CHECK(b.engine().mode() == MODE_FIRST, "junk slot was loaded");
   }
   std::printf("    %d saveable mode/option combinations reloaded; junk slot rejected\n", saved);
   return true;
@@ -194,7 +194,7 @@ MONSOON_TEST(stress_save_load_every_option) {
 // Very quiet input must stay clean (the hi-fi promise): noise floor of the
 // wet path with silence in, no freeze, blend 100 %.
 MONSOON_TEST(stress_noise_floor) {
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     Module m;
     CHECK(m.SetMode(ModeId(mode)), "init");
     auto out = m.Render(Silence(3.0f), [](size_t) {
@@ -210,12 +210,12 @@ MONSOON_TEST(stress_noise_floor) {
 
 MONSOON_TEST(stress_report_unbuilt_modes) {
   int stubs = 0;
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     if (IsStub(ModeId(mode))) {
       std::printf("    NOTE: %s is still a pass-through stub\n", Engine::mode_name(ModeId(mode)));
       ++stubs;
     }
   }
-  std::printf("    %d of %d modes built\n", MODE_LAST - stubs, int(MODE_LAST));
+  std::printf("    %d of %d modes built\n", MODE_LAST - MODE_FIRST - stubs, int(MODE_LAST - MODE_FIRST));
   return true;
 }

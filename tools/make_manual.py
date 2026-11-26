@@ -122,10 +122,11 @@ def build():
     md_out = os.path.join(DOCS, "Cirrostratus-Manual.md")
     open(md_out, "w").write(text)
     body = markdown.markdown(text, extensions=["tables", "fenced_code"])
-    body = re.sub(r"<h2>(?=(1|2|3|5)\. )", '<h2 class="page">', body)
+    # "5. Modes" follows section 4 on its page; each bank opens a page.
+    body = re.sub(r"<h2>(?=(1|2|3)\. )", '<h2 class="page">', body)
     # A bank heading opens a page and takes its first mode along.
     body = re.sub(r"<h3>(Bank 2[^<]*</h3>\s*)<h4>", r'<h3 class="page">\1<h4 class="nb">', body)
-    body = re.sub(r"(<h3>Bank 1[^<]*</h3>\s*)<h4>", r'\1<h4 class="nb">', body)
+    body = re.sub(r"<h3>(Bank 1[^<]*</h3>\s*)<h4>", r'<h3 class="page">\1<h4 class="nb">', body)
     # One <section> per heading, so a figure stays on the page with its text.
     parts = re.split(r"(?=<h[234][ >])", body)
     body = parts[0] + "".join('<section class="%s">%s</section>' % ("mode" if p.startswith("<h4") else "", p)

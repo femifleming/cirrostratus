@@ -85,8 +85,20 @@ struct Tube {
                 float c2, bool on);
 };
 
+#ifndef PT2399_MAX_RATE
+#define PT2399_MAX_RATE 160000.0f
+#endif
+#ifndef BBD_MAX_CLK
+#define BBD_MAX_CLK 64000.0f
+#endif
+
 struct Pt2399Line {
   static const int kBits = 44000;
+  // The clock never runs faster than this: below kBits / kMaxRate (0.275 s,
+  // about SIZE at 60 %) the line uses fewer bits instead (same delay), so
+  // short delays cost what that setting does. (At 20 ms the full line
+  // needed ~46 bits per sample per side: 3x the module's time.)
+  static constexpr float kMaxRate = PT2399_MAX_RATE;
   uint8_t* mem;  // kBits / 8 bytes
   int pos;
   float bit_rate, target_rate, bit_phase, prev_in, held;
@@ -99,15 +111,19 @@ struct Pt2399Line {
   bool Init(Arena* arena, uint32_t seed);
   void SetTime(float sec) { target_rate = kBits / Clamp(sec, 0.02f, 1.6f); }
   void UpdateCoeffs();
+  float rate() const { return bit_rate < kMaxRate ? bit_rate : kMaxRate; }
   // Recomputes only when the clock moved by more than 0.3 %.
   void MaybeUpdateCoeffs() {
-    if (fabsf(bit_rate - coeff_rate) > 0.003f * coeff_rate) UpdateCoeffs();
+    if (fabsf(rate() - coeff_rate) > 0.003f * coeff_rate) UpdateCoeffs();
   }
   float Process(float x, bool freeze);
 };
 
 struct BbdLine {
   static const int kStages = 4096;
+  // As Pt2399Line: the clock stops at kMaxClk, shorter delays use fewer
+  // stages (same delay).
+  static constexpr float kMaxClk = BBD_MAX_CLK;
   float* bucket;
   int idx;
   float clk, target_clk, clk_a, tick_phase, prev_aa, held, cti, parity;

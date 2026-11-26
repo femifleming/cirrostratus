@@ -87,10 +87,10 @@ MONSOON_TEST(fft_setting_change_restarts_the_running_mode) {
   m.Render(Silence(0.5f), [](size_t) { return DefaultControls(); });
   CHECK(m.engine().fft_size() == 2048, "back to its own size");
   // Non-spectral modes don't notice (and report no FFT).
-  CHECK(m.SetMode(MODE_GRAINS, 0), "grains");
+  CHECK(m.SetMode(MODE_HALL, 0), "hall");
   m.engine().set_fft_setting(3);
-  CHECK(!m.engine().switching(), "grains is not restarted");
-  CHECK(m.engine().fft_size() == 0, "grains has no FFT");
+  CHECK(!m.engine().switching(), "hall is not restarted");
+  CHECK(m.engine().fft_size() == 0, "hall has no FFT");
   return true;
 }
 

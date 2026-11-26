@@ -71,7 +71,7 @@ MONSOON_TEST(sample_buffer_keeps_quiet_signals_clean) {
 MONSOON_TEST(every_mode_initialises_within_memory) {
   Module m;
   CHECK(m.ok(), "engine init");
-  for (int i = 0; i < MODE_LAST; ++i) {
+  for (int i = MODE_FIRST; i < MODE_LAST; ++i) {
     for (int o = 0; o < m.engine().num_options(ModeId(i)); ++o) {
       CHECK(m.SetMode(ModeId(i), o), "mode %s option %d failed to init",
             Engine::mode_name(ModeId(i)), o);
@@ -86,7 +86,7 @@ MONSOON_TEST(every_mode_initialises_within_memory) {
 }
 
 MONSOON_TEST(every_mode_survives_random_knob_abuse) {
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     Module m;
     CHECK(m.SetMode(ModeId(mode)), "init");
     auto in = Music(14.0f, mode + 3);
@@ -122,7 +122,7 @@ MONSOON_TEST(every_mode_survives_random_knob_abuse) {
 }
 
 MONSOON_TEST(every_mode_makes_sound_from_music) {
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     Module m;
     CHECK(m.SetMode(ModeId(mode)), "init");
     auto in = Music(6.0f);
@@ -164,7 +164,7 @@ MONSOON_TEST(mode_switches_are_click_free) {
   Module m;
   auto in = Sine(220.0f, 0.25f, 0.4f);
   float worst = 0.0f;
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     m.engine().RequestMode(ModeId(mode), 0);
     auto out = m.Render(in, [](size_t) { return DefaultControls(); });
     for (size_t i = 1; i < out.size(); ++i) {
@@ -181,6 +181,7 @@ MONSOON_TEST(reverb_tail_grows_with_slider) {
   float tails[2];
   for (int k = 0; k < 2; ++k) {
     Module m;
+    CHECK(m.SetMode(MODE_CAPTURE), "capture");  // RVB = the FDN reverb
     std::vector<FloatFrame> in = Silence(6.0f);
     for (int i = 0; i < 64; ++i) in[i].l = in[i].r = 0.8f;
     auto out = m.Render(in, [&](size_t) {
@@ -199,7 +200,7 @@ MONSOON_TEST(reverb_tail_grows_with_slider) {
 }
 
 MONSOON_TEST(save_and_load_round_trip_every_mode) {
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     Module a;
     CHECK(a.SetMode(ModeId(mode)), "init");
     auto in = Music(3.0f, 11);

@@ -46,7 +46,7 @@ void Settings::Init() {
   }
   data_.magic = kSettingsMagic;
   data_.version = kSettingsVersion;
-  data_.mode = MODE_GRAINS;
+  data_.mode = MODE_FIRST;
   version_token_ = 0;
   Save();
 }

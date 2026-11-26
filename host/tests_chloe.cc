@@ -26,24 +26,45 @@ size_t EchoArrival(const std::vector<FloatFrame>& out, size_t skip) {
 }  // namespace
 
 MONSOON_TEST(chloe_every_engine_echoes_at_the_size_time) {
-  // SIZE 0.5 -> 20 ms * 2^(3.16) = 179 ms.
-  const float expected = 0.02f * exp2f(0.5f * 6.32f) * 48000.0f;
+  // SIZE s -> 20 ms * 2^(6.32 s): 20 ms .. 1.6 s. Since 1.5 the PT2399
+  // clock stops at 160 kHz and the BBD's at 64 kHz (shorter lines below
+  // 0.275 s / 64 ms instead): the echo must still come at the SIZE time.
   const char* names[3] = { "PT2399", "BBD", "tape" };
+  const float sizes[4] = { 0.0f, 0.2f, 0.5f, 0.8f };
   for (int engine = 0; engine < 3; ++engine) {
-    Module m;
-    CHECK(m.SetMode(MODE_CHLOE, engine), "init");
-    std::vector<FloatFrame> in = Silence(1.0f);
-    for (int i = 0; i < 96; ++i) in[4800 + i].l = in[4800 + i].r = 0.5f * std::sin(i * 0.3f);
-    auto out = m.Render(in, [](size_t) {
-      Controls c = DefaultControls();
-      c.size = 0.5f; c.density = 0.0f; c.position = 0.95f; c.texture = 0.0f;
-      return c;
-    });
-    size_t arrival = EchoArrival(out, 4800 + 2000) - 4800;
-    std::printf("    %-6s echo after %.1f ms (expected %.1f ms)\n", names[engine],
-                arrival / 48.0, expected / 48.0);
-    CHECK(std::fabs(float(arrival) - expected) < 0.06f * expected + 200.0f, "echo time");
+    std::printf("    %-6s", names[engine]);
+    for (float size : sizes) {
+      const float expected = 0.02f * exp2f(size * 6.32f) * 48000.0f;
+      // Tape glides to a new time like real tape (from noon, where the
+      // module started): check it at noon only.
+      if (engine == 2 && size != 0.5f) continue;
+      Module m;
+      CHECK(m.SetMode(MODE_CHLOE, engine), "init");
+      std::vector<FloatFrame> in = Silence(1.0f + expected / 48000.0f);
+      for (int i = 0; i < 96; ++i) in[4800 + i].l = in[4800 + i].r = 0.5f * std::sin(i * 0.3f);
+      auto out = m.Render(in, [size](size_t) {
+        Controls c = DefaultControls();
+        c.size = size; c.density = 0.0f; c.position = 0.95f; c.texture = 0.0f;
+        return c;
+      });
+      size_t arrival = EchoArrival(out, 4800 + 96 + size_t(expected / 3.0f)) - 4800;
+      std::printf("  %6.1f ms (%6.1f)", arrival / 48.0, expected / 48.0);
+      CHECK(std::fabs(float(arrival) - expected) < 0.06f * expected + 200.0f,
+            "%s echo at %.1f ms, expected %.1f", names[engine], arrival / 48.0,
+            expected / 48.0);
+    }
+    std::printf("\n");
   }
+  return true;
+}
+
+MONSOON_TEST(chloe_short_delays_cost_no_more_than_the_cap) {
+  // The PT2399 / BBD lines never clock faster than their caps, so a short
+  // delay costs the CPU what 0.275 s (PT2399) / 64 ms (BBD) does.
+  CHECK(chloe::Pt2399Line::kMaxRate <= 160000.0f, "PT2399 cap");
+  CHECK(chloe::BbdLine::kMaxClk <= 64000.0f, "BBD cap");
+  CHECK(chloe::Pt2399Line::kBits / chloe::Pt2399Line::kMaxRate > 0.27f, "PT2399: the cap "
+        "only touches delays shorter than SIZE ~60 %%");
   return true;
 }
 

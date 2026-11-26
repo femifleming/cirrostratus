@@ -202,6 +202,15 @@ def bq_leds(q, pending=False):
     return leds
 
 
+def fft_leds(s, pending=False):
+    """FFT page LEDs: s = 0 green bar (each mode's own size: 4 = 2048 as in
+    SPECTRAL), 1-4 an amber bar of s LEDs (256 .. 2048). Pending = the bar
+    the page blinks; drawn steady here."""
+    if s == 0:
+        return [(0, 1)] * 4
+    return [((1, 0.63) if i < s else (0, 0)) for i in range(4)]
+
+
 def row(label, text, spoken=None, hl=None):
     return dict(label=label, text=text, spoken=spoken, hl=hl if hl is not None else hl_for(label))
 
@@ -209,14 +218,38 @@ def row(label, text, spoken=None, hl=None):
 def general_chapters():
     return [
         dict(code="cs00", title="cirrostratus", sub="a thin, high sheet of cloud for the monsoon",
-             desc="Alternative firmware for Jak Plugg's Monsoon, the twelve HP Clouds. Thirty modes in two "
+             desc="Alternative firmware for Jak Plugg's Monsoon, the twelve HP Clouds. Twenty-nine modes in two "
                   "banks, a forty-eight kilohertz floating-point engine, and eight hands-on controls in every mode.",
              say="Cirrostratus. A thin, high sheet of cloud for the Monsoon. It's alternative firmware for "
-                 "Jak Plugg's Monsoon: thirty modes in two banks, a forty-eight kilohertz floating-point engine, "
+                 "Jak Plugg's Monsoon: twenty-nine modes in two banks, a forty-eight kilohertz floating-point engine, "
                  "and eight controls in every mode: the four sliders, and now the BAL, FBK and RVB knobs too. "
                  "Same panel, same jacks. Only the weather changes.",
-             rows=[row("modes", "30 · two banks", hl=[]), row("engine", "48 kHz · 32-bit float", hl=[]),
+             rows=[row("modes", "29 · two banks", hl=[]), row("engine", "48 kHz · 32-bit float", hl=[]),
                    row("slots", "4 jars of sky", hl=[]), row("look up", "always", hl=[])], kind="intro"),
+        dict(code="nw15", title="new in 1.5", sub="grains retired, every mode checked",
+             desc="GRAINS is retired: every other mode keeps its number, and your settings, calibration and "
+                  "slots carry over. Then every mode and option ran on an emulated STM32F405, built exactly "
+                  "like the firmware: CHLOE's short delays and TAPE's fastest speed were over the module's "
+                  "time, and are fixed.",
+             say="New in one point five.",
+             rows=[row("grains", "retired · numbers kept",
+                       "Grains is retired. Every other mode keeps its number, so bank one now runs from two to "
+                       "fifteen, and the bottom of POSITION lands on Spectral. Your settings, your calibration "
+                       "and your save slots all carry over.", hl=["disp", "leds", "sl0"]),
+                   row("every mode", "checked on the chip's twin",
+                       "Then every mode and every option ran on an emulated copy of the module's chip, built "
+                       "exactly like the firmware, and was checked against a computer: at ordinary settings, "
+                       "flat out, fully dry, and with every slider at both ends.", hl=["sl0", "sl1", "sl2", "sl3"]),
+                   row("fully dry", "the input, untouched",
+                       "With WET all the way down, every mode passes your input through untouched.",
+                       hl=["k0", "in_l", "out_l"]),
+                   row("chloe", "short delays fit the cpu",
+                       "Chloe's PT2399 and BBD delays needed up to three times the time the module has at short "
+                       "delays. Their clocks now stop rising there, and the line gets shorter instead: the same "
+                       "delay time, short echoes just a little darker.", hl=["sl2"]),
+                   row("tape", "tops out at ×3",
+                       "And Tape now tops out at three times speed, where four was too much.",
+                       hl=["sl2", "tune"])], kind="steps"),
         dict(code="in01", title="installing", sub="getting the cloud up there",
              desc="Rack off. Computer out into IN L. Hold FREEZE and power on: the FREEZE button blinks. "
                   "Play cirrostratus.wav from the start. Four green lights as each block is written; "
@@ -286,8 +319,9 @@ def general_chapters():
              say="Choosing a mode.",
              rows=[row("hold disp", "menu opens",
                        "Hold DISP. The four lights show the mode as a binary number: green for bank one, "
-                       "modes one to fifteen, red for bank two, sixteen to thirty.", hl=["disp", "leds"]),
-                   row("position", "browse 15 modes", "Move the POSITION slider to browse.",
+                       "modes two to fifteen, red for bank two, sixteen to thirty. Mode one, Grains, is retired, so "
+                       "the others keep their numbers.", hl=["disp", "leds"]),
+                   row("position", "browse the bank", "Move the POSITION slider to browse.",
                        hl=["sl0"]),
                    row("tap write", "other bank", "Tap WRITE to flip banks.", hl=["write"]),
                    row("tap freeze", "options", "Tap FREEZE to step through the mode's options.",
@@ -343,9 +377,9 @@ def general_chapters():
                    row("limiter", "−1 dBFS", "And a limiter that stays out of the way.")], kind="output"),
         dict(code="bq08", title="longer buffers", sub="buffer quality, for every mode that records",
              desc="Hold WRITE and tap DISP. FREEZE steps through 48, 24 and 16 kHz, in 16 or 8 bit. "
-                  "The lower settings hold up to six times more sound in GRAINS, STRETCH, CAPTURE, TAPE, "
+                  "The lower settings hold up to six times more sound in STRETCH, CAPTURE, TAPE, "
                   "BARBERPOLE and BLOOM.",
-             say="Longer buffers. New in one point two: one master setting for every mode that records. "
+             say="Longer buffers. One master setting for every mode that records. "
                  "Trade a little fidelity, for up to six times more sound.",
              rows=[dict(row("write + disp", "open the buffer page",
                             "Hold WRITE and tap DISP, within a second, before the save page opens.",
@@ -362,16 +396,44 @@ def general_chapters():
                    dict(row("write · disp", "apply · cancel",
                             "WRITE applies it, and the running mode's buffer starts again, empty. Or tap "
                             "DISP to leave without changing a thing.", hl=["write", "disp"]), leds=bq_leds(5)),
-                   dict(row("grains mono", "1.24 s → 7.32 s",
-                            "Grains in mono goes from one and a quarter seconds, to more than seven. "
+                   dict(row("tape mono", "1.2 s → 7.2 s",
+                            "Tape runs slower, so in mono its echoes go from just over a second, to seven. "
                             "Stretch, up to five.", hl=["sl0", "sl1", "sl2", "sl3"]), leds=bq_leds(5)),
-                   dict(row("the others", "tape, barberpole, bloom: up to 6×",
-                            "Tape runs slower, so its echoes reach seven seconds. Barberpole's loop grows to "
-                            "three, and Bloom's swells get six times longer.", hl=["out_l", "out_r"]),
+                   dict(row("the others", "capture, barberpole, bloom: up to 6×",
+                            "Capture holds three seconds, Barberpole's loop grows to three, and Bloom's swells "
+                            "get six times longer.", hl=["out_l", "out_r"]),
                         leds=bq_leds(5)),
                    dict(row("slots", "keep their quality",
                             "And a save slot remembers the quality it was recorded with.",
                             hl=["write", "leds"]), leds=bq_leds(5))], kind="buffer"),
+        dict(code="ff09", title="fft size", sub="one resolution for every spectral mode",
+             desc="Hold DISP and tap FREEZE. FREEZE steps through each mode's own size, then 256, 512, 1024 "
+                  "and 2048 points, for SPECTRAL and SMEAR, CROSS, STRETCH, PUTZ, QUELL, SPECDELAY and MIRROR. "
+                  "WRITE applies, DISP cancels.",
+             say="F F T size. One setting for the resolution of every spectral mode.",
+             rows=[dict(row("disp + freeze", "open the fft page",
+                            "Hold DISP and tap FREEZE. A green light sweeps across: you're on the page.",
+                            hl=["disp", "freeze"]), leds="sweep"),
+                   dict(row("green bar", "each mode's own size",
+                            "A green bar is the default: each mode at its own size, exactly as before.",
+                            hl=["leds"]), leds=fft_leds(0)),
+                   dict(row("freeze", "256 · 512 · 1024 · 2048",
+                            "FREEZE steps through the sizes: an amber bar of one to four lights, two hundred "
+                            "and fifty-six points up to two thousand and forty-eight.", hl=["freeze", "leds"]),
+                        leds="cycle"),
+                   dict(row("small", "sharp, grainy, quick",
+                            "Small sizes are sharp and quick: transients survive, spectra turn grainy.",
+                            hl=["leds"]), leds=fft_leds(1, True)),
+                   dict(row("large", "smooth, glassy",
+                            "Large sizes are smooth and glassy, with finer pitch.", hl=["leds"]),
+                        leds=fft_leds(4, True)),
+                   dict(row("write · disp", "apply · cancel",
+                            "WRITE applies it, all four lights flash, and the running spectral mode restarts. "
+                            "DISP leaves without a change. Blur, decay and delay times stay the same at every "
+                            "size: only the resolution changes.", hl=["write", "disp"]), leds=fft_leds(4)),
+                   dict(row("slots", "keep their size",
+                            "A frozen spectrum saved in a slot comes back at the size it was saved with.",
+                            hl=["write", "leds"]), leds=fft_leds(4))], kind="buffer"),
     ]
 
 
@@ -389,10 +451,10 @@ def build_chapters():
         ch.append(dict(code=code, title=m["name"].lower(), sub=m["sub"].lower(), desc=m["desc"],
                        forecast=m["forecast"], say=say, rows=rows, kind="mode", num=m["num"]))
     ch.append(dict(code="cs∞", title="look up", sub="cirrostratus · firmware for monsoon",
-                   desc="Thirty kinds of sky. Thanks to Mutable Instruments, Tom Burns and Jak Plugg.",
-                   say="That's Cirrostratus. Thirty kinds of sky, in one small cloud. Thanks to Mutable Instruments, "
+                   desc="Twenty-nine kinds of sky. Thanks to Mutable Instruments, Tom Burns and Jak Plugg.",
+                   say="That's Cirrostratus. Twenty-nine kinds of sky, in one small cloud. Thanks to Mutable Instruments, "
                        "Tom Burns and Jak Plugg. Now go and look up.",
-                   rows=[row("modes", "30", hl=[]), row("tests", "224 passing", hl=[]),
+                   rows=[row("modes", "29", hl=[]), row("tests", "225 passing", hl=[]),
                          row("licence", "mit", hl=[])], kind="outro"))
     for i, c in enumerate(ch):
         c["index"] = i
@@ -406,10 +468,10 @@ def short_chapters():
     allk = ["sl0", "sl1", "sl2", "sl3"]
     ch = [
         dict(code="cs", title="cirrostratus", sub="a thin, high sheet of cloud",
-             desc="Firmware for the Monsoon. Thirty kinds of weather, at forty-eight kilohertz, in floating point.",
-             say="Cirrostratus. A thin, high sheet of cloud, drawn across the Monsoon. Thirty kinds of weather, "
+             desc="Firmware for the Monsoon. Twenty-nine kinds of weather, at forty-eight kilohertz, in floating point.",
+             say="Cirrostratus. A thin, high sheet of cloud, drawn across the Monsoon. Twenty-nine kinds of weather, "
                  "sung at forty-eight kilohertz. The same panel. A different sky.",
-             rows=[row("modes", "30 · two banks", hl=[]), row("engine", "48 kHz · float", hl=[]),
+             rows=[row("modes", "29 · two banks", hl=[]), row("engine", "48 kHz · float", hl=[]),
                    row("look up", "always", hl=[])], kind="intro"),
         dict(code="pn", title="the panel", sub="four sliders, one big knob, three new hands",
              desc="POSITION, DENSITY, SIZE, TEXTURE shape the sky. TUNE is pitch. BAL, FBK and RVB belong to "
@@ -421,7 +483,7 @@ def short_chapters():
                    row("tune", "pitch, v/oct", hl=["tune", "voct"]),
                    row("bal fbk rvb", "new hands in every mode", hl=["k1", "k2", "k3"]),
                    row("wet", "how much sky", hl=["k0"])], kind="panel"),
-        dict(code="mn", title="thirty skies", sub="hold disp, slide position, let go",
+        dict(code="mn", title="twenty-nine skies", sub="hold disp, slide position, let go",
              desc="Hold DISP: the lights count in binary, green for the first bank, red for the second. "
                   "POSITION browses, WRITE crosses banks, FREEZE picks an option.",
              say="Hold display, and the four lights count in binary. Green is the first bank, red the second. "
@@ -429,13 +491,13 @@ def short_chapters():
              rows=[row("hold disp", "the lights count", hl=["disp", "leds"]),
                    row("position", "wander", hl=["sl0"]), row("write", "cross the banks", hl=["write"]),
                    row("let go", "the new sky fades in", hl=["disp"])], kind="menu"),
-        dict(code="wx", title="the weather", sub="a few of the thirty",
-             desc="Grains falling in shapes. Spectra held and refracted. Strings with a buzzing bridge. "
+        dict(code="wx", title="the weather", sub="a few of the twenty-nine",
+             desc="Spectra held and refracted. Strings with a buzzing bridge. "
                   "Tabla and tanpura. Plates of glass. A choir of you. Rooms that loop forever.",
-             say="Grains, falling in shapes. A spectrum, held and refracted into its colours. Strings with a "
+             say="A spectrum, held and refracted into its colours. Strings with a "
                  "buzzing bridge, a tabla and its tanpura, plates of metal and glass, a choir made of you, "
                  "and rooms that loop back into themselves forever.",
-             rows=[row("grains", "falling in shapes", hl=[]), row("spectral", "held, refracted", hl=[]),
+             rows=[row("spectral", "held, refracted", hl=[]), row("resonator", "a buzzing bridge", hl=[]),
                    row("tantri", "tabla · tanpura", hl=[]), row("choir", "made of you", hl=[])], kind="menu"),
         dict(code="fz", title="hold the moment", sub="freeze, trig, four jars of sky",
              desc="FREEZE holds the moment. TRIG asks every mode a different question. WRITE keeps what you "
@@ -902,13 +964,18 @@ def render_chapter(args):
         elif c["kind"] == "sunrise":
             leds, frz = splash_leds((t * 1000) % 4200)
         elif c["kind"] == "menu":
-            n = int(t / 1.2) % 30 + 1
+            n = int(t / 1.2) % 29 + 2  # 2..30: mode 1 is retired
             leds = binary_leds((n - 1) % 15 + 1, n <= 15)
         elif c["kind"] == "buffer":
             r = c["rows"][active] if active is not None else c["rows"][0]
             leds = r.get("leds", bq_leds(0))
+            fft = c["code"].startswith("ff")
             if leds == "cycle":
-                leds = bq_leds(int(t / 0.9) % 6)
+                leds = fft_leds(1 + int(t / 0.9) % 4) if fft else bq_leds(int(t / 0.9) % 6)
+            elif leds == "sweep":
+                # green sweep from LED 4 to LED 1, then the own-size bar
+                k = int(t / 0.15) % 6
+                leds = [((0, 1) if 3 - i == k else (0, 0)) for i in range(4)] if k < 4 else fft_leds(0)
         elif c["kind"] == "env":
             leds = [(0, 1), (0, 0), (0, 0.4), (1, 0)]
         elif c["kind"] == "steps":

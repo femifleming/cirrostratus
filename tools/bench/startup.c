@@ -5,7 +5,13 @@ extern void (*__init_array_start[])(void);
 extern void (*__init_array_end[])(void);
 int main(void);
 void SysTick_Handler(void);
-void Default_Handler(void) { while (1) { } }
+// A fault: the verify image reports it and stops QEMU (weak: the bench
+// image just stops here).
+void Bench_Fault(void) __attribute__((weak));
+void Default_Handler(void) {
+  if (Bench_Fault) Bench_Fault();
+  while (1) { }
+}
 
 void Reset_Handler(void) {
   // Enable the FPU (CP10/CP11 full access).

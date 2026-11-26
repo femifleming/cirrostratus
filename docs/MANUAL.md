@@ -2,7 +2,7 @@
 
 ### *a thin, high sheet of cloud for the Monsoon*
 
-**Version 1.4.0**
+**Version 1.5.0**
 
 <!-- PANEL cover -->
 
@@ -14,10 +14,10 @@ Cirrostratus is alternative firmware for **Monsoon**, Jak Plugg's 12HP
 module built on Mutable Instruments' Clouds. Clouds made granular weather.
 This firmware goes one layer higher, thinner and brighter:
 
-- **30 modes** in two banks (Clouds had four kinds of sky)
+- **29 modes** in two banks (Clouds had four kinds of sky)
 - **seven controls of their own in every mode**: the four sliders plus the
   three small knobs **BAL**, **FBK** and **RVB**, which mean something
-  different (and specific) in each mode. That's 90 extra controls, all with
+  different (and specific) in each mode. That's 87 extra controls, all with
   CV
 - **48 kHz**, 32-bit float inside, 16-bit block-float buffers that keep quiet
   sounds clean (a −60 dB whisper is stored with 93 dB SNR), and a
@@ -33,16 +33,30 @@ This firmware goes one layer higher, thinner and brighter:
 It is still your Monsoon: same panel, same jacks, same bootloader. Only the
 weather changes.
 
-**New in 1.4.0:** an **FFT size** page (hold DISP, tap FREEZE; section
+**New in 1.5.0:** **GRAINS is gone.** Mode 1 is retired and every other
+mode keeps its number, so bank 1 now runs from 2 to 15 (POSITION's bottom
+end lands on 2 · SPECTRAL), and your settings, calibration and save slots
+all carry over. A module that was sitting in GRAINS wakes up in SPECTRAL;
+a slot saved from GRAINS is simply skipped. Every remaining mode and option
+was then put through a long check on an emulated STM32F405 built exactly
+like the firmware: each one at ordinary settings, flat out, fully dry
+(the input comes through within 1 LSB in every mode) and at all 16 corners
+of the panel. That turned up two old overloads, now fixed: **CHLOE**'s
+PT2399 and BBD engines at short delays (SIZE below ~60 % on the PT2399,
+below ~27 % on the BBD) needed up to three times the time the
+module has, and **TAPE** at its very fastest (×4) was over too. CHLOE's
+emulated chips now stop raising their clock there and use a shorter line
+instead (same delay time; short PT2399 echoes are a little darker), and
+TAPE now tops out at ×3.
+
+**1.4.0:** an **FFT size** page (hold DISP, tap FREEZE; section
 3.8) sets the resolution of all seven spectral modes at once: 256 points
 for sharp, grainy, transient spectra up to 2048 for smooth, glassy ones,
 or each mode's own size as before. Blur, decay and delay times stay the
 same at every size; only the resolution changes.
 
-**1.3.1:** GRAINS needed more time than the module has, so the whole
-output broke up, dry signal included, at every buffer quality. It now
-runs in about four fifths of the time with the same sound. The buffer page
-opens however long you've held WRITE, and shows itself clearly (3.7).
+**1.3.1:** the buffer page opens however long you've held WRITE, and
+shows itself clearly (3.7).
 
 **1.3.0:** SPECTRAL has a second option, **SMEAR**, the spectral
 smear from Sleepcousonique's Wingie mode (section 5, mode 2). RESONATOR,
@@ -118,9 +132,11 @@ of the "build_4" Monsoon firmwares.
 
 - Your **V/OCT calibration comes along** from the stock firmware
   automatically. Never calibrated? See 3.9.
-- **Coming from Cirrostratus 1.0 or 1.1?** Settings, per-mode options,
-  envelope routings and all four save slots carry over untouched. Mono bass
+- **Coming from an earlier Cirrostratus?** Settings, per-mode options,
+  envelope routings and save slots carry over untouched. Mono bass
   starts on; buffer quality starts at 48 kHz 16-bit (exactly as before).
+  If the module was in GRAINS it starts in SPECTRAL, and slots saved from
+  GRAINS are skipped.
 - Old Clouds save slots aren't compatible. Cirrostratus recognises and
   ignores them; it never plays garbage.
 - **Back to stock:** flash the stock Monsoon firmware the same way. Clouds
@@ -189,7 +205,9 @@ Any button skips it (that press does nothing else).
 
 <!-- PANEL menu -->
 1. **Hold DISP** for a second. The LEDs show the current mode in binary:
-   **green = bank 1** (modes 1–15), **red = bank 2** (16–30).
+   **green = bank 1** (modes 2–15), **red = bank 2** (16–30). Mode 1
+   (GRAINS) was retired in 1.5; the others kept their numbers, so bank 1
+   has 14 and the bottom of POSITION lands on 2.
 2. **Move POSITION** to browse. The menu only starts following POSITION
    once you actually move it, so peeking never changes anything. The sound
    keeps its old POSITION while you browse.
@@ -203,7 +221,7 @@ Reading the binary, left to right is 8 · 4 · 2 · 1:
 
 | ●=on | # | | # | | # |
 |---|---|---|---|---|---|
-| ○○○● | 1 | ○●○● | 5 | ●○○● | 9 |
+| ○○○● | (1) | ○●○● | 5 | ●○○● | 9 |
 | ○○●○ | 2 | ○●●○ | 6 | ●○●○ | 10 |
 | ○○●● | 3 | ○●●● | 7 | ●○●● | 11 |
 | ○●○○ | 4 | ●○○○ | 8 | ●●○○ | 12 |
@@ -269,8 +287,8 @@ freeze when you use it for this.
 ### 3.7 Buffer quality (longer buffers)
 
 <!-- PANEL quality -->
-One master setting for every mode that records into a buffer: **GRAINS,
-STRETCH, CAPTURE, TAPE, BARBERPOLE** and **BLOOM**. Store the audio at a
+One master setting for every mode that records into a buffer: **STRETCH,
+CAPTURE, TAPE, BARBERPOLE** and **BLOOM**. Store the audio at a
 lower sample rate and/or 8-bit and the same memory holds up to six times
 as much sound.
 
@@ -298,8 +316,6 @@ How long that makes each buffer (seconds):
 
 | Mode | 48k 16 | 24k 16 | 16k 16 | 48k 8 | 24k 8 | 16k 8 |
 |---|---|---|---|---|---|---|
-| GRAINS stereo | 0.62 | 1.24 | 1.86 | 1.22 | 2.44 | 3.66 |
-| GRAINS mono | 1.24 | 2.48 | 3.72 | 2.44 | 4.88 | 7.32 |
 | STRETCH stereo | 0.30 | 0.60 | 0.90 | 0.59 | 1.18 | 1.76 |
 | STRETCH mono | 0.89 | 1.77 | 2.66 | 1.75 | 3.49 | 5.23 |
 | CAPTURE (capture length) | 0.50 | 1.01 | 1.51 | 0.99 | 1.99 | 2.98 |
@@ -391,13 +407,12 @@ IN ─┬───────────────────────�
 
 **What happened to FEEDBACK and REVERB?** They became engine services that
 a mode can borrow for one of its knobs when that's truly the best control
-for it. GRAINS borrows both (FBK = the classic Clouds feedback, still with
-its built-in howl tamer: two adaptive notches that talk down a whistling
-loop; RVB = the 8-line FDN reverb, 0.5 → 16 s). CONVOLVE and BLOOM borrow
-the feedback loop for FBK. The dry voices and mono modes that have no space
-of their own borrow the reverb for RVB: DIFFERENCE, CROSS, CAPTURE, GENDY,
+for it. CONVOLVE and BLOOM borrow the feedback loop for FBK (the classic
+Clouds feedback, with its built-in howl tamer: two adaptive notches that
+talk down a whistling loop). The dry voices and mono modes that have no space
+of their own borrow the reverb (the 8-line FDN, 0.5 → 16 s) for RVB: DIFFERENCE, CROSS, CAPTURE, GENDY,
 PLATES, FALTUNG, LEITNER, TANTRI, ENSEMBLE, CHOIR, FOLDER, GAMELAN and
-MIRROR. Everything else (73 of the 90 knob jobs) is the mode's own, and a
+MIRROR. Everything else (72 of the 87 knob jobs) is the mode's own, and a
 mode pays no CPU for a reverb it doesn't use.
 
 ---
@@ -422,15 +437,15 @@ for that mode.
 | Interpolation | Hermite everywhere it reads between samples |
 | FFT | ARM CMSIS-DSP real FFT, heavy work between interrupts; 256–2048 points (FFT size, 3.8) |
 | RAM per mode | about 130 KB (only the running mode holds memory) |
-| CPU | every mode measured on an emulated STM32F405 at ≤ ~2400 instructions per stereo frame including the output section |
+| CPU | every mode and option measured on an emulated STM32F405 (built with the firmware's own compiler flags) at ordinary settings, flat out and at all 16 panel corners: ≤ ~2200 instructions per stereo frame including the output section |
 | Output | hard stereo, mono bass below 60 Hz (LR4, switchable), limiter, TPDF dither |
 | Save slots | 4 × 128 KB of flash |
 | Settings | calibration, mode, per-mode option + envelope routing, mono bass, buffer quality, FFT size |
 
-The source, the 231 tests and the CPU benchmark live in the repository:
-`make -C host test`, `tools/bench/run.sh`. Cirrostratus has so far been
-tested on the host and an emulated STM32F405, not yet on a physical
-module.
+The source, the 225 tests, the CPU benchmark and the emulator check live
+in the repository: `make -C host test`, `tools/bench/run.sh`,
+`tools/bench/verify.sh` (every mode and option on the emulated chip,
+compared with the same run on a computer).
 
 ---
 

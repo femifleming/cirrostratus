@@ -24,7 +24,6 @@
 #include "monsoon/dsp/modes/cross.h"
 #include "monsoon/dsp/modes/difference.h"
 #include "monsoon/dsp/modes/gendy.h"
-#include "monsoon/dsp/modes/grains.h"
 #include "monsoon/dsp/modes/plates.h"
 #include "monsoon/dsp/modes/resonator.h"
 #include "monsoon/dsp/modes/shimmer.h"
@@ -49,7 +48,6 @@ Fft& SharedFft() {
 
 // One instance of every mode. Their big buffers live in the arena; the
 // objects themselves are small.
-static GrainsMode grains_mode;
 static SpectralMode spectral_mode;
 static ConvolveMode convolve_mode;
 static ResonatorMode resonator_mode;
@@ -81,7 +79,7 @@ static MirrorMode mirror_mode;
 static PolishMode polish_mode;
 
 static Mode* const kModes[MODE_LAST] = {
-  &grains_mode, &spectral_mode, &convolve_mode, &resonator_mode,
+  NULL /* 1: removed */, &spectral_mode, &convolve_mode, &resonator_mode,
   &difference_mode, &cross_mode, &stretch_mode, &spreek_mode,
   &capture_mode, &gendy_mode, &shimmer_mode, &tape_mode, &plates_mode,
   &chloe_mode,
@@ -105,9 +103,13 @@ static SlotHeader slot_header;
 
 Mode* Engine::mode_instance(ModeId id) { return kModes[id]; }
 
-const char* Engine::mode_name(ModeId id) { return kModes[id]->name(); }
+const char* Engine::mode_name(ModeId id) {
+  return ModeExists(id) ? kModes[id]->name() : "(removed)";
+}
 
-uint8_t Engine::num_options(ModeId id) { return kModes[id]->num_options(); }
+uint8_t Engine::num_options(ModeId id) {
+  return ModeExists(id) ? kModes[id]->num_options() : 1;
+}
 
 bool Engine::Init(void* main_mem, size_t main_size,
                   void* ccm_mem, size_t ccm_size) {
@@ -142,9 +144,9 @@ bool Engine::Init(void* main_mem, size_t main_size,
   pending_load_size_ = 0;
 
   // Bring up the first mode synchronously.
-  active_mode_ = MODE_GRAINS;
+  active_mode_ = MODE_FIRST;
   active_option_ = 0;
-  requested_mode_ = MODE_GRAINS;
+  requested_mode_ = MODE_FIRST;
   requested_option_ = 0;
   arena_.Reset();
   current_ = kModes[active_mode_];
@@ -158,7 +160,7 @@ bool Engine::Init(void* main_mem, size_t main_size,
 }
 
 void Engine::RequestMode(ModeId mode, uint8_t option) {
-  if (mode >= MODE_LAST) return;
+  if (!ModeExists(mode)) return;
   if (option >= kModes[mode]->num_options()) option = 0;
   requested_option_ = option;
   if (mode != active_mode_) {
@@ -208,7 +210,7 @@ static uint8_t SlotFft(const SlotHeader* h) {
 void Engine::RequestLoad(const uint8_t* data, size_t size) {
   if (!data || size < sizeof(SlotHeader)) return;
   const SlotHeader* h = reinterpret_cast<const SlotHeader*>(data);
-  if (h->magic != kSlotMagic || h->mode >= MODE_LAST) return;
+  if (h->magic != kSlotMagic || !ModeExists(h->mode)) return;
   if (h->payload_size + sizeof(SlotHeader) > size) return;
   pending_load_data_ = data;
   pending_load_size_ = size;

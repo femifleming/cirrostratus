@@ -76,10 +76,10 @@ MONSOON_TEST(hardware_knob_noise_does_not_retune) {
 MONSOON_TEST(hardware_switch_completes_while_shedding) {
   auto in = Music(0.5f, 7);
   for (int pattern = 0; pattern < 2; ++pattern) {
-    for (int mode = 0; mode < MODE_LAST; ++mode) {
+    for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
       Module m;
       CHECK(m.SetMode(ModeId(mode)), "init");
-      const ModeId next = ModeId((mode + 1) % MODE_LAST);
+      const ModeId next = ModeId(mode + 1 < MODE_LAST ? mode + 1 : MODE_FIRST);
       m.engine().RequestMode(next, 0);
       size_t blocks = 0;
       bool finite = true;
@@ -107,7 +107,7 @@ MONSOON_TEST(hardware_switch_completes_while_shedding) {
 // triggers: finite, never clipping, never stuck at a rail.
 MONSOON_TEST(hardware_minute_in_every_mode) {
   auto in = Music(60.0f, 99);
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     Module m;
     CHECK(m.SetMode(ModeId(mode)), "init");
     auto out = m.Render(in, [](size_t b) {
@@ -129,7 +129,7 @@ MONSOON_TEST(hardware_minute_in_every_mode) {
     CHECK(longest < 480, "%s: stuck at full scale for %zu samples",
           Engine::mode_name(ModeId(mode)), longest);
   }
-  std::printf("    %d modes x 60 s heavy settings, noisy knobs, freezes: ok\n", int(MODE_LAST));
+  std::printf("    %d modes x 60 s heavy settings, noisy knobs, freezes: ok\n", int(MODE_LAST - MODE_FIRST));
   return true;
 }
 

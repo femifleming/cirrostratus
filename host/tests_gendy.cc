@@ -206,7 +206,7 @@ MONSOON_TEST(gendy_save_load_restores_breakpoints) {
     }
   }
   Module b;
-  b.SetMode(MODE_GRAINS);
+  b.SetMode(MODE_HALL);
   b.engine().RequestLoad(slot.data(), slot.size());
   auto sil = Silence(0.3f);
   b.Render(sil, [](size_t) {

@@ -10,7 +10,6 @@
 #include "monsoon/dsp/modes/barberpole.h"
 #include "monsoon/dsp/modes/bloom.h"
 #include "monsoon/dsp/modes/capture.h"
-#include "monsoon/dsp/modes/grains.h"
 #include "monsoon/dsp/modes/stretch.h"
 #include "monsoon/dsp/modes/tape.h"
 #include "monsoon/dsp/sample_buffer.h"
@@ -31,8 +30,6 @@ struct BufferMode {
 };
 
 static const BufferMode kBufferModes[] = {
-  { MODE_GRAINS, 0, "grains stereo" },
-  { MODE_GRAINS, 4, "grains mono" },
   { MODE_STRETCH, 0, "stretch stereo" },
   { MODE_STRETCH, 1, "stretch mono" },
   { MODE_CAPTURE, 0, "capture" },
@@ -46,7 +43,6 @@ static const BufferMode kBufferModes[] = {
 static float ModeSeconds(Module& m, ModeId id) {
   Mode* mode = m.engine().mode_instance(id);
   switch (id) {
-    case MODE_GRAINS: return static_cast<GrainsMode*>(mode)->buffer_seconds();
     case MODE_STRETCH: return static_cast<StretchMode*>(mode)->buffer_seconds();
     case MODE_CAPTURE: return static_cast<CaptureMode*>(mode)->buffer_seconds();
     case MODE_TAPE: return static_cast<TapeMode*>(mode)->head3_seconds();
@@ -238,7 +234,7 @@ MONSOON_TEST(buffer_quality_slot_reloads_at_its_own_quality) {
     CHECK(m.engine().mode_instance(b.id)->buffer_quality() == 5,
           "%s should reload at 16k 8-bit", b.label);
     CHECK(m.engine().buffer_quality() == 0, "master setting unchanged");
-    if (b.id == MODE_GRAINS || b.id == MODE_STRETCH) {
+    if (b.id == MODE_STRETCH) {
       float e = 0.0f;
       for (size_t i = out.size() / 2; i < out.size(); ++i) e += std::fabs(out[i].l);
       CHECK(e > 1.0f, "%s frozen slot should play", b.label);
@@ -259,8 +255,8 @@ MONSOON_TEST(buffer_quality_only_reinits_buffer_modes) {
   CHECK(m.SetMode(MODE_HALL), "hall");
   m.engine().set_buffer_quality(4);
   CHECK(!m.engine().switching(), "hall has no buffer: no restart");
-  CHECK(m.SetMode(MODE_GRAINS), "grains");
-  CHECK(m.engine().mode_instance(MODE_GRAINS)->buffer_quality() == 4,
+  CHECK(m.SetMode(MODE_STRETCH), "stretch");
+  CHECK(m.engine().mode_instance(MODE_STRETCH)->buffer_quality() == 4,
         "a buffer mode picks up the master setting when it starts");
   m.engine().set_buffer_quality(4);
   CHECK(!m.engine().switching(), "same setting: no restart");

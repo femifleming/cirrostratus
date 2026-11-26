@@ -1,26 +1,4 @@
-### Bank 1 (green)
-
-#### 1 · GRAINS — trajectory grains
-*Forecast: scattered showers, falling in shapes.*
-
-Grains are read from a recorded buffer along a moving path, not at random
-spots. Buffer: 0.62 s stereo or 1.24 s mono, up to 3.66 s / 7.32 s at a
-lower buffer quality (3.7).
-
-| Control | |
-|---|---|
-| POSITION | centre of the path (bottom = newest audio) |
-| SIZE | path size and speed: bottom = a fixed point; up = wider and faster (0.05 → 2 Hz) |
-| DENSITY | grain rate 1 → 150 grains/s; grain length follows (long and sparse → short and dense) |
-| TEXTURE | window: percussive → smooth (Hann) → flat; top quarter adds pitch scatter |
-| PITCH | grain transposition, quantised by the option |
-| BAL | noon = plain. Left: spray (grains scatter around the path, up to half the buffer away). Right: more and more grains play backwards, all of them at full |
-| FBK | feedback: the cloud back into itself, Clouds style, with the howl tamer on duty |
-| RVB | the 8-line FDN reverb: send and length together, 0.5 → 16 s |
-| FREEZE | stop recording |
-| TRIG | next path shape: circle → line → figure-8 → spiral → random walk |
-| Options | 1 chromatic · 2 minor pentatonic · 3 octaves + fifths · 4 free; options 5–8 = the same in mono (double length) |
-| Keeps | the buffer |
+### Bank 1 (green) · 2–15 (mode 1, GRAINS, retired in 1.5)
 
 #### 2 · SPECTRAL — spectral freeze / resynthesis
 *Forecast: a held moment, refracted into its colours.*
@@ -247,7 +225,7 @@ quality, 3.7).
 | Control | |
 |---|---|
 | SIZE | tape speed ×0.25 → ×2 (×1 at noon) |
-| PITCH | fine speed, V/OCT |
+| PITCH | fine speed, V/OCT (together with SIZE: ×0.0625 → ×3; the tape stops speeding up at ×3) |
 | POSITION | heads: 1 · 2 · 3 · 1+2 · 2+3 · 1+3 · 1+2+3 · all into the repeats · swell |
 | DENSITY | feedback, up to gentle self-oscillation |
 | TEXTURE | tape character: wow, flutter, saturation, head bump |
@@ -301,4 +279,8 @@ cutoffs apart and lets the filter wander between low-pass and band-pass.
 
 On the module: the tube runs 2× oversampled (4× in the plug-in), one
 delay line per side (time changes glide), the tape is 0.45 s per side with
-fixed wear, and there are no poly taps or flock.
+fixed wear, and there are no poly taps or flock. The emulated chips stop
+raising their clock where the module would run out of time (PT2399 at
+160 kHz, below 0.275 s; BBD at 64 kHz, below 64 ms) and use a shorter line
+instead: the delay time is the same, short PT2399 echoes are a little
+darker than the real chip's.

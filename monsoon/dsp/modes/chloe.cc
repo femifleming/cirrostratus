@@ -185,13 +185,14 @@ __attribute__((cold)) bool Pt2399Line::Init(Arena* arena, uint32_t seed) {
 }
 
 __attribute__((cold)) void Pt2399Line::UpdateCoeffs() {
-  coeff_rate = bit_rate;
-  leak = expf(-kTwoPi * 25.0f / bit_rate);
-  beta = expf(-1.0f / (0.0035f * bit_rate));
-  const float isq = 1.0f / sqrtf(bit_rate);
+  const float r = rate();
+  coeff_rate = r;
+  leak = expf(-kTwoPi * 25.0f / r);
+  beta = expf(-1.0f / (0.0035f * r));
+  const float isq = 1.0f / sqrtf(r);
   d_min = 2.6f * isq;
   d_max = 145.0f * isq;
-  const float bw = Clamp(bit_rate * 0.048f, 2400.0f, 11500.0f);
+  const float bw = Clamp(r * 0.048f, 2400.0f, 11500.0f);
   in_lp.Lowpass(bw, 0.62f);
   out_lp1.Lowpass(bw, 0.54f);
   out_lp2.Lowpass(bw * 1.25f, 1.3f);
@@ -202,7 +203,15 @@ float Pt2399Line::Process(float x, bool freeze) {
   float in = freeze ? 0.0f : x;
   in = in_lp.Process(in);
   in = 1.1f * FastTanh(in * 0.9f);
-  bit_phase += bit_rate * (1.0f / kSampleRate);
+  // Past kMaxRate: the clock stays there and the line gets shorter, so the
+  // delay (bits / clock) is still kBits / bit_rate.
+  float r = bit_rate;
+  int len = kBits;
+  if (r > kMaxRate) {
+    len = static_cast<int>(static_cast<float>(kBits) * kMaxRate / r);
+    r = kMaxRate;
+  }
+  bit_phase += r * (1.0f / kSampleRate);
   const int n = static_cast<int>(bit_phase);
   bit_phase -= static_cast<float>(n);
   if (n > 0) {
@@ -238,7 +247,7 @@ float Pt2399Line::Process(float x, bool freeze) {
       d_est = d_est * lk + (out_bit ? d_step : -d_step);
       acc += d_est;
 
-      if (++p >= kBits) p = 0;
+      if (++p >= len) p = 0;
       if ((p & 7) == 0) {
         m[byte_index] = static_cast<uint8_t>(cur);
         byte_index = p >> 3;
@@ -293,7 +302,13 @@ float BbdLine::Process(float x, bool freeze) {
   float g = 1.0f / sqrtf(env / kBbdRef);
   if (g > 10.0f) g = 10.0f;
   const float aa = aa2.Process(aa1.Process(x * g));
-  const float inc = clk * (1.0f / kSampleRate);
+  float ck = clk;
+  int stages = kStages;
+  if (ck > kMaxClk) {
+    stages = static_cast<int>(static_cast<float>(kStages) * kMaxClk / ck);
+    ck = kMaxClk;
+  }
+  const float inc = ck * (1.0f / kSampleRate);
   const float inv_inc = 1.0f / inc;
   tick_phase += inc;
   while (tick_phase >= 1.0f) {
@@ -303,7 +318,7 @@ float BbdLine::Process(float x, bool freeze) {
     const float out = bucket[idx];
     bucket[idx] = freeze ? out * 0.99985f
                          : BucketSat(v) + (rng.Float() - 0.5f) * 0.0009f;
-    if (++idx >= kStages) idx = 0;
+    if (++idx >= stages) idx = 0;
     cti += 0.86f * (out - cti);
     held = cti;
     parity = -parity;

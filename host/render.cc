@@ -1,6 +1,6 @@
 // Renders audio through one mode for listening.
 //
-//   host/build/render --mode grains --in music --secs 12 --out out.wav \
+//   host/build/render --mode spectral --in music --secs 12 --out out.wav \
 //       --set position=0.3 --set density=0.7 --freeze-at 4 --trig-every 0.5
 //
 // --in accepts a .wav path, or: music, noise, sine:<hz>, silence.
@@ -33,7 +33,7 @@ static float* Param(Controls* c, const std::string& name) {
 }
 
 int main(int argc, char** argv) {
-  std::string mode_name = "grains", in_name = "music", out_name = "out.wav";
+  std::string mode_name = "spectral", in_name = "music", out_name = "out.wav";
   std::string sweep;
   float secs = 10.0f, freeze_at = -1.0f, unfreeze_at = -1.0f, trig_every = 0.0f;
   int option = 0, quality = 0, fft = 0;
@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
 
   Module module;
   int mode = -1;
-  for (int m = 0; m < monsoon::MODE_LAST; ++m) {
+  for (int m = monsoon::MODE_FIRST; m < monsoon::MODE_LAST; ++m) {
     if (mode_name == monsoon::Engine::mode_name(monsoon::ModeId(m))) mode = m;
   }
   if (mode < 0) { std::fprintf(stderr, "unknown mode %s\n", mode_name.c_str()); return 1; }

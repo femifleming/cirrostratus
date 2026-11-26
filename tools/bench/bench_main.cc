@@ -9,7 +9,6 @@
 #include "monsoon/dsp/memory.h"
 #include "monsoon/dsp/stft.h"
 #include "monsoon/dsp/modes/chloe.h"
-#include "monsoon/dsp/modes/grains.h"
 
 using namespace monsoon;
 
@@ -147,7 +146,7 @@ int main() {
     if (acc == 12345.0f) Print("x");
   }
   // The micro-benchmarks above reuse block_main as scratch, which trashes the
-  // mode Engine::Init brought up (GRAINS): bring the engine up again.
+  // mode Engine::Init brought up: bring the engine up again.
   engine.Init(block_main, sizeof(block_main), block_ccm, sizeof(block_ccm));
   Controls c;
   memset(&c, 0, sizeof(c));
@@ -163,7 +162,7 @@ int main() {
   engine.set_fft_setting(BENCH_FFT);
 #endif
   for (int scenario = 0; scenario < 2; ++scenario) {
-    for (int m = 0; m < MODE_LAST; ++m) {
+    for (int m = MODE_FIRST; m < MODE_LAST; ++m) {
 #ifdef BENCH_ONLY
       if (m != BENCH_ONLY) continue;  // BENCH_DEFS="-DBENCH_ONLY=1": one mode
 #endif
@@ -230,9 +229,6 @@ int main() {
       uint64_t frames = (uint64_t)kBlocks * kBlockSize;
       uint32_t per_frame_x10 = (uint32_t)((process + prepare) * 10000ull / 168ull / frames);
       uint32_t isr_peak = (uint32_t)(peak_block * 1000ull / 168ull / kBlockSize);
-#ifdef BENCH_GRAINS
-      if (m == MODE_GRAINS) { Print("active grains "); PrintNum((uint32_t) static_cast<GrainsMode*>(engine.mode_instance((ModeId)m))->active_grains()); Print("\n"); }
-#endif
       Print(scenario ? "heavy   " : "typical ");
       Print(Engine::mode_name((ModeId)m));
       Print(" insns/frame ");

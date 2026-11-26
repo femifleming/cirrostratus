@@ -46,7 +46,8 @@ static_assert(sizeof(SettingsData) == 220, "settings layout changed");
 // Brings a loaded block up to date. Returns false if it isn't ours.
 inline bool UpgradeSettingsData(SettingsData* d) {
   if (d->magic != kSettingsMagic) return false;
-  if (d->mode >= MODE_LAST) d->mode = 0;
+  // Mode 1 (GRAINS) is gone since 1.5: its users come up in mode 2.
+  if (!ModeExists(d->mode)) d->mode = MODE_FIRST;
   for (int m = 0; m < MODE_LAST; ++m) {
     for (int i = 0; i < ENV_TARGET_LAST; ++i) {
       int8_t e = d->env[m][i];

@@ -13,13 +13,18 @@ CMSIS_INC := -I$(ROOT)/stmlib/third_party/STM/CMSIS/CM3_f4xx
 TEST_SRC := $(wildcard tests_*.cc) test_main.cc
 HDRS := $(wildcard $(ROOT)/monsoon/dsp/*.h) $(wildcard $(ROOT)/monsoon/dsp/modes/*.h) $(wildcard *.h)
 
-all: $(BUILD)/tests $(BUILD)/render
+all: $(BUILD)/tests $(BUILD)/render $(BUILD)/verify
 
 $(BUILD)/tests: $(DSP_SRC) $(TEST_SRC) $(HDRS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(SAN) $(DSP_SRC) $(TEST_SRC) -o $@
 
 $(BUILD)/render: $(DSP_SRC) render.cc $(HDRS) | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(DSP_SRC) render.cc -o $@
+
+# The emulator verify run (tools/bench/verify.h) built for the Mac, to
+# compare with the ARM build on QEMU (tools/bench/verify.sh).
+$(BUILD)/verify: $(DSP_SRC) verify_main.cc $(ROOT)/tools/bench/verify.h $(HDRS) | $(BUILD)
+	$(CXX) $(CXXFLAGS) $(DSP_SRC) verify_main.cc -o $@
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -33,10 +38,12 @@ test: $(BUILD)/tests
 
 render: $(BUILD)/render
 
+verify: $(BUILD)/verify
+
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all test render clean
+.PHONY: all test render verify clean
 
 BOOT_SRC := $(ROOT)/stm_audio_bootloader/qpsk/demodulator.cc \
             $(ROOT)/stm_audio_bootloader/qpsk/packet_decoder.cc \

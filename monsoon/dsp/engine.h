@@ -9,8 +9,12 @@
 
 namespace monsoon {
 
+// Panel numbers are fixed: slots, settings (per-mode arrays) and the menu
+// all index by them. Mode 1 (GRAINS) was removed in 1.5: its number stays
+// reserved, so every other mode keeps its number and old settings,
+// calibration and slots still load.
 enum ModeId {
-  MODE_GRAINS,       // 1  trajectory grains
+  MODE_REMOVED_1,    // 1  (was GRAINS, removed in 1.5): never selected
   MODE_SPECTRAL,     // 2  spectral freeze / resynthesis
   MODE_CONVOLVE,     // 3  convolution, freeze captures the IR
   MODE_RESONATOR,    // 4  sympathetic strings + jawari
@@ -40,8 +44,11 @@ enum ModeId {
   MODE_GAMELAN,     // 28  pelog/slendro metallophones
   MODE_MIRROR,      // 29  spectral warping
   MODE_POLISH,      // 30  mastering chain
-  MODE_LAST
+  MODE_LAST,
+  MODE_FIRST = MODE_SPECTRAL  // the lowest mode that exists
 };
+
+inline bool ModeExists(int m) { return m >= MODE_FIRST && m < MODE_LAST; }
 
 // What the envelope page can push: WET and the three per-mode knobs.
 enum EnvTarget {

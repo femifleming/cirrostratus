@@ -78,7 +78,7 @@ bool TapeMode::Init(Arena* arena) {
   return true;
 }
 
-MONSOON_COLD void TapeMode::WriteTapeSample(float l, float r) {
+inline void TapeMode::WriteTapeSample(float l, float r) {
   stage_[staged_].l = l;
   stage_[staged_].r = channels_ == 1 ? l : r;
   if (++staged_ == kBlockSize) {
@@ -106,6 +106,14 @@ void TapeMode::Process(const Controls& c, const FloatFrame* in,
   }
 }
 
+// Fastest tape speed: each step above 1 records one more tape sample per
+// output sample (x4 measured ~2300 instructions per frame in the stereo
+// tape, past what the module has; x3 fits).
+#ifndef TAPE_MAX_SPEED
+#define TAPE_MAX_SPEED 3.0f
+#endif
+static const float kMaxSpeed = TAPE_MAX_SPEED;
+
 template<bool kLofi>
 void TapeMode::ProcessT(const Controls& c, const FloatFrame* in,
                         FloatFrame* out, size_t n) {
@@ -116,7 +124,7 @@ void TapeMode::ProcessT(const Controls& c, const FloatFrame* in,
   float size = Clamp(c.size, 0.0f, 1.0f);
   float base = size < 0.5f ? exp2f((size - 0.5f) * 4.0f)
                            : exp2f((size - 0.5f) * 2.0f);
-  float target = Clamp(base * SemitonesToRatio(c.pitch), 0.0625f, 4.0f);
+  float target = Clamp(base * SemitonesToRatio(c.pitch), 0.0625f, kMaxSpeed);
   const float speed_start = speed_target_;
   speed_target_ += 0.15f * (target - speed_target_);
   const float speed_inc = (speed_target_ - speed_start) / static_cast<float>(n);

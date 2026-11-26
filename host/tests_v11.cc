@@ -28,7 +28,7 @@ struct V10Print {
   double energy_l, energy_r, proj_l, proj_r;
 };
 const V10Print kV10[] = {
-  { "grains", 120798, 0xc1127646u, 433.051858, 375.070922, -10.2249065, 19.3220353 },
+  { "(removed)", 0, 0u, 0.0, 0.0, 0.0, 0.0 },  // mode 1 (GRAINS) removed in 1.5
   { "spectral", 16396, 0xb4b1aa76u, 355.421397, 258.436441, 10.2265751, -10.6315267 },
   { "convolve", 13416, 0x1a0b003bu, 2587.17193, 1807.32843, -20.1384871, 13.3925218 },
   { "resonator", 0, 0x00000000u, 378.559752, 216.152097, 21.3374112, -10.5457194 },
@@ -230,7 +230,7 @@ MONSOON_TEST(output_is_hard_stereo_with_mono_bass_on_the_main_out) {
 // BAL / FBK / RVB on every mode.
 
 MONSOON_TEST(every_mode_bal_fbk_rvb_sweeps_and_random_cv_are_safe) {
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     const char* name = Engine::mode_name(ModeId(mode));
     Module m;
     CHECK(m.SetMode(ModeId(mode)), "%s init", name);
@@ -298,7 +298,7 @@ MONSOON_TEST(every_mode_bal_fbk_rvb_sweeps_and_random_cv_are_safe) {
 // what the change is; this one catches dead knobs.)
 MONSOON_TEST(every_mode_bal_fbk_rvb_each_change_the_sound) {
   int dead = 0;
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     const char* name = Engine::mode_name(ModeId(mode));
     auto render = [&](int knob, float value) {
       Module m;
@@ -348,13 +348,22 @@ MONSOON_TEST(every_mode_bal_fbk_rvb_each_change_the_sound) {
 // BAL at noon with FBK and RVB at zero is v1.0, exactly: same output for the
 // same music (to float rounding) and byte-identical save slots, which also
 // proves that v1.0 slots load into v1.1 unchanged.
+static void V10SwitchHistory(Module& m) {
+  m.Render(Silence(3 * 32 / 48000.0f), [](size_t) { return DefaultControls(); });
+}
+
 MONSOON_TEST(neutral_knobs_reproduce_v10_and_old_slots_load) {
   CHECK(sizeof(kV10) / sizeof(kV10[0]) == MODE_LAST, "table");
-  for (int mode = 0; mode < MODE_LAST; ++mode) {
+  for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     const V10Print& p = kV10[mode];
     CHECK(std::strcmp(p.mode, Engine::mode_name(ModeId(mode))) == 0, "order");
     // The slot.
     Module a;
+    // v1.0 modules started in GRAINS (removed in 1.5), so the first mode
+    // was reached by a switch, which left its STFT at another hop phase
+    // when the music began. Modules start in it now: 3 blocks of silence
+    // put it at that same phase (checked: byte-identical slot and output).
+    if (mode == MODE_FIRST) V10SwitchHistory(a);
     a.SetMode(ModeId(mode));
     auto in = Music(3.0f, 11);
     a.Render(in, [](size_t b) {
@@ -390,6 +399,7 @@ MONSOON_TEST(neutral_knobs_reproduce_v10_and_old_slots_load) {
     // The sound.
     Module m;
     m.engine().set_mono_bass(false, true);
+    if (mode == MODE_FIRST) V10SwitchHistory(m);
     m.SetMode(ModeId(mode));
     auto music = Music(2.0f, 5);
     auto out = m.Render(music, [](size_t b) {
@@ -414,6 +424,10 @@ MONSOON_TEST(neutral_knobs_reproduce_v10_and_old_slots_load) {
                              std::fmax(rel(p1, p.proj_l), rel(p2, p.proj_r)));
     std::printf("    %-11s slot %s, output vs v1.0 within %.1e\n", p.mode,
                 n ? "identical" : "(none)  ", worst);
+    // CHLOE's PT2399 (option 1, SIZE at noon = 0.18 s) changed on purpose
+    // in 1.5: its clock stops at 160 kHz (it needed ~2350 instructions per
+    // frame at noon, more than the module has). See tests_chloe.cc.
+    if (mode == MODE_CHLOE) continue;
     CHECK(worst < 1e-4, "%s: neutral knobs no longer sound like v1.0", p.mode);
   }
   return true;
@@ -451,10 +465,11 @@ MONSOON_TEST(envelope_routes_to_wet_and_the_mode_knobs) {
       CHECK(std::fabs(w[target] - 0.5f) < 0.01f, "target %d stuck at %.2f", target, w[target]);
     }
   }
-  // Audibly: on GRAINS, RVB routed +1 opens the FDN reverb on loud input.
+  // Audibly: on CAPTURE, RVB routed +1 opens the FDN reverb on loud input.
   float tail[2];
   for (int k = 0; k < 2; ++k) {
     Module m;
+    CHECK(m.SetMode(MODE_CAPTURE), "capture");
     EnvRouting r = {{ 0.0f, 0.0f, 0.0f, k ? 1.0f : 0.0f }};
     m.engine().set_env_routing(r);
     auto in = Noise(1.0f, 0.5f);
@@ -467,7 +482,7 @@ MONSOON_TEST(envelope_routes_to_wet_and_the_mode_knobs) {
     });
     tail[k] = Measure(out, 48000 + 2400, 48000 + 24000).rms;
   }
-  std::printf("    GRAINS, dry, tail after the noise: %.1f dB unrouted, %.1f dB with ENV -> RVB\n",
+  std::printf("    CAPTURE, dry, tail after the noise: %.1f dB unrouted, %.1f dB with ENV -> RVB\n",
               Db(tail[0]), Db(tail[1]));
   CHECK(Db(tail[1]) - Db(tail[0]) > 30.0f, "envelope -> RVB should open the reverb");
   return true;
