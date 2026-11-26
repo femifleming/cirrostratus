@@ -15,3 +15,7 @@
 > Call it Fletchfoorth
 
 > lowercase
+
+> add quantizer vca and ring mod and all the different sleepsoniqe cord types ans stair row and dream drigt ans gendy row and weather, add different types of audio and cv processing types as well. any more ideas?
+
+1.1: a sixth type, **Effect** (the left neighbour's audio at the full rate: filter, VCA / low-pass gate, ring mod, comb, chorus, echo, drive, lo-fi); Processor gains **Quantise** (Sleepcousonique's 38 scales, in cents), **Hold** (sample / track and hold), **Compare** (comparator / window); Random 8 **Weather** (a sky: pressure, wind, rain, humidity across a row); Chaos 7 **Stair** (a row is one stepped sequence, knobs = chance per step); **Gendy rows** share one waveform; **cords** from the left neighbour into the CV input (hall, fog, water, door, range, maybe; hold + tap left, hold both + knob = amount); **dream drift** (buttons 1+2 for 2 s). The wave bank is 128 points per wave now to make room. 267 host tests, CPU worst 1287 of 2304.

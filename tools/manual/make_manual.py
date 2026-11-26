@@ -14,7 +14,7 @@ DOCS = os.path.join(ROOT, "docs")
 IMG = os.path.join(DOCS, "img")
 FONTS = os.path.expanduser("~/faltung-kit/assets/fonts")
 
-G, Y, R, GR, YR = "green", "yellow", "red", "greenred", "yellowred"
+G, Y, R, GR, YR, GY = "green", "yellow", "red", "greenred", "yellowred", "greenyellow"
 
 
 def default_cols():
@@ -74,6 +74,30 @@ FIGS = {
                       badges=[(3, "cv", "in"), (3, "slider", "1st"), (3, "pot", "2nd"),
                               (3, "gate", "gate"), (3, "out", "out")],
                       dim=[0, 1, 2, 4, 5]),
+    "effect": dict(cols=[dict(led=G, glow=0.5), dict(led=G, glow=0.5), dict(led=G, glow=0.5),
+                         dict(led=R, glow=0.9), dict(led=GR, glow=1.0, slider=0.5),
+                         dict(led=GY, glow=0.8, slider=0.35, pot=0.7)],
+                   rings=[(4, "out"), (5, "slider"), (5, "pot"), (5, "gate"), (5, "out")],
+                   badges=[(4, "out", "osc"), (5, "slider", "cutoff"), (5, "pot", "res."),
+                           (5, "gate", "gate"), (5, "out", "out")],
+                   dim=[0, 1, 2, 3]),
+    "cords": dict(cols=[dict(led=G, glow=0.6), dict(led=G, glow=0.4), dict(led=R, glow=0.8),
+                        dict(led=Y), dict(led=GR, glow=1.0, pot=0.8), dict(led=GY)],
+                  rings=[(3, "button"), (4, "button"), (4, "pot"), (3, "led")],
+                  badges=[(3, "button", "tap"), (4, "button", "hold"), (4, "pot", "amount"),
+                          (3, "led", "kind")],
+                  dim=[0, 1, 2, 5]),
+    "stair": dict(cols=[dict(led=Y, glow=0.9, slider=0.15, pot=1.0), dict(led=Y, glow=0.1, slider=0.45, pot=0.9),
+                        dict(led=Y, glow=0.1, slider=0.75, pot=0.5), dict(led=Y, glow=0.1, slider=0.3, pot=1.0),
+                        dict(led=R), dict(led=GR)],
+                  rings=[(0, "gate"), (0, "out"), (1, "slider"), (2, "pot"), (3, "out")],
+                  badges=[(0, "gate", "clock"), (0, "out", "stairs"), (1, "slider", "step"),
+                          (2, "pot", "chance"), (3, "out", "gate")],
+                  dim=[4, 5]),
+    "drift": dict(cols=[dict(led=G, glow=0.6, slider=0.6, pot=0.4), dict(led=G, glow=0.6, slider=0.35, pot=0.7)] +
+                       [dict(led=G, glow=0.5, slider=0.45 + 0.08 * k, pot=0.3 + 0.1 * k) for k in range(4)],
+                  rings=[(0, "button"), (1, "button")],
+                  badges=[(0, "button", "hold"), (1, "button", "2 s")]),
     "neighbours": dict(cols=[dict(led=G, glow=0.6), dict(led=G, glow=0.6), dict(led=G, glow=0.6),
                              dict(led=G), dict(led=GR, glow=1.0), dict(led=GR, glow=1.0)],
                        rings=[(0, "out"), (1, "out"), (2, "out"), (4, "out"), (5, "out")],

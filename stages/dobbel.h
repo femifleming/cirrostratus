@@ -289,7 +289,7 @@ class Engine {
   float dream_x_, dream_y_, dream_z_;
   float last_slider_[kNumSegments];
   float last_pot_[kNumSegments];
-  uint8_t last_type_[kNumSegments];
+  uint32_t last_config_;   // a checksum of the settings: any button gesture changes it
  public:
   inline float drift() const { return drift_; }
  private:

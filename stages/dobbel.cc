@@ -275,8 +275,8 @@ void Engine::Init(Memory* memory) {
   dream_z_ = 20.0f;
   for (int i = 0; i < kNumSegments; ++i) {
     last_slider_[i] = last_pot_[i] = -1.0f;
-    last_type_[i] = 0xff;
   }
+  last_config_ = 0;
   BuildBank();
 }
 
@@ -484,13 +484,18 @@ void Engine::Drift(const Config& c, const Input* input, size_t size) {
   bool touched = false;
   for (int i = 0; i < kNumSegments; ++i) {
     if (fabsf(input[i].slider - last_slider_[i]) > 0.02f ||
-        fabsf(input[i].pot - last_pot_[i]) > 0.02f ||
-        last_type_[i] != c.segment[i].type) {
+        fabsf(input[i].pot - last_pot_[i]) > 0.02f) {
       touched = true;
       last_slider_[i] = input[i].slider;
       last_pot_[i] = input[i].pot;
-      last_type_[i] = c.segment[i].type;
     }
+  }
+  uint32_t sum = 2166136261u;   // FNV-1a over the settings
+  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(c.segment);
+  for (size_t k = 0; k < sizeof(c.segment); ++k) sum = (sum ^ bytes[k]) * 16777619u;
+  if (sum != last_config_) {
+    touched = true;
+    last_config_ = sum;
   }
   const float block = static_cast<float>(size);
   if (touched || !c.drift) idle_ = 0;

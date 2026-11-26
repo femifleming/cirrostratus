@@ -3,7 +3,7 @@
 Coordinates follow the photo of the real module (module at 437..912 x
 72..932 in a 1360x1000 picture), scaled by S, so every control sits where it
 does on the panel. A figure is a dict per column (0-5):
-  led:     'green' | 'yellow' | 'red' | 'orange' | 'greenred' | 'yellowred' | None
+  led:     'green' | 'yellow' | 'red' | 'orange' | 'greenred' | 'yellowred' | 'greenyellow' | None
   blink:   True draws the LED's blink marks
   slider:  0-1 cap position;  glow: 0-1 slider LED
   pot:     0-1 knob position
@@ -118,8 +118,10 @@ def draw(path, cols=None, rings=(), badges=(), dim=(), title=True):
                fill=f((245, 245, 245)), width=int(3 * S))
         # type LED
         led = c.get("led")
-        if led in ("greenred", "yellowred"):
-            a_col, b_col = (LED["green"], LED["red"]) if led == "greenred" else (LED["yellow"], LED["red"])
+        if led in ("greenred", "yellowred", "greenyellow"):
+            a_col, b_col = {"greenred": (LED["green"], LED["red"]),
+                            "yellowred": (LED["yellow"], LED["red"]),
+                            "greenyellow": (LED["green"], LED["yellow"])}[led]
             lx, ly = P(x, Y_LED)
             r = 8 * S
             d.pieslice([lx - r, ly - r, lx + r, ly + r], 90, 270, fill=f(a_col))

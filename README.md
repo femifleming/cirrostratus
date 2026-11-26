@@ -6,13 +6,14 @@ fletchfoorth is a new mode for Stages in which every segment is its own instrume
 
 | Light | Type | Flavours |
 |---|---|---|
-| green | **Random** | uniform, gaussian, Xenakis walk, pink 1/f, quantised, kin, orbit |
-| yellow | **Chaos** | Turing loop, logistic map, Lorenz, cellular automaton, coin gates, dust |
+| green | **Random** | uniform, gaussian, Xenakis walk, pink 1/f, quantised, kin, orbit, weather |
+| yellow | **Chaos** | Turing loop, logistic map, Lorenz, cellular automaton, coin gates, dust, stair row |
 | red | **Envelope** | attack *and* decay in one segment, with curve, loop and 1 to 4 ratchets |
-| green/red | **Oscillator** | morph, 16-wave bank, additive, difference pair, fold, FM from the left, Gendy, wave-rider; built-in VCA voice option |
-| yellow/red | **Processor** | envelope follower, transient gate, slew, crush/fold, gesture looper |
+| green/red | **Oscillator** | morph, 16-wave bank, additive, difference pair, fold, FM from the left, Gendy (rows share one waveform), wave-rider; built-in VCA voice option |
+| yellow/red | **Processor** | CV: envelope follower, transient gate, slew, crush/fold, gesture looper, quantiser (Sleepcousonique's 38 scales), sample/track and hold, comparator/window |
+| green/yellow | **Effect** | audio, the left neighbour at the full rate: filter, VCA/low-pass gate, ring mod, comb, chorus/flanger, echo, drive/fold, lo-fi |
 
-Hold a button and move the slider to pick the flavour, turn the knob to set its hidden setting, hold half a second for its extra option (bipolar, loop, voice, invert). Neighbours can team up: Orbit and Lorenz rows read one shared point or attractor, cellular automata share one ring of cells, FM and the wave-rider listen to the segment on their left.
+Hold a button and move the slider to pick the flavour, turn the knob to set its hidden setting, hold half a second for its extra option (bipolar, loop, voice, invert). Hold a button and tap the one on its left for a **cord** from that segment into this one's CV input, Sleepcousonique's kinds: hall, fog, water, door, range, maybe. Hold buttons 1 and 2 for 2 s for **dream drift**: left alone for a minute, the panel slowly wanders on a Lorenz attractor until you touch it. Neighbours can team up: Orbit and Lorenz rows read one shared point or attractor, cellular automata share one ring of cells, FM and the wave-rider listen to the segment on their left.
 
 It is built on [BRIBESTAGES](https://github.com/thisisbribery/bribestages) (qiemem's bipolar multi-mode firmware plus segment linking, envelope followers and sync LFOs). All of that still works in its own modes; fletchfoorth is one more mode, on **button 6** (hold 5 s). Ouroboros alternate moved to a second hold of button 5.
 
@@ -22,7 +23,7 @@ It is built on [BRIBESTAGES](https://github.com/thisisbribery/bribestages) (qiem
 
 ## Download
 
-[`firmware/fletchfoorth-v1.0.wav`](firmware/fletchfoorth-v1.0.wav) for a module mounted normally, [`firmware/fletchfoorth-v1.0-flipped.wav`](firmware/fletchfoorth-v1.0-flipped.wav) upside down (SHA-256 in `firmware/SHA256SUMS.txt`). Also on the [releases page](../../releases).
+[`firmware/fletchfoorth-v1.1.wav`](firmware/fletchfoorth-v1.1.wav) for a module mounted normally, [`firmware/fletchfoorth-v1.1-flipped.wav`](firmware/fletchfoorth-v1.1-flipped.wav) upside down (SHA-256 in `firmware/SHA256SUMS.txt`). Also on the [releases page](../../releases).
 
 ## Install
 
@@ -38,7 +39,7 @@ The module updates from an audio file; the updater can't be damaged by a failed 
 
 All six button lights blinking red: press button 6, raise slider 6, play again from the start. Upside-down module: use the `-flipped` file, mirrored (leftmost segment). Then **hold button 6 for 5 seconds** to enter fletchfoorth.
 
-Your BRIBESTAGES / qiemem settings are kept; fletchfoorth stores its own settings separately, in the last 4 KB of flash.
+Your BRIBESTAGES / qiemem settings are kept; fletchfoorth stores its own settings separately, in the last 4 KB of flash. (Coming from fletchfoorth 1.0: its settings start fresh once, they grew.)
 
 ## Build
 
@@ -53,9 +54,9 @@ python3 tools/qpsk.py decode fletchfoorth.wav check.bin    # expect bad=0
 ```
 Add `FLIPPED=1` for the upside-down build.
 
-**Tests** (no hardware): `make -f stages/test/dobbel.mk test` runs the engine on the computer with sanitizers: pitch and 1 V/oct, envelope times, ratchets, loop, random rates, ranges and clocked chance, the quantiser, orbit, kin, Turing, logistic, Lorenz, coin, dust, cellular, follower, transient, slew, looper, crush, FM, rider and the wave bank.
+**Tests** (no hardware): `make -f stages/test/dobbel.mk test` runs the engine on the computer with sanitizers (267 checks): pitch and 1 V/oct, envelope times, ratchets, loop, random rates, ranges and clocked chance, orbit, kin, Turing, logistic, Lorenz, coin, dust, cellular, follower, transient, slew, looper, crush, FM, rider, the wave bank; the scales to the cent, hold, comparator, filter, VCA, ring, comb pitch, echo time, every cord, the stair, the weather, Gendy rows, dream drift, and a storm of every type, flavour and option with cords on and the controls thrown.
 
-**CPU:** `tools/bench/run.sh` runs the engine on QEMU's Cortex-M4F and prints instructions per sample for six segments of every flavour (worst 1125, default layout 588; Stages has 2304 cycles per sample).
+**CPU:** `tools/bench/run.sh` runs the engine on QEMU's Cortex-M4F and prints instructions per sample for six segments of every flavour (worst 1287, default layout 733; Stages has 2304 cycles per sample).
 
 **Manual:** `python3 tools/manual/make_manual.py` (Pillow, `markdown`, Chrome) draws the panel figures and builds the PDF from `docs/MANUAL.md`.
 

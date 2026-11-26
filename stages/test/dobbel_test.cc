@@ -936,6 +936,11 @@ static void TestDrift() {
   r.Slider(3, 0.9f);                         // a touch
   r.Run(0, 1.0f);
   CHECK(engine.drift() < 0.01f, "a touch wakes it (%.3f)", engine.drift());
+  r.Run(0, 95.0f);
+  CHECK(engine.drift() > 0.9f, "dreaming again (%.2f)", engine.drift());
+  r.config.segment[2].alt ^= 1;   // a button gesture (the extra option) also wakes it
+  r.Run(0, 1.0f);
+  CHECK(engine.drift() < 0.01f, "a button gesture wakes it (%.3f)", engine.drift());
   Rig off;
   off.config.drift = 0;
   off.Run(0, 100.0f);

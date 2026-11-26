@@ -2,7 +2,7 @@
 
 ### *every segment its own instrument, for Stages*
 
-**Version 1.0**
+**Version 1.1**
 
 <img class="panel" src="img/overview.png" width="260" align="right" alt="Stages panel: overview">
 
@@ -15,14 +15,24 @@ segment's button and it becomes the next type:
 
 | Light | Type | What it is |
 |---|---|---|
-| green | **Random** | slewed random voltages: 7 kinds |
-| yellow | **Chaos** | patterned randomness: Turing loop, logistic map, Lorenz, cellular automaton, coin gates, dust |
+| green | **Random** | slewed random voltages: 7 kinds, and the weather |
+| yellow | **Chaos** | patterned randomness: Turing loop, logistic map, Lorenz, cellular automaton, coin gates, dust, a stair row |
 | red | **Envelope** | attack *and* decay in one segment, with curve, loop and ratchets |
 | green/red | **Oscillator** | 8 audio oscillators, including a 16-wave bank, additive, Gendy and a wave-rider |
-| yellow/red | **Processor** | envelope follower, transient gate, slew, crush/fold, gesture looper |
+| yellow/red | **Processor** | CV: envelope follower, transient gate, slew, crush/fold, gesture looper, quantiser, sample and hold, comparator |
+| green/yellow | **Effect** | audio: the segment on the left through a filter, VCA, ring modulator, comb, chorus, echo, drive or lo-fi |
 
 Every type has several **flavours**, and every segment remembers its own
 flavour, settings and extra options for each type.
+
+Segments can also take each other's outputs through **cords**, the same
+kinds as in Sleepcousonique (section 10), and the whole panel can **dream**
+when you leave it alone (section 11).
+
+**New in 1.1:** the Effect type, three CV processors (quantiser with
+Sleepcousonique's 38 scales, sample and hold, comparator), the Weather and the
+Stair row, Gendy rows, cords, dream drift. 1.0's fletchfoorth settings start
+fresh once (the settings grew).
 
 Everything BRIBESTAGES does still works in its own modes. fletchfoorth is one
 more mode next to them.
@@ -36,7 +46,7 @@ damaged by a failed attempt, so you can always try again.
 
 **You need:** a computer or phone with a headphone jack (a wired USB headphone
 adapter works, Bluetooth doesn't), a 3.5 mm patch cable, and
-`fletchfoorth-v1.0.wav` (or `fletchfoorth-v1.0-flipped.wav` for a module mounted
+`fletchfoorth-v1.1.wav` (or `fletchfoorth-v1.1-flipped.wav` for a module mounted
 upside down).
 
 <img class="panel" src="img/install.png" width="260" align="right" alt="Stages panel: install">
@@ -111,11 +121,14 @@ Each segment works the same way, whatever its type:
 
 | Gesture | Does |
 |---|---|
-| **Tap** | next type: Random → Chaos → Envelope → Oscillator → Processor → Random |
+| **Tap** | next type: Random → Chaos → Envelope → Oscillator → Processor → Effect → Random |
 | **Hold + move the slider** | choose the **flavour** (the slider is cut into as many zones as the type has flavours; bottom = 1) |
 | **Hold + turn the knob** | set the type's **hidden setting** (amplitude, curve, fine tune, gain…). The slider light shows its value while you turn |
 | **Hold ½ to 5 s, release** | toggle the type's **extra option** (bipolar, loop, voice, invert…) |
 | **Hold 5 s** | mode change (section 2) |
+| **Hold + tap the button on its left** | the **cord** into this segment: none → hall → fog → water → door → range → maybe (section 10) |
+| **Hold both + turn this knob** | the cord's **amount**, −1 to +1 |
+| **Buttons 1 and 2 together, 2 s** | **dream drift** on or off (section 11) |
 
 While you hold a button, its slider and knob are frozen: moving them sets the
 flavour and the hidden setting without changing the sound. When you let go,
@@ -166,6 +179,7 @@ randomness.
 | 5 | **Quantised** | whole semitones, 0 to 5 V at 1 V/oct. Hold + knob sets the range: 1 to 5 octaves. Bipolar shifts it down 2.5 V |
 | 6 | **Kin** | stays close to the segment on its left; the knob is how loosely (the slew is fixed and gentle) |
 | 7 | **Orbit** | a point moving along a path. The knob morphs the path: circle → figure 8 → spiral → wandering. The slider is its speed. Side by side, Orbit segments read the same point: the first gives **X**, the next **Y**, the third the **distance** from the centre |
+| 8 | **Weather** | a sky. Pressure fronts come and go; low pressure brings gusts of wind, and rain when the air is damp. The slider is how fast the weather moves (at the top, a storm a second; at the bottom, a front every few minutes). One segment gives the sky: pressure with its gusts. Side by side, weather segments read one sky: the **sky**, the **wind**, the **rain** (5 ms triggers, their heights random), the **humidity**, the **pressure** alone |
 
 Four Random segments with different flavours make four voltages that move in
 four different ways from one gesture of your hand.
@@ -193,6 +207,19 @@ Randomness with a shape you can lock, push and listen to.
 | 4 | **Cellular** | the rule: 30, 90, 110, 150, 184, 45, 73, 54 | a cellular automaton, 8 cells per segment. Side by side, the segments share one ring of cells; each segment outputs its 8 cells as a stepped voltage. Clocked by the first segment of the row |
 | 5 | **Coin gates** | chance of heads | a coin toss per clock: heads opens the gate for half a clock. Outputs 0 or 8 V (times the amplitude) |
 | 6 | **Dust** | how random the heights are | triggers (5 ms) at random moments, no clock. The slider sets how many: from 0.1 to 50 a second (at the top, triggers closer than 5 ms merge, so about 40 land) |
+| 7 | **Stair** | the chance this step plays | a row of Stair segments is one stepped sequence (below) |
+
+### The stair row
+
+<img class="panel" src="img/stair.png" width="260" align="right" alt="Stages panel: stair">
+
+Put two to six Stair segments side by side. Each **slider** (+ its CV, and its
+cord) is the height of its step, each **knob** the chance its step plays: a
+step that loses the roll is skipped, so the knobs turn a fixed pattern into a
+changing one. The **first** segment's gate jack is the clock; with no clock
+its knob is the speed (0.25 to 16 steps a second) and its own step always
+plays. The first segment outputs the **stairs**; every other one outputs a
+**gate** (8 V) while its step is on: trigger an envelope from step 3 only.
 
 ---
 
@@ -251,7 +278,7 @@ waveforms).
 | 4 | **Pair** | second sine from unison to a fifth above | two sines; between them your ear hears a third, lower tone (difference tones, as in the Oneirophone) |
 | 5 | **Fold** | fold depth | a sine through a wavefolder: from round to glassy |
 | 6 | **FM** | modulation depth | the segment on the **left** is the modulator: another oscillator gives FM; a random or envelope bends the phase slowly. Segment 1 has no left neighbour: a plain sine |
-| 7 | **Gendy** | how far the waveform wanders | Xenakis' dynamic stochastic synthesis: 12 points whose heights and spacing take a random walk every cycle. Left: a steady tone; right: a living, unstable one |
+| 7 | **Gendy** | how far the waveform wanders | Xenakis' dynamic stochastic synthesis: 12 points whose heights and spacing take a random walk every cycle. Left: a steady tone; right: a living, unstable one. **Gendy row:** side by side, Gendy segments play the first one's points, each at its own pitch: one waveform moving as a cloud of voices (the first one's knob is the wander) |
 | 8 | **Rider** | how long one rewrite takes (0.05 to 10 s) | the wave-rider: it records the segment on its **left** into its own waveform as it plays (segment 1 records its CV jack). The gate held high freezes the waveform |
 
 ---
@@ -271,6 +298,9 @@ audio comes in lo-fi: that's part of the sound. Here the slider works alone
 | 3 | **Slew** | rise time, 0 to 5 s | fall time, 0 to 5 s | – | high = hold | invert |
 | 4 | **Crush/fold** | drive ×1 to ×8 into a folder | rate: each reading held 1 to 32 times (3.9 kHz down to 122 Hz) | output level | high = freeze | invert |
 | 5 | **Looper** | speed ¼× to 4× (noon = 1×) | smoothing | – | high = **record**, low = play | backwards |
+| 6 | **Quantise** | transpose, −2 to +2 octaves (five zones) | the **scale**: Sleepcousonique's 38 (below) | the root, C to B | a new note only on each rising gate | a trigger on every new note instead of the pitch |
+| 7 | **Hold** | rate of the internal clock when no gate is patched, 0.05 to 100 Hz | glide to the new value, 0 to 1 s | – | sample on each rising gate | track and hold: follows while the gate is high |
+| 8 | **Compare** | the level, −5 to +8 V | hysteresis, 0 to 1 V | the gate's height, 5 to 8 V | – | window: open while the input is within the knob's distance of the level |
 
 - **Follow** is the BRIBESTAGES envelope follower: 0 to 8 V; at ×1 a 5 V audio
   peak gives full output.
@@ -281,10 +311,93 @@ audio comes in lo-fi: that's part of the sound. Here the slider works alone
   the gate is high, then loops it when the gate goes low. Before anything is
   recorded, and while recording, the input passes straight through. A new
   gate records over it.
+- **Quantise** uses the CV jack at 1 V/oct and the same 38 scales as
+  Sleepcousonique, in the same order, turning the knob from left to right: just
+  major, just minor, just pentatonic, otonal 8–15, utonal, chromatic, major,
+  minor, dorian, phrygian, lydian, mixolydian, locrian, harmonic minor,
+  melodic minor, major and minor pentatonic, blues, whole tone, diminished,
+  then 24-, 19-, 22-, 31- and 53-TET, Bohlen-Pierce and the rest of
+  Sleepcousonique's list. Scales that aren't 12-tone (Bohlen-Pierce repeats at
+  3:1, not the octave) work in cents, so the notes are exact.
 
 ---
 
-## 9. Neighbours
+## 9. Effect (green/yellow)
+
+<img class="panel" src="img/effect.png" width="260" align="right" alt="Stages panel: effect">
+
+Audio processing of the segment on the **left**, sample by sample at the full
+rate (31,250 a second), so an oscillator → filter → VCA across three segments
+sounds clean. Segment 1 has no left neighbour: it takes its own CV jack
+(read 3,900 times a second, lo-fi). Everywhere else the CV jack modulates the
+main control.
+
+| # | Flavour | Slider + CV | Knob | Hold + knob | Gate | Extra option |
+|---|---|---|---|---|---|---|
+| 1 | **Filter** | cutoff, 20 Hz to 13 kHz, 1 V/oct | resonance, up to ringing | low-pass → band-pass → high-pass | – | drive into the filter |
+| 2 | **VCA** | level (unity at the top) | decay of the gate's envelope, 5 ms to 5 s | the response, linear → exponential | opens it (2 ms attack), letting go decays | low-pass gate: it darkens as it closes |
+| 3 | **Ring** | the carrier's pitch, C1 to C7, 1 V/oct | dry → ring modulated | carrier sine → square | – | the carrier is the CV jack (another sound, lo-fi) |
+| 4 | **Comb** | its pitch, C1 to C7, 1 V/oct (41 Hz lowest) | feedback: how long it rings | damping | – | negative feedback: hollow, an octave down |
+| 5 | **Chorus** | speed, 0.05 to 8 Hz | depth | feedback: towards a flanger | – | vibrato (only the moving copy) |
+| 6 | **Echo** | time, up to 0.19 s | feedback | dry → wet | – | hold: what's in it repeats for ever |
+| 7 | **Drive** | drive, ×1 to ×16 | soft clip → wave folder | output level | – | asymmetric: even harmonics |
+| 8 | **Lo-fi** | sample rate, 31 kHz (bottom) down to 100 Hz (top) | bits, 16 down to 2 | output level | – | the rate jitters |
+
+The comb, chorus and echo use the segment's own looper memory, so a segment
+can be one of those or a looper, not both at once (it is a different type
+anyway). The echo stores its sound 3,900 times a second: warm and dark,
+like a small tape.
+
+---
+
+## 10. Cords
+
+<img class="panel" src="img/cords.png" width="260" align="right" alt="Stages panel: cords">
+
+A cord takes the output of the segment on the **left** into a segment's
+**CV input**, as if a patch cable ran there (added to whatever is plugged
+in). Segment 1's left is segment 6: the row is a ring. The cords are
+Sleepcousonique's:
+
+| Kind | Light (on the left button, while you hold this one) | What gets through |
+|---|---|---|
+| none | off | nothing (as before) |
+| **hall** `->` | green | a plain wire |
+| **fog** `~>` | yellow | softened: edges rounded over 8 ms |
+| **water** `=>` | red | a capacitor: slow to fill, slow to drain (60 ms) |
+| **door** `>|` | green, blinking | a diode: only what is above 0 V |
+| **range** | yellow, blinking | the neighbour's swing as 0 to the amount, whatever its polarity (a ±5 V sound becomes 0 to +8 V) |
+| **maybe** `?>` | red, blinking | each time the neighbour rises through the middle of its swing, the dice roll: it gets through, or stays silent until the next rise |
+
+**Set one:** hold the segment's button and **tap the button on its left**:
+each tap steps to the next kind. **Amount:** hold both buttons and turn the
+held segment's knob: −1 (upside down) to +1, noon = nothing; the slider light
+shows it. A new cord starts at +1.
+
+What the cord does depends on what the CV jack does: an oscillator's pitch
+(1 V/oct: +1 V from the left is an octave), a random's rate, a filter's
+cutoff, a processor's input. A random into an oscillator through a **maybe**
+is a melody with holes in it.
+
+---
+
+## 11. Dream drift
+
+<img class="panel" src="img/drift.png" width="260" align="right" alt="Stages panel: drift">
+
+**Hold buttons 1 and 2 together for 2 seconds** to turn dream drift on (all
+lights flash green) or off (red).
+
+With it on, the panel watches your hands. A minute after the last time you
+touched a slider, a knob or a button, every segment's slider and knob start
+to wander on a slow Lorenz attractor (each segment its own mix of its three
+axes), fading in over 30 seconds, up to a sixth of their travel: the patch
+keeps being itself, but slowly dreams. Touch anything and it comes back to
+where you left it in half a second.
+
+---
+
+## 12. Neighbours
 
 <img class="panel" src="img/neighbours.png" width="260" align="right" alt="Stages panel: neighbours">
 
@@ -299,13 +412,18 @@ when neighbours share a type **and** a flavour:
 | Chaos 4 **Cellular** | side by side: one ring of cells, 8 per segment |
 | Oscillator 6 **FM** | the left segment is its modulator |
 | Oscillator 8 **Rider** | records the left segment as its waveform |
+| Random 8 **Weather** | side by side: sky, wind, rain, humidity, pressure of one sky |
+| Chaos 7 **Stair** | side by side: one stepped sequence (section 5) |
+| Oscillator 7 **Gendy** | side by side: one waveform at several pitches |
+| every **Effect** | processes the segment on its left |
+| any segment with a **cord** | hears the segment on its left through it (section 10) |
 
 A row starts at its leftmost segment: that one's slider, knob and gate run
 the row.
 
 ---
 
-## 10. Recipes
+## 13. Recipes
 
 **Your usual set.** Segments 1–4 Random (tap until green), 5 Envelope, 6
 Oscillator. For a bipolar random, hold its button ½ s. For four different
@@ -330,30 +448,48 @@ waveform, slowly changing as it rides.
 **FM bells.** Segment 5 Oscillator (Morph, a sine), segment 6 Oscillator
 flavour 6 (FM), both tuned with their sliders. Knob 6 is the FM depth.
 
+**A voice across three segments.** Segment 4 Oscillator (Morph), segment 5
+Effect 1 (Filter), segment 6 Effect 2 (VCA). A clock into **gate 6**, an
+envelope's out into **CV 5** for the cutoff. Oscillator → filter → VCA, at
+the full rate, no cables between them.
+
+**Tuned randomness.** Segment 3 Random (Walk), segment 4 Processor 6
+(Quantise) with a **hall** cord from 3 (hold 4, tap 3), the knob on a scale.
+Out 4 is a melody in that scale. For just intonation turn the knob fully
+left; Bohlen-Pierce sits about two-thirds of the way round.
+
+**Rain on a drum.** Segments 1–3 Random 8 (Weather), slider up. Out 3 is the
+rain: patch it into a drum or an envelope's gate. Out 2, the wind, into a
+filter's cutoff.
+
+**The stair with holes.** Segments 1–4 Chaos 7 (Stair), a clock into gate 1.
+Sliders = the notes, knobs = the chance of each. Out 1 into an oscillator's
+CV; out 3 opens the VCA only on step 3.
+
 **Play it back.** A hand-played CV (a joystick, a ribbon) into **CV 4**,
 segment 4 Processor flavour 5 (Looper). Hold a gate high while you play, let
 go: your gesture loops.
 
 ---
 
-## 11. Under the hood
+## 14. Under the hood
 
 | | |
 |---|---|
 | Output | 1.0 = 8 V; randoms 0 to 8 V or ±5 V; oscillators ±5 V; gates 8 V (times the amplitude) |
 | Processing | 31,250 samples a second per segment; CV and knobs read 3,906 times a second |
-| CPU | measured on an emulated Cortex-M4: 588 instructions per sample for the default set, 1,125 for the heaviest (six additive oscillators); the chip has 2,304 cycles per sample |
-| Memory | fletchfoorth uses the memory the normal Stages engines use; they rest while it runs |
+| CPU | measured on an emulated Cortex-M4: 733 instructions per sample for the default set, 1,287 for the heaviest (six additive oscillators), 1,121 for six effects (six choruses); the chip has 2,304 cycles per sample |
+| Memory | fletchfoorth uses the memory the normal Stages engines use; they rest while it runs (19.9 KB of their 23.6 KB; the wave bank's 16 waves are 128 points each, enough for 64 harmonics) |
 | Settings | stored in their own flash pages (the last 4 KB), untouched by firmware updates and by the other modes |
 | Chaining | each module runs its own six segments; fletchfoorth doesn't chain |
-| Tests | 111 host tests on the real engine code (pitch, V/oct, envelope times, rates, ranges, every flavour) and a check that the update file decodes to exactly the firmware |
+| Tests | 267 host tests on the real engine code (pitch, V/oct, envelope times, rates, ranges, every flavour; scales to the cent, filter, ring, comb pitch, echo time, every cord, the stair, the weather, Gendy rows, dream drift; a storm of every type, flavour and option with cords and thrown controls) and a check that the update file decodes to exactly the firmware |
 
 fletchfoorth has so far been tested on the computer and an emulated
 processor, not yet on a real Stages.
 
 ---
 
-## 12. Thanks and licences
+## 15. Thanks and licences
 
 - **Mutable Instruments / Émilie Gillet**: Stages, stmlib and the audio
   bootloader (MIT).
