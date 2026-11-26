@@ -28,7 +28,7 @@ struct V10Print {
   double energy_l, energy_r, proj_l, proj_r;
 };
 const V10Print kV10[] = {
-  { "(removed)", 0, 0u, 0.0, 0.0, 0.0, 0.0 },  // mode 1 (GRAINS) removed in 1.5
+  { "spring", 0, 0u, 0.0, 0.0, 0.0, 0.0 },  // mode 1: GRAINS until 1.5, SPRING since 1.5.2 (no v1.0 sound)
   { "spectral", 16396, 0xb4b1aa76u, 355.421397, 258.436441, 10.2265751, -10.6315267 },
   { "convolve", 13416, 0x1a0b003bu, 2587.17193, 1807.32843, -20.1384871, 13.3925218 },
   { "resonator", 0, 0x00000000u, 378.559752, 216.152097, 21.3374112, -10.5457194 },
@@ -357,6 +357,7 @@ MONSOON_TEST(neutral_knobs_reproduce_v10_and_old_slots_load) {
   for (int mode = MODE_FIRST; mode < MODE_LAST; ++mode) {
     const V10Print& p = kV10[mode];
     CHECK(std::strcmp(p.mode, Engine::mode_name(ModeId(mode))) == 0, "order");
+    if (mode == MODE_SPRING) continue;   // new in 1.5.2: nothing to match
     // The slot.
     Module a;
     // v1.0 modules started in GRAINS (removed in 1.5), so the first mode

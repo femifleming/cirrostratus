@@ -6,12 +6,24 @@
 // STFT 512 / hop 128 (4x overlap), Hann analysis and synthesis windows,
 // mono like the Wingie's: the mid (L+R)/2 is smeared and sent to both
 // outputs (RVB gives it its space). Stereo would be twice the work, more
-// than the module has to spare. Per bin: the magnitude and the phase deviation are each smoothed
-// by a one-pole whose time is 15 ms x 2^(8.5 blur) (blur 0 passes the sound
-// through untouched, 1 is ~5 s); the magnitude also leans towards its
-// neighbours by 0.3 x blur; the phase runs on from the smoothed deviation.
-// The same sine and atan2 approximations as the Wingie, so the beating of
-// a long blur (part of its sound) is the same.
+// than the module has to spare. Per bin the magnitude is smoothed by a
+// one-pole whose time is 15 ms x 2^(8.5 blur) (blur 0 passes the sound
+// through untouched, 1 is ~5 s) and leans towards its neighbours by
+// 0.3 x blur, as on the Wingie.
+//
+// 1.5.2: the resynthesis is phase-locked. Until 1.5.1 every bin ran on from
+// its own smoothed phase deviation, like the Wingie's: under a long blur the
+// deviations of a busy input average out to ~0, so every bin sat on its own
+// centre frequency, all multiples of fs / N, and the output became a loop of
+// one FFT length (10.7 ms at 512): a stutter. And the 3-4 bins of one
+// partial drifted against each other and cancelled now and then: dropouts.
+// Now the phase deviation is averaged as a phasor weighted by the magnitude
+// (no wrap-around bias, the loudest partial in the bin decides its
+// frequency); each peak of the smoothed spectrum runs on at its bin's
+// frequency (a random phase drift was tried: it only added flutter); and the
+// bins around a peak, up to half-way to the next, take its phase with
+// the Hann lobe's alternating sign, so they sound as one partial and can't
+// cancel each other.
 //
 // Controls: DENSITY blur. FREEZE holds the spectrum as it is (the blur
 // stops moving). The engine's WET and RVB (the FDN reverb) as usual.
@@ -51,7 +63,8 @@ class SmearEngine {
   float* in_;
   float* out_;
   float* mag_;
-  float* dev_;
+  float* ur_;      // the phase deviation, as a phasor weighted by magnitude
+  float* ui_;
   float* prev_;
   float* acc_;
   float* win_;

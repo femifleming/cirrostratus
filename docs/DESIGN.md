@@ -123,7 +123,7 @@ RVB 0 = v1.0 exactly (checked against v1.0 fingerprints in host/tests_v11.cc).
 
 ## Modes
 
-### 1 GRAINS — trajectory grains (retired in 1.5: the number stays reserved, the code is gone)
+### 1 SPRING (since 1.5.2) — see monsoon/dsp/modes/spring.h. Until 1.5: GRAINS, trajectory grains (below, for the record)
 Buffer: SampleBuffer, stereo (options 0–3) or mono (4–7), ≤ 118 KB,
 records continuously unless frozen.
 - POSITION: centre of the trajectory (0 = newest audio, 1 = oldest).

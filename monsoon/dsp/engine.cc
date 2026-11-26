@@ -20,6 +20,7 @@
 #include "monsoon/dsp/modes/gamelan.h"
 #include "monsoon/dsp/modes/mirror.h"
 #include "monsoon/dsp/modes/polish.h"
+#include "monsoon/dsp/modes/spring.h"
 #include "monsoon/dsp/modes/convolve.h"
 #include "monsoon/dsp/modes/cross.h"
 #include "monsoon/dsp/modes/difference.h"
@@ -77,9 +78,10 @@ static BloomMode bloom_mode;
 static GamelanMode gamelan_mode;
 static MirrorMode mirror_mode;
 static PolishMode polish_mode;
+static SpringMode spring_mode;
 
 static Mode* const kModes[MODE_LAST] = {
-  NULL /* 1: removed */, &spectral_mode, &convolve_mode, &resonator_mode,
+  &spring_mode, &spectral_mode, &convolve_mode, &resonator_mode,
   &difference_mode, &cross_mode, &stretch_mode, &spreek_mode,
   &capture_mode, &gendy_mode, &shimmer_mode, &tape_mode, &plates_mode,
   &chloe_mode,

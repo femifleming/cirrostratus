@@ -1,10 +1,12 @@
 # Cirrostratus ☁
 
 **Alternative firmware for the [Monsoon](https://github.com/jakplugg/Monsoon)**
-(Jak Plugg's 12HP Mutable Instruments Clouds variant): 29 modes in two
+(Jak Plugg's 12HP Mutable Instruments Clouds variant): 30 modes in two
 banks, a 48 kHz floating-point engine, and a clean output section.
 
-**Version 1.5.1.** Fixes glitchy pulses on top of the audio: a block that ran a little long used to skip the mode for the next block (a click); now only a real overrun does, and it ramps down and back in.
+**Version 1.5.2.** Mode 1 is back as **SPRING**, a dispersive spring reverb tank (falling chirps, dwell, TRIG kicks the tank), and SPECTRAL's SMEAR is phase-locked: smooth at long blurs, no more flutter or dropouts.
+
+**1.5.1:** fixes glitchy pulses on top of the audio: a block that ran a little long used to skip the mode for the next block (a click); now only a real overrun does, and it ramps down and back in.
 
 **1.5.0:** GRAINS is gone: mode 1 is retired, every other mode
 keeps its number (bank 1 is 2–15), and settings, calibration and slots
@@ -35,7 +37,7 @@ save slots from 1.0 load unchanged.
 
 | Bank 1 (green) | | Bank 2 (red) | |
 |---|---|---|---|
-| ~~1 GRAINS~~ | retired in 1.5 | 16 QUELL | resonance suppressor |
+| 1 SPRING | spring reverb tank (new in 1.5.2) | 16 QUELL | resonance suppressor |
 | 2 SPECTRAL | spectral freeze / resynthesis | 17 LEITNER | spatial path panner |
 | 3 CONVOLVE | freeze captures the IR | 18 TANTRI | tabla + tanpura |
 | 4 RESONATOR | sympathetic strings + jawari | 19 HARMONIZER | scale harmonizer |
@@ -88,7 +90,7 @@ any mode to a WAV for listening.
 |---|---|
 | `monsoon/` | firmware: drivers (from the Monsoon port of Clouds), UI, settings, main |
 | `monsoon/dsp/` | portable DSP: engine, output section, STFT, buffers |
-| `monsoon/dsp/modes/` | the 29 modes |
+| `monsoon/dsp/modes/` | the 30 modes |
 | `host/` | test harness, renderer, bootloader simulator |
 | `tools/` | QPSK encoder, table/IR generators, CPU bench, manual builder |
 | `docs/` | design spec and manual |

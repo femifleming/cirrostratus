@@ -10,11 +10,11 @@
 namespace monsoon {
 
 // Panel numbers are fixed: slots, settings (per-mode arrays) and the menu
-// all index by them. Mode 1 (GRAINS) was removed in 1.5: its number stays
-// reserved, so every other mode keeps its number and old settings,
-// calibration and slots still load.
+// all index by them. Mode 1 was GRAINS until 1.5 (its number was kept, so
+// every other mode kept its number and old settings, calibration and slots
+// still load); since 1.5.2 it is SPRING.
 enum ModeId {
-  MODE_REMOVED_1,    // 1  (was GRAINS, removed in 1.5): never selected
+  MODE_SPRING,       // 1  spring reverb tank (was GRAINS until 1.5)
   MODE_SPECTRAL,     // 2  spectral freeze / resynthesis
   MODE_CONVOLVE,     // 3  convolution, freeze captures the IR
   MODE_RESONATOR,    // 4  sympathetic strings + jawari
@@ -45,7 +45,7 @@ enum ModeId {
   MODE_MIRROR,      // 29  spectral warping
   MODE_POLISH,      // 30  mastering chain
   MODE_LAST,
-  MODE_FIRST = MODE_SPECTRAL  // the lowest mode that exists
+  MODE_FIRST = MODE_SPRING   // the lowest mode
 };
 
 inline bool ModeExists(int m) { return m >= MODE_FIRST && m < MODE_LAST; }

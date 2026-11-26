@@ -55,14 +55,16 @@ bool SmearEngine::Init(Arena* arena, size_t size) {
   in_ = arena->Allocate<float>(kRing);
   out_ = arena->Allocate<float>(kRing);
   mag_ = arena->Allocate<float>(kBins);
-  dev_ = arena->Allocate<float>(kBins);
+  ur_ = arena->Allocate<float>(kBins);
+  ui_ = arena->Allocate<float>(kBins);
   prev_ = arena->Allocate<float>(kBins);
   acc_ = arena->Allocate<float>(kBins);
-  if (!in_ || !out_ || !mag_ || !dev_ || !prev_ || !acc_) return false;
+  if (!in_ || !out_ || !mag_ || !ur_ || !ui_ || !prev_ || !acc_) return false;
   memset(in_, 0, kRing * sizeof(float));
   memset(out_, 0, kRing * sizeof(float));
   memset(mag_, 0, kBins * sizeof(float));
-  memset(dev_, 0, kBins * sizeof(float));
+  memset(ur_, 0, kBins * sizeof(float));
+  memset(ui_, 0, kBins * sizeof(float));
   memset(prev_, 0, kBins * sizeof(float));
   memset(acc_, 0, kBins * sizeof(float));
   win_ = arena->Allocate<float>(kSize);
@@ -100,10 +102,12 @@ void SmearEngine::Process(const Controls& c, const FloatFrame* in,
   }
 }
 
-// The bins, as the Wingie's sp_smear_bins does them.
+// The bins: analysis as the Wingie's sp_smear_bins, resynthesis phase-locked
+// to the peaks (see smear.h).
 void SmearEngine::Bins(float* x) {
   float* mag = mag_;
-  float* dev = dev_;
+  float* ur = ur_;
+  float* ui = ui_;
   float* prev = prev_;
   float* acc = acc_;
   const float blur = blur_;
@@ -116,27 +120,62 @@ void SmearEngine::Bins(float* x) {
   const float q = 0.3f * blur;
   const bool thru = c >= 0.999f;
   for (size_t k = 1; k < kBins; ++k) {
-    float re = x[2 * k], im = x[2 * k + 1];
-    float m = sqrtf(re * re + im * im);   // (the Wingie: two Newton steps, the same to float precision)
-    float ph = SqAtan2Turns(im, re);
+    const float re = x[2 * k], im = x[2 * k + 1];
+    const float m = sqrtf(re * re + im * im);
+    const float ph = SqAtan2Turns(im, re);
     float d = ph - prev[k] - static_cast<float>(k & 3) * 0.25f;
     d -= SqFloor(d + 0.5f);
     prev[k] = ph;
     mag[k] += c * (m - mag[k]);
-    dev[k] += c * (d - dev[k]);
-    if (thru) { acc[k] = ph; continue; }      // no blur: as it was
-    float lo = k > 1 ? mag[k - 1] : mag[k];
-    float hi = k < kBins - 1 ? mag[k + 1] : mag[k];
-    float mo = mag[k] + q * (0.5f * (lo + hi) - mag[k]);
-    float a = acc[k] + static_cast<float>(k & 3) * 0.25f + dev[k];
-    a -= SqFloor(a);
-    acc[k] = a;
-    x[2 * k] = mo * SqSin2Pi(a + 0.25f);
-    x[2 * k + 1] = mo * SqSin2Pi(a);
+    ur[k] += c * (m * SqSin2Pi(d + 0.25f) - ur[k]);
+    ui[k] += c * (m * SqSin2Pi(d) - ui[k]);
+    if (thru) acc[k] = ph;                     // no blur: as it was
   }
-  if (!thru) {   // (nothing to sing at DC or Nyquist; untouched without blur)
-    x[0] = 0.0f;
-    x[1] = 0.0f;
+  if (thru) return;
+
+  // The leaned magnitudes, and the peaks among them (scratch in temp_, free
+  // between the two transforms).
+  float* mo = temp_;
+  uint16_t* peaks = reinterpret_cast<uint16_t*>(temp_ + kBins);
+  mo[0] = 0.0f;
+  for (size_t k = 1; k < kBins; ++k) {
+    const float lo = k > 1 ? mag[k - 1] : mag[k];
+    const float hi = k < kBins - 1 ? mag[k + 1] : mag[k];
+    mo[k] = mag[k] + q * (0.5f * (lo + hi) - mag[k]);
+  }
+  size_t n_peaks = 0;
+  for (size_t k = 1; k < kBins; ++k) {
+    const float lo = k > 1 ? mo[k - 1] : 0.0f;
+    const float hi = k < kBins - 1 ? mo[k + 1] : 0.0f;
+    if (mo[k] > lo && mo[k] >= hi && mo[k] > 1e-9f) {
+      peaks[n_peaks++] = static_cast<uint16_t>(k);
+    }
+  }
+  x[0] = 0.0f;   // (nothing to sing at DC or Nyquist)
+  x[1] = 0.0f;
+  if (!n_peaks) {
+    for (size_t k = 1; k < kBins; ++k) x[2 * k] = x[2 * k + 1] = 0.0f;
+    return;
+  }
+  size_t from = 1;
+  for (size_t j = 0; j < n_peaks; ++j) {
+    const size_t p = peaks[j];
+    const size_t to = j + 1 < n_peaks ? (p + peaks[j + 1]) / 2 : kBins - 1;
+    float a = acc[p] + static_cast<float>(p & 3) * 0.25f +
+        SqAtan2Turns(ui[p], ur[p]);
+    a -= SqFloor(a);
+    const float cp = SqSin2Pi(a + 0.25f);
+    const float sp = SqSin2Pi(a);
+    const float a_odd = a + 0.5f - SqFloor(a + 0.5f);
+    for (size_t k = from; k <= to; ++k) {
+      // a Hann lobe: neighbouring bins of one partial are half a turn apart
+      const bool odd = (k ^ p) & 1;
+      const float g = odd ? -mo[k] : mo[k];
+      x[2 * k] = g * cp;
+      x[2 * k + 1] = g * sp;
+      acc[k] = odd ? a_odd : a;
+    }
+    from = to + 1;
   }
 }
 

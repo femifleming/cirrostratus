@@ -1,4 +1,30 @@
-### Bank 1 (green) · 2–15 (mode 1, GRAINS, retired in 1.5)
+### Bank 1 (green) · 1–15
+
+#### 1 · SPRING — a spring reverb tank
+*Forecast: thunder in a tin roof, a long way off.*
+
+The tank from the back of a guitar amp. Every spring carries the low
+frequencies slower than the high ones, so each echo arrives as a falling
+chirp, and every trip along the spring spreads it further: the "boing" on a
+snare, the "drip" on a picked note. Each spring is a delay loop with 32
+dispersing allpass filters inside it. New in 1.5.2 (mode 1 was GRAINS until
+1.5).
+
+| Control | |
+|---|---|
+| POSITION | tone: the tank's band limit, dark 1.2 kHz → bright 8 kHz |
+| SIZE | spring length: 25 → 80 ms per trip (the spacing of the echoes) |
+| DENSITY | decay: 0.4 → 8 s |
+| TEXTURE | dispersion: a short splash → long, liquid chirps (the drip) |
+| PITCH | spring tension: the trip follows V/OCT (5 to 150 ms), so the flutter between echoes is pitched |
+| FREEZE | the tank rings on: input off, no decay, tone wide open |
+| TRIG | kick the tank: a knock into every spring, the crash |
+| BAL | stereo width: left = the springs summed (mono), noon = each spring on its side, right = wider still |
+| FBK | the module's feedback loop: the tank's output back into its input (dub) |
+| RVB | dwell: how hard the tank is driven, clean at 0, up to ×6 into the driver's saturation (a hot spring) |
+| Options | 1 a pair (A left, B right) · 2 a tank of three (A left, B right, C in the middle) · 3 one spring |
+| Keeps / morph | nothing / no |
+
 
 #### 2 · SPECTRAL — spectral freeze / resynthesis
 *Forecast: a held moment, refracted into its colours.*
@@ -21,15 +47,18 @@
 | Keeps / morph | the frozen spectrum / yes (option 1) |
 
 **Option 2 · SMEAR** — *a photograph left out in the rain.* The spectral
-smear from Sleepcousonique's Wingie mode, the same sound: the spectrum is
-blurred in time and a little across frequency, and its partials carry on.
-512-point transform (256–2048 with the FFT size setting, 3.8), 4× overlap,
-16 ms latency. Mono, like the Wingie's: the
-mid (L+R) is smeared and comes out of both sides.
+smear from Sleepcousonique's Wingie mode: the spectrum is blurred in time
+and a little across frequency, and its partials carry on. Since 1.5.2 the
+resynthesis is phase-locked: the bins around each peak of the blurred
+spectrum move together as one partial, at the frequency of the loudest
+sound that passed through it, so a long blur is a smooth wash instead of a
+flutter, and it never cancels itself out. 512-point transform (256–2048
+with the FFT size setting, 3.8), 4× overlap, 16 ms latency. Mono, like the
+Wingie's: the mid (L+R) is smeared and comes out of both sides.
 
 | Control | |
 |---|---|
-| DENSITY | blur: none (the sound as it is) → seconds; long blurs beat and shimmer |
+| DENSITY | blur: none (the sound as it is) → about 5 s |
 | FREEZE | hold: the blur stops where it is |
 | RVB | reverb (the module's FDN reverb: SMEAR's space) |
 | Keeps / morph | nothing / no |

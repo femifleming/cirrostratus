@@ -2,7 +2,7 @@
 
 ### *a thin, high sheet of cloud for the Monsoon*
 
-**Version 1.5.1**
+**Version 1.5.2**
 
 <img class="panel" src="img/cover.png" width="300" align="right" alt="Monsoon panel: cover">
 
@@ -15,7 +15,7 @@ Cirrostratus is alternative firmware for **Monsoon**, Jak Plugg's 12HP
 module built on Mutable Instruments' Clouds. Clouds made granular weather.
 This firmware goes one layer higher, thinner and brighter:
 
-- **29 modes** in two banks (Clouds had four kinds of sky)
+- **30 modes** in two banks (Clouds had four kinds of sky)
 - **seven controls of their own in every mode**: the four sliders plus the
   three small knobs **BAL**, **FBK** and **RVB**, which mean something
   different (and specific) in each mode. That's 87 extra controls, all with
@@ -33,6 +33,16 @@ This firmware goes one layer higher, thinner and brighter:
 
 It is still your Monsoon: same panel, same jacks, same bootloader. Only the
 weather changes.
+
+**New in 1.5.2:** mode 1 is back, as **SPRING**: a spring reverb tank whose
+every echo arrives as a falling chirp, the "boing" and the "drip" of a guitar
+amp's tank (one spring, a pair or a tank of three; RVB is the dwell, TRIG
+kicks the tank). And SPECTRAL's **SMEAR** option is smooth now: under a long
+blur the bins of one partial used to drift against each other, so the smear
+fluttered like a stutter and now and then cancelled itself out (a dropout).
+The bins around each peak now move as one partial, at the frequency of the
+loudest sound in it: about a quarter of the flutter at full blur, and no more
+cancelling.
 
 **New in 1.5.1:** no more glitchy pulses. When a block of audio took a little
 too long, 1.3 to 1.5 skipped the mode for the next block, and that gap was a
@@ -143,8 +153,8 @@ of the "build_4" Monsoon firmwares.
 - **Coming from an earlier Cirrostratus?** Settings, per-mode options,
   envelope routings and save slots carry over untouched. Mono bass
   starts on; buffer quality starts at 48 kHz 16-bit (exactly as before).
-  If the module was in GRAINS it starts in SPECTRAL, and slots saved from
-  GRAINS are skipped.
+  Mode 1 was GRAINS until 1.5 and is SPRING since 1.5.2; a slot saved
+  from GRAINS opens SPRING (it has nothing to load).
 - Old Clouds save slots aren't compatible. Cirrostratus recognises and
   ignores them; it never plays garbage.
 - **Back to stock:** flash the stock Monsoon firmware the same way. Clouds
@@ -218,9 +228,7 @@ Any button skips it (that press does nothing else).
 <img class="panel" src="img/menu.png" width="300" align="right" alt="Monsoon panel: menu">
 
 1. **Hold DISP** for a second. The LEDs show the current mode in binary:
-   **green = bank 1** (modes 2–15), **red = bank 2** (16–30). Mode 1
-   (GRAINS) was retired in 1.5; the others kept their numbers, so bank 1
-   has 14 and the bottom of POSITION lands on 2.
+   **green = bank 1** (modes 1–15), **red = bank 2** (16–30).
 2. **Move POSITION** to browse. The menu only starts following POSITION
    once you actually move it, so peeking never changes anything. The sound
    keeps its old POSITION while you browse.
@@ -444,7 +452,35 @@ mode pays no CPU for a reverb it doesn't use.
 give the mode plain, exactly as in 1.0. "Keeps" = what a save slot holds
 for that mode.
 
-### Bank 1 (green) · 2–15 (mode 1, GRAINS, retired in 1.5)
+### Bank 1 (green) · 1–15
+
+#### 1 · SPRING — a spring reverb tank
+*Forecast: thunder in a tin roof, a long way off.*
+
+The tank from the back of a guitar amp. Every spring carries the low
+frequencies slower than the high ones, so each echo arrives as a falling
+chirp, and every trip along the spring spreads it further: the "boing" on a
+snare, the "drip" on a picked note. Each spring is a delay loop with 32
+dispersing allpass filters inside it. New in 1.5.2 (mode 1 was GRAINS until
+1.5).
+
+<img class="panel" src="img/mode01.png" width="300" align="right" alt="Monsoon panel: mode 1 SPRING">
+
+| Control | |
+|---|---|
+| ① POSITION | tone: the tank's band limit, dark 1.2 kHz → bright 8 kHz |
+| ② SIZE | spring length: 25 → 80 ms per trip (the spacing of the echoes) |
+| ③ DENSITY | decay: 0.4 → 8 s |
+| ④ TEXTURE | dispersion: a short splash → long, liquid chirps (the drip) |
+| ⑤ PITCH | spring tension: the trip follows V/OCT (5 to 150 ms), so the flutter between echoes is pitched |
+| ⑥ FREEZE | the tank rings on: input off, no decay, tone wide open |
+| ⑦ TRIG | kick the tank: a knock into every spring, the crash |
+| ⑧ BAL | stereo width: left = the springs summed (mono), noon = each spring on its side, right = wider still |
+| ⑨ FBK | the module's feedback loop: the tank's output back into its input (dub) |
+| ⑩ RVB | dwell: how hard the tank is driven, clean at 0, up to ×6 into the driver's saturation (a hot spring) |
+| ⑪ Options | 1 a pair (A left, B right) · 2 a tank of three (A left, B right, C in the middle) · 3 one spring |
+| Keeps / morph | nothing / no |
+
 
 #### 2 · SPECTRAL — spectral freeze / resynthesis
 *Forecast: a held moment, refracted into its colours.*
@@ -469,17 +505,20 @@ for that mode.
 | ⑫ Keeps / morph | the frozen spectrum / yes (option 1) |
 
 **Option 2 · SMEAR** — *a photograph left out in the rain.* The spectral
-smear from Sleepcousonique's Wingie mode, the same sound: the spectrum is
-blurred in time and a little across frequency, and its partials carry on.
-512-point transform (256–2048 with the FFT size setting, 3.8), 4× overlap,
-16 ms latency. Mono, like the Wingie's: the
-mid (L+R) is smeared and comes out of both sides.
+smear from Sleepcousonique's Wingie mode: the spectrum is blurred in time
+and a little across frequency, and its partials carry on. Since 1.5.2 the
+resynthesis is phase-locked: the bins around each peak of the blurred
+spectrum move together as one partial, at the frequency of the loudest
+sound that passed through it, so a long blur is a smooth wash instead of a
+flutter, and it never cancels itself out. 512-point transform (256–2048
+with the FFT size setting, 3.8), 4× overlap, 16 ms latency. Mono, like the
+Wingie's: the mid (L+R) is smeared and comes out of both sides.
 
 <img class="panel" src="img/mode02.png" width="300" align="right" alt="Monsoon panel: mode 2 SPECTRAL">
 
 | Control | |
 |---|---|
-| ① DENSITY | blur: none (the sound as it is) → seconds; long blurs beat and shimmer |
+| ① DENSITY | blur: none (the sound as it is) → about 5 s |
 | ② FREEZE | hold: the blur stops where it is |
 | ③ RVB | reverb (the module's FDN reverb: SMEAR's space) |
 | Keeps / morph | nothing / no |

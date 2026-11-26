@@ -344,8 +344,6 @@ uint8_t Ui::ModeFromPosition() const {
   // kMenuLo..kMenuHi, widened whenever the slider goes further.
   float p = cv_scaler_->raw_position();
   float q = (p - menu_lo_) / (menu_hi_ - menu_lo_);
-  // Bank 1 has 14 modes since GRAINS (mode 1) went: its zones are 2..15,
-  // so every mode keeps its number (and its place at the top end).
   int first = menu_bank_ * kModesPerBank;
   int last = first + kModesPerBank;
   if (first < MODE_FIRST) first = MODE_FIRST;
