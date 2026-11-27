@@ -108,7 +108,15 @@ int main() {
   Config config;
   uint32_t worst = 0;
   for (int t = 0; t < TYPE_LAST; ++t) {
+#ifdef BENCH_TYPE
+    // BENCH_DEFS="-DBENCH_TYPE=0 -DBENCH_FLAVOUR=0": one layout only
+    // (tools/bench/profile.sh uses it)
+    if (t != BENCH_TYPE) continue;
+#endif
     for (int f = 0; f < kNumFlavours[t]; ++f) {
+#ifdef BENCH_FLAVOUR
+      if (f != BENCH_FLAVOUR) continue;
+#endif
       config.Init();
       for (int i = 0; i < kNumSegments; ++i) {
         config.segment[i].type = t;
@@ -123,10 +131,12 @@ int main() {
       Print("\n");
     }
   }
+#ifndef BENCH_TYPE
   config.Init();  // the default: 4 random, envelope, oscillator
   Print("default layout: "); PrintNum(Measure(config)); Print(" insns/sample, worst block ");
   PrintNum((uint32_t)(worst_block * 1000ull / 168ull / kMaxBlockSize));
   Print("\n");
+#endif
   Print("worst: "); PrintNum(worst); Print(" insns/sample (budget 2304 cycles for everything)\n");
   Exit();
   return 0;

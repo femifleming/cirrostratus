@@ -3,7 +3,8 @@
 // the spectrum blurred in time and a little across frequency, its partials
 // carried on by a phase vocoder; blur from none to seconds).
 //
-// STFT 512 / hop 128 (4x overlap), Hann analysis and synthesis windows,
+// STFT 2048 / hop 256 (8x overlap; 512 / 128 until 1.5.2: coarse 94 Hz
+// bins and few overlaps made a grainy wash), Hann analysis and synthesis windows,
 // mono like the Wingie's: the mid (L+R)/2 is smeared and sent to both
 // outputs (RVB gives it its space). Stereo would be twice the work, more
 // than the module has to spare. Per bin the magnitude is smoothed by a
@@ -25,13 +26,15 @@
 // the Hann lobe's alternating sign, so they sound as one partial and can't
 // cancel each other.
 //
-// Controls: DENSITY blur. FREEZE holds the spectrum as it is (the blur
-// stops moving). The engine's WET and RVB (the FDN reverb) as usual.
+// Controls: DENSITY blur. TEXTURE diffusion (1.5.3): left = coherent, the
+// blurred partials held as steady tones; right = each bin's phase takes a
+// random walk, and fully right a fresh random phase every frame: a smooth,
+// diffuse wash. FREEZE holds the spectrum as it is (the blur stops moving). The engine's WET and RVB (the FDN reverb) as usual.
 //
 // The audio interrupt only moves samples; the transforms run in Prepare()
 // (main loop), like SPECTRAL's own STFT; a frame is heard two hops after it
-// is due, so the main loop has 5 ms for it. Latency N + 2 hops = 768
-// samples (16 ms).
+// is due, so the main loop has 10 ms for it. Latency N + 2 hops = 2560
+// samples (53 ms).
 
 #ifndef MONSOON_DSP_MODES_SMEAR_H_
 #define MONSOON_DSP_MODES_SMEAR_H_
@@ -43,9 +46,9 @@ namespace monsoon {
 
 class SmearEngine {
  public:
-  static const size_t kNativeSize = 512;
+  static const size_t kNativeSize = 2048;   // 512 until 1.5.2
 
-  // N = 512 unless the FFT setting says otherwise, hop N/4.
+  // N = 2048 unless the FFT setting says otherwise, hop N/8.
   bool Init(Arena* arena, size_t size = kNativeSize) __attribute__((cold));
   void Process(const Controls& c, const FloatFrame* in, FloatFrame* out,
                size_t n);
@@ -67,6 +70,7 @@ class SmearEngine {
   float* ui_;
   float* prev_;
   float* acc_;
+  float* jit_;     // TEXTURE: each bin's random phase walk
   float* win_;
   float* temp_;
   float* spec_;
@@ -74,6 +78,8 @@ class SmearEngine {
   size_t hop_counter_;
   volatile uint32_t hops_ready_;
   uint32_t hops_done_;
+  uint32_t rng_;
+  volatile float diffuse_;
   volatile float blur_;
   volatile bool hold_;
 };

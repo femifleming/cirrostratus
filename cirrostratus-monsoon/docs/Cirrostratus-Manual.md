@@ -2,7 +2,7 @@
 
 ### *a thin, high sheet of cloud for the Monsoon*
 
-**Version 1.5.2**
+**Version 1.5.3**
 
 <img class="panel" src="img/cover.png" width="300" align="right" alt="Monsoon panel: cover">
 
@@ -33,6 +33,11 @@ This firmware goes one layer higher, thinner and brighter:
 
 It is still your Monsoon: same panel, same jacks, same bootloader. Only the
 weather changes.
+
+**New in 1.5.3:** a smoother **SMEAR**. Its transform is four times finer
+(2048 points, 23 Hz apart): chords stay clear instead of blurring into a
+grainy blend. And **TEXTURE** now sets its character, from clear, steady
+tones (left) to a soft, diffuse wash (right) at the same level.
 
 **New in 1.5.2:** mode 1 is back, as **SPRING**: a spring reverb tank whose
 every echo arrives as a falling chirp, the "boing" and the "drip" of a guitar
@@ -507,23 +512,26 @@ dispersing allpass filters inside it. New in 1.5.2 (mode 1 was GRAINS until
 | ⑪ Options | 1 as above · 2 SMEAR (below) |
 | ⑫ Keeps / morph | the frozen spectrum / yes (option 1) |
 
-**Option 2 · SMEAR** — *a photograph left out in the rain.* The spectral
-smear from Sleepcousonique's Wingie mode: the spectrum is blurred in time
-and a little across frequency, and its partials carry on. Since 1.5.2 the
-resynthesis is phase-locked: the bins around each peak of the blurred
-spectrum move together as one partial, at the frequency of the loudest
-sound that passed through it, so a long blur is a smooth wash instead of a
-flutter, and it never cancels itself out. 512-point transform (256–2048
-with the FFT size setting, 3.8), 4× overlap, 16 ms latency. Mono, like the
-Wingie's: the mid (L+R) is smeared and comes out of both sides.
+**Option 2 · SMEAR** — *a photograph left out in the rain.* The spectrum
+is blurred in time and a little across frequency, and its partials carry on.
+The bins around each peak of the blurred spectrum move together as one
+partial, so a long blur never flutters or cancels itself out (1.5.2). Since
+1.5.3 the transform is four times finer, 2048 points (23 Hz apart instead of
+94: chords stay chords instead of a grainy blend; 256–2048 with the FFT size
+setting, 3.8), and **TEXTURE** sets the character: fully left the blurred
+sound is held as steady, clear tones; turning right, every partial's phase
+wanders more and more, until fully right it is a soft, diffuse wash, like a
+long reverb of the same colours. 4× overlap, 53 ms latency. Mono: the mid
+(L+R) is smeared and comes out of both sides.
 
 <img class="panel" src="img/mode02.png" width="300" align="right" alt="Monsoon panel: mode 2 SPECTRAL">
 
 | Control | |
 |---|---|
 | ① DENSITY | blur: none (the sound as it is) → about 5 s |
-| ② FREEZE | hold: the blur stops where it is |
-| ③ RVB | reverb (the module's FDN reverb: SMEAR's space) |
+| ② TEXTURE | diffusion: clear, steady tones (left) → a smooth, diffuse wash (right); the level stays the same |
+| ③ FREEZE | hold: the blur stops where it is |
+| ④ RVB | reverb (the module's FDN reverb: SMEAR's space) |
 | Keeps / morph | nothing / no |
 
 #### 3 · CONVOLVE — freeze captures the impulse response

@@ -40,3 +40,8 @@
 > push the merged repo, delete the old, dont keep fleshcfoorth,
 
 1.3.1: fletchfoorth is now **Cirrostratus Stages**, in one repository with Cirrostratus for the Monsoon (femifleming/cirrostratus, folders cirrostratus-stages/ and cirrostratus-monsoon/, hyphens because make breaks on spaces), with its whole history. Update files, manual and video renamed (cirrostratus-stages-v1.3.1.wav, Cirrostratus-Stages-Manual.pdf); code-internal names (dobbel::, MULTI_MODE_DOBBEL) kept. New video manual (tools/video/build_video.py), never on GitHub. The old fletchfoorth repository was deleted.
+
+> stages still flashes red over and over when i change modes, sometimes it goes away, but now its flashing red fast the same way as before.
+> lmk when i can flash the new stages firmware
+
+1.3.2: the light means real overload on the module (it needs more cycles per instruction than the emulator counts; the load meter, buttons 5+6, shows by how much). The CV types (Random, Chaos, Envelope, Processor) now run once per block of 8 samples (3,906 a second, the rate Stages reads CV and knobs) and glide between blocks; notes, gates, triggers and clean steps jump. Every time base goes through one switch (rates, counts, one-pole coefficients, per-sample constants as 1 - (1 - c)^8; Lorenz in sub-steps), so timing is unchanged: all 713 checks pass (two adjusted: the looper's first output and rain drops now start on a block). CPU: six randoms 592 -> 437, six envelopes 498 -> 409, default 651 -> 532 insns/sample. New tools/bench/profile.sh (instruction-level profile of one layout on QEMU).

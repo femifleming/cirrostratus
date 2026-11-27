@@ -2,7 +2,7 @@
 
 ### *a thin, high sheet of cloud for the Monsoon*
 
-**Version 1.5.2**
+**Version 1.5.3**
 
 <!-- PANEL cover -->
 
@@ -32,6 +32,11 @@ This firmware goes one layer higher, thinner and brighter:
 
 It is still your Monsoon: same panel, same jacks, same bootloader. Only the
 weather changes.
+
+**New in 1.5.3:** a smoother **SMEAR**. Its transform is four times finer
+(2048 points, 23 Hz apart): chords stay clear instead of blurring into a
+grainy blend. And **TEXTURE** now sets its character, from clear, steady
+tones (left) to a soft, diffuse wash (right) at the same level.
 
 **New in 1.5.2:** mode 1 is back, as **SPRING**: a spring reverb tank whose
 every echo arrives as a falling chirp, the "boing" and the "drip" of a guitar

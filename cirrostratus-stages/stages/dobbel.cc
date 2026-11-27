@@ -209,10 +209,26 @@ inline float Curve(float x, float k) {
   return x / (x + k * (1.0f - x));
 }
 
+// The time base. Oscillators and effects run every sample; since 1.3.2 the
+// CV types (random, chaos, envelope, processor) run once per block, one
+// "step" standing for g_step samples, and glide between blocks. Everything
+// they time goes through these: rates, counts, one-pole coefficients.
+float g_step = 1.0f;
+uint32_t g_step_i = 1;
+// Set by a CV type when this block's value should jump, not glide: notes,
+// gates, triggers and clean steps.
+bool g_jump = false;
+
+inline float StepRate() { return kSampleRate / g_step; }          // steps/s
+inline uint32_t Steps(uint32_t samples) {                          // a count
+  const uint32_t n = (samples + g_step_i / 2) / g_step_i;
+  return n ? n : 1;
+}
+
 inline float OnePoleCoefficient(float seconds) {
   if (seconds <= 0.0f) return 1.0f;
   // 1 - e^-z; for small z a series keeps the precision 1 - Exp2() would lose
-  const float z = 1.0f / (seconds * kSampleRate);
+  const float z = 1.0f / (seconds * StepRate());
   if (z < 0.25f) {
     return z * (1.0f - z * (0.5f - z * (0.16666667f - z * 0.041666667f)));
   }
@@ -220,6 +236,14 @@ inline float OnePoleCoefficient(float seconds) {
 }
 
 const float kInvSampleRate = 1.0f / kSampleRate;
+
+inline float StepTime() { return kInvSampleRate * g_step; }       // s/step
+
+// A per-sample one-pole coefficient c, for one step: 1 - (1 - c)^step.
+inline float PerStep(float c) {
+  if (g_step_i == 1) return c;
+  return 1.0f - Exp2(g_step * Log2(1.0f - c));
+}
 const float kInvAudioPeak = 1.0f / kAudioPeak;
 const float kInv255 = 1.0f / 255.0f;
 const float kInv32000 = 1.0f / 32000.0f;
@@ -392,10 +416,10 @@ bool Engine::Tick(Segment* s, const Input& in, float rate_hz, size_t n) {
     }
     return false;
   }
-  s->phase += rate_hz * kInvSampleRate;
+  s->phase += rate_hz * StepTime();
   if (s->phase >= 1.0f) {
     s->phase -= Floor(s->phase);
-    s->period = kSampleRate / rate_hz;
+    s->period = StepRate() / rate_hz;
     s->since = 0;
     return true;
   }
@@ -557,13 +581,51 @@ void Engine::Process(
     heard_slider_[i] = in.cv_slider;
     heard_pot_[i] = in.pot;
     float* out = output[i];
-    switch (type) {
-      case TYPE_RANDOM: ProcessRandom(i, config, in, out, size); break;
-      case TYPE_CHAOS: ProcessChaos(i, config, in, out, size); break;
-      case TYPE_ENVELOPE: ProcessEnvelope(i, config, in, out, size); break;
-      case TYPE_OSCILLATOR: ProcessOscillator(i, config, in, out, size); break;
-      case TYPE_PROCESSOR: ProcessProcessor(i, config, in, out, size); break;
-      default: ProcessEffect(i, config, in, out, size); break;
+    if (type == TYPE_OSCILLATOR || type == TYPE_EFFECT) {
+      if (type == TYPE_OSCILLATOR) {
+        ProcessOscillator(i, config, in, out, size);
+      } else {
+        ProcessEffect(i, config, in, out, size);
+      }
+    } else {
+      // A CV type: one step for the whole block (the gates folded into
+      // one: rising / falling if any sample was, high as the block ends),
+      // then a straight line from the last block's value to this one.
+      stmlib::GateFlags g = in.gate[size - 1] & GATE_FLAG_HIGH;
+      for (size_t n = 0; n < size; ++n) {
+        g |= in.gate[n] & (GATE_FLAG_RISING | GATE_FLAG_FALLING);
+      }
+      in.gate = &g;
+      g_step = static_cast<float>(size);
+      g_step_i = static_cast<uint32_t>(size);
+      g_jump = false;
+      float o;
+      switch (type) {
+        case TYPE_RANDOM: ProcessRandom(i, config, in, &o, 1); break;
+        case TYPE_CHAOS: ProcessChaos(i, config, in, &o, 1); break;
+        case TYPE_ENVELOPE: ProcessEnvelope(i, config, in, &o, 1); break;
+        default: ProcessProcessor(i, config, in, &o, 1); break;
+      }
+      g_step = 1.0f;
+      g_step_i = 1;
+      Segment& sg = segment_[i];
+      const float norm = block_norm_[i][0];
+      const float o0 = sg.cv_out, n0 = sg.cv_norm;
+      const float inv = 1.0f / static_cast<float>(size);
+      if (g_jump) {
+        for (size_t n = 0; n < size; ++n) {
+          out[n] = o;
+          block_norm_[i][n] = norm;
+        }
+      } else {
+        for (size_t n = 0; n < size; ++n) {
+          const float t = static_cast<float>(n + 1) * inv;
+          out[n] = o0 + (o - o0) * t;
+          block_norm_[i][n] = n0 + (norm - n0) * t;
+        }
+      }
+      sg.cv_out = o;
+      sg.cv_norm = norm;
     }
     if (type == TYPE_PROCESSOR || type == TYPE_EFFECT) {
       // -8 to +8 V, whatever came in (the other types stay inside by
@@ -597,12 +659,17 @@ void Engine::ProcessRandom(
   const float slew_b = s.flavour == RANDOM_KIN ? 0.2f : b;
   const float tau = slew_b * slew_b * s.period;
   const float slew = tau < 0.5f ? 1.0f : 1.0f / (1.0f + tau);
+  if (slew == 1.0f || s.flavour == RANDOM_QUANTISED ||
+      (s.flavour == RANDOM_WEATHER && run % 5 == 2)) {
+    g_jump = true;   // clean steps, notes, rain
+  }
 
+  const float wander = PerStep(0.0005f);
   for (size_t n = 0; n < size; ++n) {
     if (s.flavour == RANDOM_ORBIT) {
       if (run == 0) {
         // The leader moves a point along a path; the run reads X, Y, radius.
-        s.phase2 += rate * (0.25f * kInvSampleRate);
+        s.phase2 += rate * (0.25f * StepTime());
         if (s.phase2 >= 1.0f) {
           s.phase2 -= 1.0f;
           s.event = 1;
@@ -613,8 +680,8 @@ void Engine::ProcessRandom(
           s.target = Random::GetFloat() * 2.0f - 1.0f;
           s.walk = Random::GetFloat() * 2.0f - 1.0f;
         }
-        s.x += (s.target - s.x) * 0.0005f;
-        s.y += (s.walk - s.y) * 0.0005f;
+        s.x += (s.target - s.x) * wander;
+        s.y += (s.walk - s.y) * wander;
         float x, y;
         const float shape = b * 3.0f;
         const int k = static_cast<int>(shape);
@@ -669,23 +736,23 @@ void Engine::ProcessRandom(
           if (w < 0.0f) w = -w;
           s.walk = Clamp(w, 0.0f, 1.0f);
         }
-        const float slow = rate * 0.02f * kInvSampleRate;
+        const float slow = rate * 0.02f * StepTime();
         s.x += (s.target - s.x) * slow;          // pressure
         s.y += (s.walk - s.y) * slow * 0.5f;     // humidity
         const float low = 1.0f - s.x;
         // gusts: more often, and stronger, the lower the pressure
-        if (Random::GetFloat() < (0.2f + low) * rate * 0.3f * kInvSampleRate) {
+        if (Random::GetFloat() < (0.2f + low) * rate * 0.3f * StepTime()) {
           s.z = (0.3f + 0.7f * Random::GetFloat()) * (0.4f + 0.6f * low);
         }
-        s.lp += (s.z - s.lp) * (rate * 0.5f * kInvSampleRate + 2e-4f);
-        s.z -= s.z * rate * 0.05f * kInvSampleRate;
+        s.lp += (s.z - s.lp) * (rate * 0.5f * StepTime() + 2e-4f * g_step);
+        s.z -= s.z * rate * 0.05f * StepTime();
         const float wind = Clamp(0.25f * low + s.lp, 0.0f, 1.0f);
         // rain: dust whose density follows the damp, when the pressure is low
         if (s.gate_samples) {
           --s.gate_samples;
         } else if (Random::GetFloat() <
-                   s.y * s.y * low * low * rate * 4.0f * kInvSampleRate) {
-          s.gate_samples = 160;  // 5 ms
+                   s.y * s.y * low * low * rate * 4.0f * StepTime()) {
+          s.gate_samples = Steps(160);  // 5 ms
           s.f_slow = 0.4f + 0.6f * Random::GetFloat();
         }
         run_x_[i][n] = s.x;
@@ -798,7 +865,8 @@ void Engine::ProcessChaos(
   const int run = RunPosition(i, c);
   const int leader = i - run;
   const float dust_chance = ExpMap(Clamp(in.cv_slider, 0.0f, 1.2f), 0.1f, 50.0f) *
-      kInvSampleRate;
+      StepTime();
+  const float follow = PerStep(0.02f);
 
   for (size_t n = 0; n < size; ++n) {
     float v = s.value;
@@ -819,7 +887,7 @@ void Engine::ProcessChaos(
             s.reg = ((s.reg << 1) | bit) & 0xff;
             s.target = static_cast<float>(s.reg) / 255.0f;
           }
-          s.lp += (s.target - s.lp) * 0.02f;
+          s.lp += (s.target - s.lp) * follow;
           v = s.lp;
         }
         break;
@@ -832,21 +900,27 @@ void Engine::ProcessChaos(
           if (s.x <= 0.0f || s.x >= 1.0f) s.x = 0.3f + Random::GetFloat() * 0.4f;
           s.target = s.x;
         }
-        s.lp += (s.target - s.lp) * 0.02f;
+        s.lp += (s.target - s.lp) * follow;
         v = s.lp;
         break;
 
       case CHAOS_LORENZ:
         if (run == 0) {
           const float rho = 20.0f + b * 30.0f;
-          const float h = rate * 2e-5f;  // Euler step: slider = speed
+          // Euler steps of at most 0.002 (slider = speed): one a sample
+          // at the fastest, as before
+          const float h_all = rate * 2e-5f * g_step;
+          int sub = 1 + static_cast<int>(h_all * 500.0f);
+          const float h = h_all / static_cast<float>(sub);
           float x = s.x, y = s.y, z = s.z;
-          const float dx = 10.0f * (y - x);
-          const float dy = x * (rho - z) - y;
-          const float dz = x * y - (8.0f / 3.0f) * z;
-          x += dx * h;
-          y += dy * h;
-          z += dz * h;
+          while (sub--) {
+            const float dx = 10.0f * (y - x);
+            const float dy = x * (rho - z) - y;
+            const float dz = x * y - (8.0f / 3.0f) * z;
+            x += dx * h;
+            y += dy * h;
+            z += dz * h;
+          }
           if (!(fabsf(x) < 200.0f && fabsf(y) < 200.0f && fabsf(z) < 200.0f)) {
             x = 0.1f; y = 0.0f; z = 0.0f;
           }
@@ -902,7 +976,7 @@ void Engine::ProcessChaos(
           if (Random::GetFloat() < b) {
             s.event = 1;
             s.gate_samples = static_cast<uint32_t>(s.period * 0.5f);
-            if (s.gate_samples < 150) s.gate_samples = 150;
+            if (s.gate_samples < Steps(150)) s.gate_samples = Steps(150);
           }
         }
         gate_out = true;
@@ -952,7 +1026,7 @@ void Engine::ProcessChaos(
           // Triggers at random moments, no clock. Slider = density.
           if (Random::GetFloat() < dust_chance) {
             s.event = 1;
-            s.gate_samples = 160;  // 5 ms
+            s.gate_samples = Steps(160);  // 5 ms
             s.target = 1.0f - b * Random::GetFloat();
           }
           gate_out = true;
@@ -962,6 +1036,9 @@ void Engine::ProcessChaos(
         break;
     }
     s.value = v;
+    if (gate_out || s.flavour == CHAOS_CELLULAR || s.flavour == CHAOS_STAIR) {
+      g_jump = true;
+    }
     float o;
     if (bipolar && !gate_out) {
       o = (v * 2.0f - 1.0f) * kAudioPeak * aux;
@@ -986,8 +1063,8 @@ void Engine::ProcessEnvelope(
   const float scale = Exp2(-in.cv * 8.0f);
   const float attack = ExpMap(Clamp(in.slider, 0.0f, 1.0f), 0.001f, 10.0f) * scale;
   const float decay = ExpMap(Clamp(in.pot, 0.0f, 1.0f), 0.001f, 10.0f) * scale;
-  const float attack_inc = 1.0f / (attack * kSampleRate);
-  const float decay_inc = 1.0f / (decay * kSampleRate);
+  const float attack_inc = 1.0f / (attack * StepRate());
+  const float decay_inc = 1.0f / (decay * StepRate());
   const float shape = CurveK(c.aux(i));
   const bool loop = c.alt(i);
   const int repeats = s.flavour;  // 0 = once, 1-3 = extra hits
@@ -1369,6 +1446,12 @@ void Engine::ProcessProcessor(
   const float aux = c.aux(i);
   const bool alt = c.alt(i);
   const float x = in.cv_raw;  // read once per block: lo-fi, by design
+  const float dc = PerStep(0.001f);
+  if (s.flavour == PROC_TRANSIENT || s.flavour == PROC_QUANTISE ||
+      s.flavour == PROC_COMPARE || s.flavour == PROC_CRUSH ||
+      (s.flavour == PROC_SAMPLE && b == 0.0f)) {
+    g_jump = true;   // triggers, notes, gates, held steps
+  }
 
   switch (s.flavour) {
     case PROC_FOLLOW: {
@@ -1378,7 +1461,7 @@ void Engine::ProcessProcessor(
         const float release = OnePoleCoefficient(ExpMap(slider, 0.005f, 5.0f));
         const float attack = OnePoleCoefficient(b * 0.25f);
         for (size_t n = 0; n < size; ++n) {
-          s.f_dc += (x - s.f_dc) * 0.001f;
+          s.f_dc += (x - s.f_dc) * dc;
           const float rect = fabsf(x - s.f_dc) * gain;
           const bool freeze = in.patched && (in.gate[n] & GATE_FLAG_HIGH);
           if (!freeze) {
@@ -1398,12 +1481,12 @@ void Engine::ProcessProcessor(
         const float gain = (1.0f + aux * 7.0f) * kInvAudioPeak;
         const float threshold = 0.02f + slider * slider * 0.6f;
         const uint32_t length = static_cast<uint32_t>(
-            ExpMap(b, 0.002f, 0.1f) * kSampleRate);
+            ExpMap(b, 0.002f, 0.1f) * StepRate());
         const float fast_up = OnePoleCoefficient(0.0005f);
         const float fast_down = OnePoleCoefficient(0.02f);
         const float slow = OnePoleCoefficient(0.1f);
         for (size_t n = 0; n < size; ++n) {
-          s.f_dc += (x - s.f_dc) * 0.001f;
+          s.f_dc += (x - s.f_dc) * dc;
           const float rect = fabsf(x - s.f_dc) * gain;
           s.f_env += (rect - s.f_env) * (rect > s.f_env ? fast_up : fast_down);
           s.f_slow += (rect - s.f_slow) * slow;
@@ -1414,7 +1497,7 @@ void Engine::ProcessProcessor(
           }
           if (s.armed && s.f_env > s.f_slow * 1.5f + threshold) {
             s.gate_samples = length;
-            s.refractory = 1500;  // 48 ms at least between triggers
+            s.refractory = Steps(1500);  // 48 ms at least between triggers
             s.armed = false;
             s.event = 1;
           }
@@ -1488,7 +1571,7 @@ void Engine::ProcessProcessor(
               fabsf(cents_in - cand) + 8.0f < fabsf(cents_in - s.q_cents)) {
             s.q_cents = cand;
             s.event = 1;
-            s.gate_samples = 160;
+            s.gate_samples = Steps(160);
           }
         }
         const float v = (s.q_cents + root) * (1.0f / 9600.0f) + octaves * 0.125f;
@@ -1573,7 +1656,7 @@ void Engine::ProcessProcessor(
             s.event = 1;
           }
           if (s.recording) {
-            s.rec_clock += 64.0f / kSampleRate;
+            s.rec_clock += 64.0f * StepTime();
             if (s.rec_clock >= 1.0f) {
               s.rec_clock -= 1.0f;
               if (s.rec_length < kLooperLength) {
@@ -1592,14 +1675,14 @@ void Engine::ProcessProcessor(
             v = in.cv;  // nothing to loop yet: pass the CV through
           } else {
             const float len = static_cast<float>(s.loop_length);
-            s.play += (alt ? -speed : speed) * (64.0f * kInvSampleRate);
+            s.play += (alt ? -speed : speed) * (64.0f * StepTime());
             while (s.play >= len) s.play -= len;
             while (s.play < 0.0f) s.play += len;
             const int j = static_cast<int>(s.play);
             const float fx = s.play - j;
             const int j2 = (j + 1) % s.loop_length;
             v = (buffer[j] + (buffer[j2] - buffer[j]) * fx) * kInv32767;
-            if (j == 0 && fx < (64.0f * kInvSampleRate) * speed) s.event = 1;
+            if (j == 0 && fx < (64.0f * StepTime()) * speed) s.event = 1;
           }
           s.lp += (v - s.lp) * smooth;
           out[n] = s.lp;

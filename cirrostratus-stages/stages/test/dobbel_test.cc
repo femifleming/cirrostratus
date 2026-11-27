@@ -507,7 +507,8 @@ static void TestProcessors() {
   // the loop is 2 s: a ramp 0 -> 0.5, so mid-playback about 0.25
   const float mid = lv[lv.size() / 2];
   CHECK(fabsf(mid - 0.25f) < 0.05f, "looper playback mid-loop %.3f (want ~0.25)", mid);
-  CHECK(lv.front() < 0.05f, "looper starts at the loop start, got %.3f", lv.front());
+  // (one block in: the CV types glide from block to block since 1.3.2)
+  CHECK(lv[8] < 0.05f, "looper starts at the loop start, got %.3f", lv[8]);
 
   // crush: output stays within +/- 10 V for a hot input
   Rig c;
@@ -1036,6 +1037,7 @@ static void TestWeather() {
   Rig r;
   for (int i = 0; i < 5; ++i) { r.Set(i, TYPE_RANDOM, RANDOM_WEATHER); r.Slider(i, 1.0f); }
   int rain = 0;
+  float last_rain = 0.0f;
   float lo = 1, hi = 0, wlo = 1, whi = 0;
   bool bounded = true;
   for (int b = 0; b < 20 * 3906; ++b) {
@@ -1045,7 +1047,12 @@ static void TestWeather() {
       lo = fminf(lo, r.out[0][n]); hi = fmaxf(hi, r.out[0][n]);
       wlo = fminf(wlo, r.out[1][n]); whi = fmaxf(whi, r.out[1][n]);
     }
-    if (r.out[2][0] == 0.0f && r.out[2][7] > 0.0f) ++rain;
+    // a drop starts where the rain output leaves zero (since 1.3.2 the CV
+    // types step once a block, so on a block's first sample)
+    for (int n = 0; n < 8; ++n) {
+      if (last_rain == 0.0f && r.out[2][n] > 0.0f) ++rain;
+      last_rain = r.out[2][n];
+    }
   }
   CHECK(bounded, "weather stays in 0-8 V");
   CHECK(hi - lo > 0.2f, "the sky moves (%.2f - %.2f)", lo, hi);

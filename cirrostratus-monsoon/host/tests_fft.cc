@@ -20,7 +20,7 @@ struct SpectralCase {
 
 static const SpectralCase kSpectral[] = {
   { MODE_SPECTRAL, 0, "spectral", 2048 },
-  { MODE_SPECTRAL, 1, "smear", 512 },
+  { MODE_SPECTRAL, 1, "smear", 2048 },
   { MODE_CROSS, 0, "cross", 2048 },
   { MODE_STRETCH, 0, "stretch", 2048 },
   { MODE_STRETCH, 1, "stretch mono", 2048 },

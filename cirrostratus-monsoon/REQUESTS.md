@@ -71,3 +71,8 @@ What was asked for, in order (2026-11-23 → 24).
 > and the vdideo manuals, and if you havent made a video manual for both do so.
 
 The repository now holds both firmwares: this one in cirrostratus-monsoon/, Cirrostratus Stages (formerly fletchfoorth) in cirrostratus-stages/. Manual: where the files are, 231 tests. Video manual 1.5.2: a "new in 1.5.2" chapter (SPRING, SMEAR, the 1.5.1 click fix), 30 modes, the menu 1-15 (the video stays off GitHub).
+
+> the smear on monsoon still does not sound that smooth
+> push latest monsoon firmware
+
+1.5.3. SMEAR's transform went from 512 to 2048 points (bins 23 Hz apart instead of 94), 4x overlap as before, and TEXTURE (unused in SMEAR until now) is diffusion: left, the phase-locked partials (1.5.2's coherent sound); right, every bin's phase takes a random walk, fully right a fresh random phase each frame: a diffuse wash, level-compensated (measured: 3.75 dB at noon, 5 dB at the end; level within 0.4 dB across TEXTURE). 8x overlap was tried and measured smoother on a vibrato pad (flutter 0.034 -> 0.019 at 512) but the FFT work per sample doubles: 2048 at 8x needed ~2540 background insns/frame, over what the module has next to the interrupt; 2048 at 4x needs 1306 (1.5.2: 968). Locking only a partial's main lobe was tried and dropped (no gain).

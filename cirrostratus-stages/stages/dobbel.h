@@ -151,6 +151,7 @@ extern const uint8_t kBankBits[kBankTables][kBankLevels];
 extern const float kBankGain[kBankTables];
 
 struct Segment {
+  float cv_out, cv_norm;   // a CV type's last step (1.3.2: once a block)
   uint8_t type;
   uint8_t flavour;
   bool started;

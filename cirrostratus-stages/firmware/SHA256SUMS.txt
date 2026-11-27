@@ -1,2 +1,2 @@
-ee219d9aff744a3dade1a45b483f4c498840ed3a46115242284a100b32462711  cirrostratus-stages-v1.3.1.wav
-ae971607cf56995df8ca9bd977c2c01752e239227dd46156738afe1643bd8b20  cirrostratus-stages-v1.3.1-flipped.wav
+f7c1bf5098748121f9c14a106f8bf8277f1209bc3fca6d646644a74e9e106d8f  cirrostratus-stages-v1.3.2.wav
+6519cc7fb3b59b1d49079d11d8d43bae56b91e95bfb9cfe9531e6c63c97ba765  cirrostratus-stages-v1.3.2-flipped.wav

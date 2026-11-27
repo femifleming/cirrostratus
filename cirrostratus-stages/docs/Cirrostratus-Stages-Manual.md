@@ -2,7 +2,7 @@
 
 ### *every segment its own instrument, for Stages*
 
-**Version 1.3.1**
+**Version 1.3.2**
 
 <img class="panel" src="img/overview.png" width="260" align="right" alt="Stages panel: overview">
 
@@ -28,6 +28,15 @@ flavour, settings and extra options for each type.
 Segments can also take each other's outputs through **cords**, the same
 kinds as in Sleepcousonique (section 10), and the whole panel can **dream**
 when you leave it alone (section 11).
+
+**New in 1.3.2:** less work for the chip, so the overload light should stay
+dark with more kinds of patches. Random, Chaos, Envelope and Processor now
+work out their value once per block of 8 samples (3,900 times a second,
+as often as Stages reads its CV and knobs) and glide smoothly from block to
+block; notes, gates and triggers still jump cleanly. Their timing is
+unchanged (every rate, time and trigger length is the same), and a set of
+six of them costs about a quarter less; the default set about a fifth less.
+Oscillators and Effects still work on every sample.
 
 **New in 1.3.1:** a new name: this was **fletchfoorth**, and it is now
 **Cirrostratus Stages**, in one place with Cirrostratus for the Monsoon
@@ -79,7 +88,7 @@ lives in Cirrostratus, next to the Monsoon firmware.)
 
 **You need:** a computer or phone with a headphone jack (a wired USB headphone
 adapter works, Bluetooth doesn't), a 3.5 mm patch cable, and
-`cirrostratus-stages-v1.3.1.wav` (or `cirrostratus-stages-v1.3.1-flipped.wav` for a module mounted
+`cirrostratus-stages-v1.3.2.wav` (or `cirrostratus-stages-v1.3.2-flipped.wav` for a module mounted
 upside down).
 
 <img class="panel" src="img/install.png" width="260" align="right" alt="Stages panel: install">
@@ -514,8 +523,8 @@ go: your gesture loops.
 | | |
 |---|---|
 | Output | −8 to +8 V at most; randoms 0 to 8 V or ±5 V; oscillators and effects ±5 V; chaos and stair gates 8 V (times the amplitude); transient, compare and quantise triggers 5 V (compare up to 8 V) |
-| Processing | 31,250 samples a second per segment (Effects process their left neighbour at that rate); CV and knobs read 3,906 times a second; cords once per block (3,906 a second) |
-| CPU | measured on an emulated Cortex-M4: 651 instructions per sample for the default set, 1,156 for the heaviest (six Fold or six Morph oscillators), 1,108 for six effects (six choruses); no single block above 1,220, with the controls jittering as the module's inputs do; the chip has 2,304 cycles per sample, and running from flash it needs more than one cycle per instruction |
+| Processing | Oscillators and Effects: 31,250 samples a second (Effects process their left neighbour at that rate); Random, Chaos, Envelope and Processor: once per block of 8 (3,906 a second), gliding between blocks (notes, gates and triggers jump); CV and knobs read 3,906 times a second; cords once per block (3,906 a second) |
+| CPU | measured on an emulated Cortex-M4: 532 instructions per sample for the default set (651 in 1.3.1), about 400–520 for six CV segments, 1,179 for the heaviest (six Fold or six Morph oscillators), 1,118 for six effects (six choruses); no single block above 1,241, with the controls jittering as the module's inputs do; the chip has 2,304 cycles per sample, and running from flash it needs more than one cycle per instruction |
 | Overload light | if the processing ever misses its deadline (the DAC would play a stale block: a gritty, chopped sound), all six **button lights flicker red** for half a second. (Not for the moment after a settings save: every change is saved to flash when you let go of the button, and the chip can't run anything while it writes flash, so a block or two goes missing there, as on stock Stages.) If you see it, the set of segments is too heavy for the chip: please report which types and flavours were running, and what the load meter shows |
 | Load meter | hold buttons 5 and 6 together for 1 s: the slider lights show the share of the chip's time the engine uses (interrupts that land in it included), measured with the chip's own cycle counter over the last 65 ms. Each light is a sixth; the last lit one glows dimmer for a part. All six full = out of time |
 | Buffering | the engine runs up to three blocks of 8 samples ahead of the outputs (0.8 ms), so one slow block doesn't miss its deadline (Stages had one block) |

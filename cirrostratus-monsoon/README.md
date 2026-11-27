@@ -4,7 +4,9 @@
 (Jak Plugg's 12HP Mutable Instruments Clouds variant): 30 modes in two
 banks, a 48 kHz floating-point engine, and a clean output section.
 
-**Version 1.5.2.** Mode 1 is back as **SPRING**, a dispersive spring reverb tank (falling chirps, dwell, TRIG kicks the tank), and SPECTRAL's SMEAR is phase-locked: smooth at long blurs, no more flutter or dropouts.
+**Version 1.5.3.** SMEAR is smoother: a 2048-point transform (four times finer, chords stay clear) and TEXTURE for its character, from clear steady tones to a soft diffuse wash at the same level.
+
+**1.5.2:** mode 1 is back as **SPRING**, a dispersive spring reverb tank (falling chirps, dwell, TRIG kicks the tank), and SPECTRAL's SMEAR is phase-locked: smooth at long blurs, no more flutter or dropouts.
 
 **1.5.1:** fixes glitchy pulses on top of the audio: a block that ran a little long used to skip the mode for the next block (a click); now only a real overrun does, and it ramps down and back in.
 

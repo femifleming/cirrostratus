@@ -59,7 +59,8 @@ bool SmearEngine::Init(Arena* arena, size_t size) {
   ui_ = arena->Allocate<float>(kBins);
   prev_ = arena->Allocate<float>(kBins);
   acc_ = arena->Allocate<float>(kBins);
-  if (!in_ || !out_ || !mag_ || !ur_ || !ui_ || !prev_ || !acc_) return false;
+  jit_ = arena->Allocate<float>(kBins);
+  if (!in_ || !out_ || !mag_ || !ur_ || !ui_ || !prev_ || !acc_ || !jit_) return false;
   memset(in_, 0, kRing * sizeof(float));
   memset(out_, 0, kRing * sizeof(float));
   memset(mag_, 0, kBins * sizeof(float));
@@ -67,6 +68,7 @@ bool SmearEngine::Init(Arena* arena, size_t size) {
   memset(ui_, 0, kBins * sizeof(float));
   memset(prev_, 0, kBins * sizeof(float));
   memset(acc_, 0, kBins * sizeof(float));
+  memset(jit_, 0, kBins * sizeof(float));
   win_ = arena->Allocate<float>(kSize);
   temp_ = arena->Allocate<float>(kSize);
   spec_ = arena->Allocate<float>(kSize);
@@ -80,6 +82,8 @@ bool SmearEngine::Init(Arena* arena, size_t size) {
   hops_ready_ = 0;
   hops_done_ = 0;
   blur_ = 0.0f;
+  diffuse_ = 0.0f;
+  rng_ = 0x5d5d5d5du;
   hold_ = false;
   return true;
 }
@@ -88,6 +92,7 @@ bool SmearEngine::Init(Arena* arena, size_t size) {
 void SmearEngine::Process(const Controls& c, const FloatFrame* in,
                           FloatFrame* out, size_t n) {
   blur_ = Clamp(c.density, 0.0f, 1.0f);
+  diffuse_ = Clamp(c.texture, 0.0f, 1.0f);
   hold_ = c.freeze;
   float* o = out_;
   for (size_t i = 0; i < n; ++i) {
@@ -118,6 +123,12 @@ void SmearEngine::Bins(float* x) {
   }
   if (hold_) c = 0.0f;                         // FREEZE: the blur stops
   const float q = 0.3f * blur;
+  // TEXTURE: diffusion, squared so the left half stays nearly coherent
+  const float diffuse = diffuse_ * diffuse_;
+  // random phases add as power, not amplitude: up to +5 dB keeps the level
+  // (measured: 3.75 dB at noon, 5 dB fully right)
+  const float t1 = 1.0f - diffuse_;
+  const float comp = expf(0.5756f * (1.0f - t1 * t1));
   const bool thru = c >= 0.999f;
   for (size_t k = 1; k < kBins; ++k) {
     const float re = x[2 * k], im = x[2 * k + 1];
@@ -171,8 +182,20 @@ void SmearEngine::Bins(float* x) {
       // a Hann lobe: neighbouring bins of one partial are half a turn apart
       const bool odd = (k ^ p) & 1;
       const float g = odd ? -mo[k] : mo[k];
-      x[2 * k] = g * cp;
-      x[2 * k + 1] = g * sp;
+      if (diffuse > 0.0f) {
+        // TEXTURE: every bin's phase takes a random step each frame (a
+        // random walk; at full diffusion a fresh random phase every frame:
+        // the steady tones become a wash)
+        rng_ = rng_ * 1664525u + 1013904223u;
+        jit_[k] += diffuse * static_cast<float>(static_cast<int32_t>(rng_)) * 2.32830644e-10f;
+        jit_[k] -= SqFloor(jit_[k]);
+        const float b2 = (odd ? a_odd : a) + jit_[k];
+        x[2 * k] = mo[k] * comp * SqSin2Pi(b2 + 0.25f);
+        x[2 * k + 1] = mo[k] * comp * SqSin2Pi(b2);
+      } else {
+        x[2 * k] = g * cp;
+        x[2 * k + 1] = g * sp;
+      }
       acc[k] = odd ? a_odd : a;
     }
     from = to + 1;
