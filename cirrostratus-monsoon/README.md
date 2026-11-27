@@ -65,6 +65,13 @@ Download `cirrostratus.wav` from the latest release, hold **FREEZE** while
 powering on, and play the file into **IN L**. Details, and SWD flashing, are
 in the manual, section 1.
 
+**Typhoon** (Calsynth's bigger sibling of the Monsoon): the same firmware with
+the Typhoon's panel, in `typhoon/`. Download `cirrostratus-typhoon.wav` from the
+`typhoon-v…` release, hold **FREEZE** while powering on, and play it into
+**IN L**. Manual: [`docs/Cirrostratus-Typhoon-Manual.pdf`](docs/Cirrostratus-Typhoon-Manual.pdf);
+port notes, control map and what is still unverified on hardware:
+[`docs/TYPHOON.md`](docs/TYPHOON.md). Not yet run on a real Typhoon.
+
 ## Build and test
 
 Needs `arm-none-eabi-gcc` (8.x works), Python 3 with numpy, and clang for
@@ -74,6 +81,8 @@ the host tests.
 make -f monsoon/makefile              # firmware -> build/cirrostratus/cirrostratus.bin
 make -f monsoon/makefile wav          # audio update file
 make -f monsoon/makefile flash        # SWD (ST-Link + OpenOCD)
+make -f typhoon/makefile wav          # the Typhoon build -> build/cirrostratus_typhoon/
+make -f typhoon/bootloader/makefile   # its bootloader (for `make -f typhoon/makefile combo`)
 make -C host test                     # all DSP tests (ASan + UBSan)
 tools/arm_check.sh                    # every DSP file with the firmware's -Werror flags
 tools/bench/run.sh                    # CPU per mode on QEMU's STM32F405 model
@@ -93,8 +102,9 @@ any mode to a WAV for listening.
 | `monsoon/` | firmware: drivers (from the Monsoon port of Clouds), UI, settings, main |
 | `monsoon/dsp/` | portable DSP: engine, output section, STFT, buffers |
 | `monsoon/dsp/modes/` | the 30 modes |
+| `typhoon/` | the Typhoon build: its drivers (after SuperParasites), UI, settings, main, bootloader; shares `monsoon/dsp` |
 | `host/` | test harness, renderer, bootloader simulator |
-| `tools/` | QPSK encoder, table/IR generators, CPU bench, manual builder |
+| `tools/` | QPSK encoder, table/IR generators, CPU bench, manual builder (`--module typhoon` for the Typhoon manual) |
 | `docs/` | design spec and manual |
 | `stmlib/`, `stm_audio_bootloader/` | Mutable Instruments libraries (MIT) |
 

@@ -4,6 +4,13 @@
   python3 tools/video/build_video.py --music ~/Desktop/Njari/Bliss.wav \
       --out ~/Desktop/Cirrostratus-Video-Manual.mp4 [--only 0-3] [--work DIR]
 
+Typhoon edition (typhoon_video.py: its panel, LEDs and general chapters;
+the mode chapters in the Typhoon's control names; a YouTube chapters .txt
+next to the video):
+
+  python3 tools/video/build_video.py --module typhoon --music ~/Desktop/Njari/Bliss.wav
+      (-> ~/Desktop/Cirrostratus-Typhoon-Video-Manual.mp4)
+
 Every chapter is one flat deep-blue field: a mono code above a lowercase
 title, the text and faltung sliders on the left; a faltung drawing of the
 Monsoon panel in the middle (every control where it sits on the real panel);
@@ -19,7 +26,7 @@ quieter than the 1.1 videos).
 Content comes from the manual (docs/MANUAL.md, docs/modes_*.md), so the
 video always matches it. Needs Pillow, numpy, ffmpeg.
 """
-import argparse, hashlib, json, math, os, re, subprocess, tempfile
+import argparse, hashlib, json, math, os, re, subprocess, sys, tempfile
 from multiprocessing import Pool
 
 import numpy as np
@@ -31,6 +38,8 @@ VENV_PY = os.path.join(HERE, ".venv", "bin", "python")
 FONTS = os.path.expanduser("~/faltung-kit/assets/fonts")
 W, H, FPS = 1920, 1080, 30
 SR = 48000
+DEFAULT_OUT = "~/Desktop/Cirrostratus-Video-Manual.mp4"
+CHAPTER_TITLE = None  # chapter -> YouTube chapter title; set = write a chapters .txt
 
 # ---------------------------------------------------------------------------
 # Palette: deep-blue grounds (faltung deep, computed the faltung way: same
@@ -125,11 +134,14 @@ def speakable(s):
     return s.strip()
 
 
-def parse_modes():
-    """Mode chapters from docs/modes_*.md."""
+def parse_modes(text_filter=None):
+    """Mode chapters from docs/modes_*.md (text_filter: rewrites each file's
+    text first, e.g. the Typhoon's control names)."""
     modes = []
     for path in sorted(p for p in os.listdir(os.path.join(ROOT, "docs")) if p.startswith("modes_")):
         text = open(os.path.join(ROOT, "docs", path)).read()
+        if text_filter:
+            text = text_filter(text)
         for block in re.split(r"\n(?=#### )", text):
             m = re.match(r"#### (\d+) · (\S+) — (.+)", block)
             if not m:
@@ -821,6 +833,7 @@ def wrap(text, fnt, width):
 
 
 TEXT_R = 960      # right edge of the text column
+HEADER = "cirrostratus · firmware for monsoon"
 ROW_LX, ROW_SX0, ROW_SX1, ROW_TX = 96, 352, 462, 492
 
 
@@ -830,7 +843,7 @@ def static_layer(c, chapters):
     dim = mix(INK, c["ground"], 0.38)
     rule = mix(INK, c["ground"], 0.75)
     d.text((96, 64), c["code"], font=F_CODE, fill=c["accent"])
-    d.text((96 + F_CODE.getlength(c["code"]) + 22, 66), "cirrostratus · firmware for monsoon",
+    d.text((96 + F_CODE.getlength(c["code"]) + 22, 66), HEADER,
            font=F_MONO_S, fill=dim)
     ft = title_font(c["title"], TEXT_R - 96)
     d.text((90, 100), c["title"], font=ft, fill=INK)
@@ -926,6 +939,39 @@ def draw_connector(d, c, active, t):
     d.ellipse([TEXT_R + 6, y - 6, TEXT_R + 18, y + 6], fill=acc)
 
 
+def chapter_leds(c, t, active):
+    """The panel LEDs (and the FREEZE LED) at time t of chapter c."""
+    frz = False
+    if c["kind"] == "mode":
+        n = c["num"]
+        leds = binary_leds((n - 1) % 15 + 1, n <= 15)
+    elif c["kind"] == "sunrise":
+        leds, frz = splash_leds((t * 1000) % 4200)
+    elif c["kind"] == "menu":
+        n = int(t / 1.2) % 30 + 1  # 1..30
+        leds = binary_leds((n - 1) % 15 + 1, n <= 15)
+    elif c["kind"] == "buffer":
+        r = c["rows"][active] if active is not None else c["rows"][0]
+        leds = r.get("leds", bq_leds(0))
+        fft = c["code"].startswith("ff")
+        if leds == "cycle":
+            leds = fft_leds(1 + int(t / 0.9) % 4) if fft else bq_leds(int(t / 0.9) % 6)
+        elif leds == "sweep":
+            # green sweep from LED 4 to LED 1, then the own-size bar
+            k = int(t / 0.15) % 6
+            leds = [((0, 1) if 3 - i == k else (0, 0)) for i in range(4)] if k < 4 else fft_leds(0)
+    elif c["kind"] == "env":
+        leds = [(0, 1), (0, 0), (0, 0.4), (1, 0)]
+    elif c["kind"] == "steps":
+        ph = int(t * 2) % 4
+        leds = [(0, 1)] * 4 if ph == 3 else [(0, 0)] * 4
+        frz = int(t * 4) % 2 == 0
+    else:
+        k = int(t * 3) % 4
+        leds = [((0, 0.8) if i == k else (0, 0)) for i in range(4)]
+    return leds, frz
+
+
 def render_chapter(args):
     c, chapters, dur, timeline, path = args
     if os.path.exists(path) and os.path.getsize(path) > 0 and os.path.exists(path + ".done"):
@@ -952,35 +998,7 @@ def render_chapter(args):
             active = int(t / max(dur, 0.1) * nrows) % nrows
         draw_rows(d, c, t, active)
         hl = c["rows"][active]["hl"] if active is not None else []
-        # LEDs on the panel
-        frz = False
-        if c["kind"] == "mode":
-            n = c["num"]
-            leds = binary_leds((n - 1) % 15 + 1, n <= 15)
-        elif c["kind"] == "sunrise":
-            leds, frz = splash_leds((t * 1000) % 4200)
-        elif c["kind"] == "menu":
-            n = int(t / 1.2) % 30 + 1  # 1..30
-            leds = binary_leds((n - 1) % 15 + 1, n <= 15)
-        elif c["kind"] == "buffer":
-            r = c["rows"][active] if active is not None else c["rows"][0]
-            leds = r.get("leds", bq_leds(0))
-            fft = c["code"].startswith("ff")
-            if leds == "cycle":
-                leds = fft_leds(1 + int(t / 0.9) % 4) if fft else bq_leds(int(t / 0.9) % 6)
-            elif leds == "sweep":
-                # green sweep from LED 4 to LED 1, then the own-size bar
-                k = int(t / 0.15) % 6
-                leds = [((0, 1) if 3 - i == k else (0, 0)) for i in range(4)] if k < 4 else fft_leds(0)
-        elif c["kind"] == "env":
-            leds = [(0, 1), (0, 0), (0, 0.4), (1, 0)]
-        elif c["kind"] == "steps":
-            ph = int(t * 2) % 4
-            leds = [(0, 1)] * 4 if ph == 3 else [(0, 0)] * 4
-            frz = int(t * 4) % 2 == 0
-        else:
-            k = int(t * 3) % 4
-            leds = [((0, 0.8) if i == k else (0, 0)) for i in range(4)]
+        leds, frz = chapter_leds(c, t, active)
         panel_dynamic(d, c, t, hl, leds, frz)
         if active is not None:
             draw_connector(d, c, active, t)
@@ -1028,7 +1046,9 @@ def load_music(path, seconds):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--music", required=True)
-    ap.add_argument("--out", default=os.path.expanduser("~/Desktop/Cirrostratus-Video-Manual.mp4"))
+    ap.add_argument("--module", choices=["monsoon", "typhoon"], default="monsoon",
+                    help="which panel: the Monsoon (default) or the Typhoon (typhoon_video.py)")
+    ap.add_argument("--out", default=None)
     ap.add_argument("--only", help="chapter range a-b (for previews)")
     ap.add_argument("--work", default=None)
     ap.add_argument("--jobs", type=int, default=max(1, os.cpu_count() - 2))
@@ -1038,6 +1058,8 @@ def main():
     ap.add_argument("--music-level", type=float, default=0.75,
                     help="music bed level (1.0 = the 1.1 videos; 0.75 is about 2.5 dB quieter)")
     a = ap.parse_args()
+    use_module(a.module)
+    a.out = a.out or os.path.expanduser(DEFAULT_OUT)
 
     chapters = short_chapters() if a.short else build_chapters()
     sel = chapters
@@ -1134,6 +1156,14 @@ def main():
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", video, "-f", "f32le", "-ar", str(SR), "-ac", "2",
                     "-i", audio, "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-shortest",
                     "-movflags", "+faststart", os.path.expanduser(a.out)], check=True)
+    if CHAPTER_TITLE:
+        chap = os.path.splitext(os.path.expanduser(a.out))[0] + "-YouTube-Chapters.txt"
+        with open(chap, "w") as f:
+            start = 0.0
+            for c, d in zip(sel, durs):
+                f.write("%d:%02d %s\n" % (int(start) // 60, int(start) % 60, CHAPTER_TITLE(c)))
+                start += d
+        print(chap)
     print(a.out)
 
 
@@ -1164,6 +1194,26 @@ def render_still(c, chapters, dur, timeline, t, png):
     Image.frombytes("RGB", (W, H), frames[min(1, len(frames) - 1)]).save(png)
     print(png)
 
+
+MODULE = "monsoon"
+
+
+def use_module(name):
+    """Switch panel, chapters and LEDs to another module (typhoon_video.py
+    patches this module's globals). Render workers are spawned and re-import
+    this file, so the choice travels in CIRRO_MODULE."""
+    global MODULE
+    if name == MODULE:
+        return
+    os.environ["CIRRO_MODULE"] = name
+    sys.path.insert(0, HERE)
+    import typhoon_video
+    typhoon_video.install(sys.modules[__name__])
+    MODULE = name
+
+
+if os.environ.get("CIRRO_MODULE", "monsoon") != "monsoon":
+    use_module(os.environ["CIRRO_MODULE"])
 
 if __name__ == "__main__":
     main()

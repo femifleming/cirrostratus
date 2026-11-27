@@ -8,19 +8,34 @@ that name (manual_figs.GENERAL). Every mode's control table (and the panel
 table in section 2) gets its own figure, and each row that touches the panel
 gets a circled number that matches a badge on the drawing.
 
-Needs `markdown`, Pillow, numpy, the faltung-kit fonts and Chrome."""
-import glob, os, re, subprocess, tempfile, markdown
+Typhoon edition: `make_manual.py --module typhoon` builds
+docs/Cirrostratus-Typhoon-Manual.md and .pdf the same way from
+docs/TYPHOON_MANUAL.md, with the mode chapters in the Typhoon's control
+names (typhoon_text.py) and Typhoon panel figures (manual_figs_typhoon.py)
+in docs/img/typhoon/.
 
-import manual_figs as figs
+Needs `markdown`, Pillow, numpy, the faltung-kit fonts and Chrome."""
+import argparse, glob, importlib, os, re, subprocess, tempfile, markdown
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCS = os.path.join(ROOT, "docs")
 IMG = os.path.join(DOCS, "img")
 FONTS = os.path.expanduser("~/faltung-kit/assets/fonts")
 
+# What differs between the two editions.
+MODULES = {
+    "monsoon": dict(src="MANUAL.md", out="Cirrostratus-Manual", img="img", figs="manual_figs",
+                    panel="Monsoon panel", html="manual.html", modes=None, title="Cirrostratus"),
+    "typhoon": dict(src="TYPHOON_MANUAL.md", out="Cirrostratus-Typhoon-Manual", img="img/typhoon",
+                    figs="manual_figs_typhoon", panel="Typhoon panel", html="manual_typhoon.html",
+                    modes="typhoon_text", title="Cirrostratus for Typhoon"),
+}
+M = MODULES["monsoon"]
+figs = None
+
 
 def img_tag(name, alt):
-    return '<img class="panel" src="img/%s.png" width="300" align="right" alt="%s">' % (name, alt)
+    return '<img class="panel" src="%s/%s.png" width="300" align="right" alt="%s">' % (M["img"], name, alt)
 
 
 def figure_table(lines, name, alt, leds, gi):
@@ -38,7 +53,7 @@ def figure_table(lines, name, alt, leds, gi):
 
 def add_figures(text):
     lines = text.split("\n")
-    out, i, mode = [], 0, None
+    out, i, mode, used = [], 0, None, set()
     while i < len(lines):
         ln = lines[i]
         m = re.match(r"#### (\d+) · (\S+)", ln)
@@ -50,7 +65,7 @@ def add_figures(text):
         if pm:
             name = pm.group(1)
             figs.render(os.path.join(IMG, name + ".png"), **figs.GENERAL[name])
-            out += [img_tag(name, "Monsoon panel: " + name), ""]
+            out += [img_tag(name, M["panel"] + ": " + name), ""]
             i += 1
             continue
         if ln.startswith("| Control") or ln.startswith("| On the panel"):
@@ -59,10 +74,19 @@ def add_figures(text):
                 j += 1
             if mode:
                 num, nm = mode
-                out += figure_table(lines[i:j], "mode%02d" % num, "Monsoon panel: mode %d %s" % (num, nm),
+                name = "mode%02d" % num
+                # A mode's second table (SPECTRAL's SMEAR) gets its own
+                # figure. The Monsoon edition keeps its old output, where
+                # it shares (and overwrites) the first one's.
+                if M is not MODULES["monsoon"]:
+                    while name in used:
+                        name += "b"
+                    used.add(name)
+                out += figure_table(lines[i:j], name, M["panel"] + ": mode %d %s" % (num, nm),
                                     figs.mode_leds(num), num)
             else:
-                out += figure_table(lines[i:j], "panel", "Monsoon panel", [figs.GREEN] * 4, 0)
+                out += figure_table(lines[i:j], "panel", M["panel"],
+                                    getattr(figs, "PANEL_LEDS", None) or [figs.GREEN] * 4, 0)
             i = j
             continue
         out.append(ln)
@@ -109,17 +133,23 @@ CSS = """
 """
 
 
-def build():
+def build(module="monsoon"):
+    global M, IMG, figs
+    M = MODULES[module]
+    IMG = os.path.join(DOCS, M["img"])
+    figs = importlib.import_module(M["figs"])
     os.makedirs(IMG, exist_ok=True)
     for old in glob.glob(os.path.join(IMG, "*.png")):
         os.remove(old)
-    text = open(os.path.join(DOCS, "MANUAL.md")).read()
+    text = open(os.path.join(DOCS, M["src"])).read()
     # modes_1_14 before modes_15_30: sort by the first number, not as text.
     files = sorted(glob.glob(os.path.join(DOCS, "modes_*.md")),
                    key=lambda f: int(re.search(r"modes_(\d+)", f).group(1)))
     modes = "".join(open(f).read() + "\n" for f in files)
+    if M["modes"]:
+        modes = importlib.import_module(M["modes"]).typhoonize(modes)
     text = add_figures(text.replace("<!-- MODES -->", modes))
-    md_out = os.path.join(DOCS, "Cirrostratus-Manual.md")
+    md_out = os.path.join(DOCS, M["out"] + ".md")
     open(md_out, "w").write(text)
     body = markdown.markdown(text, extensions=["tables", "fenced_code"])
     # "5. Modes" follows section 4 on its page; each bank opens a page.
@@ -131,11 +161,11 @@ def build():
     parts = re.split(r"(?=<h[234][ >])", body)
     body = parts[0] + "".join('<section class="%s">%s</section>' % ("mode" if p.startswith("<h4") else "", p)
                               for p in parts[1:])
-    html = ('<!doctype html><html><head><meta charset="utf-8"><title>Cirrostratus</title><style>'
+    html = ('<!doctype html><html><head><meta charset="utf-8"><title>' + M["title"] + '</title><style>'
             + CSS % dict(f=FONTS) + "</style></head><body>" + body + "</body></html>")
-    html_path = os.path.join(DOCS, "manual.html")
+    html_path = os.path.join(DOCS, M["html"])
     open(html_path, "w").write(html)
-    pdf = os.path.join(DOCS, "Cirrostratus-Manual.pdf")
+    pdf = os.path.join(DOCS, M["out"] + ".pdf")
     if os.path.exists(pdf):
         os.remove(pdf)
     chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
@@ -154,4 +184,7 @@ def build():
 
 
 if __name__ == "__main__":
-    build()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--module", choices=sorted(MODULES), default="monsoon",
+                    help="which edition: the Monsoon's (default) or the Typhoon's")
+    build(ap.parse_args().module)
