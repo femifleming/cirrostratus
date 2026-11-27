@@ -39,7 +39,39 @@ FONTS = os.path.expanduser("~/faltung-kit/assets/fonts")
 W, H, FPS = 1920, 1080, 30
 SR = 48000
 DEFAULT_OUT = "~/Desktop/Cirrostratus-Video-Manual.mp4"
-CHAPTER_TITLE = None  # chapter -> YouTube chapter title; set = write a chapters .txt
+def default_chapter_title(c):
+    """YouTube chapter titles: 'Intro – ...', 'Mode n – NAME · forecast', 'Title – sub'."""
+    if c.get("kind") == "intro":
+        return "Intro – Cirrostratus, " + c["sub"]
+    if c.get("kind") == "mode":
+        return "Mode %d – %s · %s" % (c["num"], c["title"].upper(), c["sub"])
+    title = c["title"][0].upper() + c["title"][1:]
+    return "%s – %s" % (title.replace("Fft", "FFT"), c["sub"]) if c.get("sub") else title
+
+
+CHAPTER_TITLE = default_chapter_title  # chapter -> YouTube chapter title (every video gets a chapters .txt)
+
+
+def write_chapters(path, sel, durs):
+    """YouTube chapters: the first at 0:00, each at least 10 s (a shorter one joins the one before it)."""
+    rows, start = [], 0.0
+    for c, d in zip(sel, durs):
+        if rows and start - rows[-1][0] < 10:
+            rows[-1] = (rows[-1][0], rows[-1][1] + " / " + CHAPTER_TITLE(c).split(" – ")[0])
+        else:
+            rows.append((start, CHAPTER_TITLE(c)))
+        start += d
+    if rows and start - rows[-1][0] < 10 and len(rows) > 1:
+        last = rows.pop()
+        rows[-1] = (rows[-1][0], rows[-1][1] + " / " + last[1].split(" – ")[0])
+    with open(path, "w") as f:
+        for t, title in rows:
+            t = int(t)
+            f.write(("%d:%02d:%02d %s\n" % (t // 3600, (t // 60) % 60, t % 60, title)) if start >= 3600
+                    else ("%d:%02d %s\n" % (t // 60, t % 60, title)))
+    if len(rows) < 3:
+        print("note: fewer than 3 chapters, YouTube won't show them")
+    return path
 
 # ---------------------------------------------------------------------------
 # Palette: deep-blue grounds (faltung deep, computed the faltung way: same
@@ -1055,6 +1087,8 @@ def main():
     ap.add_argument("--still", help="write one frame per chapter as PNG at this time (s) and stop")
     ap.add_argument("--print", action="store_true", help="print the spoken text and stop")
     ap.add_argument("--short", action="store_true", help="the 90-second poem instead of the full manual")
+    ap.add_argument("--chapters-only", action="store_true",
+                    help="work out the timeline (narration) and write the YouTube chapters .txt, without rendering")
     ap.add_argument("--music-level", type=float, default=0.75,
                     help="music bed level (1.0 = the 1.1 videos; 0.75 is about 2.5 dB quieter)")
     a = ap.parse_args()
@@ -1098,6 +1132,10 @@ def main():
         pos += d
     total = pos
     print("total %.1f s" % total)
+    chapters_txt = os.path.splitext(os.path.expanduser(a.out))[0] + "-YouTube-Chapters.txt"
+    if a.chapters_only:
+        print(write_chapters(chapters_txt, sel, durs))
+        return
 
     if a.still:
         ts = float(a.still)
@@ -1156,14 +1194,7 @@ def main():
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", video, "-f", "f32le", "-ar", str(SR), "-ac", "2",
                     "-i", audio, "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-shortest",
                     "-movflags", "+faststart", os.path.expanduser(a.out)], check=True)
-    if CHAPTER_TITLE:
-        chap = os.path.splitext(os.path.expanduser(a.out))[0] + "-YouTube-Chapters.txt"
-        with open(chap, "w") as f:
-            start = 0.0
-            for c, d in zip(sel, durs):
-                f.write("%d:%02d %s\n" % (int(start) // 60, int(start) % 60, CHAPTER_TITLE(c)))
-                start += d
-        print(chap)
+    print(write_chapters(chapters_txt, sel, durs))
     print(a.out)
 
 
