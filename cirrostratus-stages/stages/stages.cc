@@ -438,12 +438,9 @@ dobbel::Engine* dobbel_engine = NULL;
 bool dobbel_active = false;
 dobbel::Input dobbel_input[kNumChannels];
 float dobbel_out[kNumChannels][kBlockSize];
-
-// Missed blocks seen so far, and blocks to ignore after entering the mode
-// (its set-up may miss one; that isn't the engine running out of time).
-uint32_t dobbel_underruns = 0;
-uint32_t dobbel_grace = 0;
-uint32_t dobbel_saves = 0;
+// The engine's oscillators and effects always render a full block.
+static_assert(kBlockSize == dobbel::kMaxBlockSize,
+    "Cirrostratus Stages expects 8-sample blocks");
 
 // Load meter: the chip's own cycle counter around every render (interrupts
 // that land in it included), over 256 blocks; 18432 cycles per block of 8
@@ -458,7 +455,6 @@ void EnterDobbel() {
   dobbel::Memory* memory = reinterpret_cast<dobbel::Memory*>(base + kDobbelEngineBytes);
   dobbel_engine->Init(memory);
   dobbel_active = true;
-  dobbel_grace = 2000;  // half a second
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
   DWT->CYCCNT = 0;
   DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
@@ -479,18 +475,6 @@ void LeaveDobbel() {
 
 void ProcessDobbel(IOBuffer::Block* block, size_t size) {
   const uint32_t start = DWT->CYCCNT;
-  // A settings save (every change, when the button is let go) stalls the
-  // chip while it writes flash: that miss isn't the engine running out of
-  // time, so the overload light ignores the next quarter second.
-  if (settings.saves() != dobbel_saves) {
-    dobbel_saves = settings.saves();
-    dobbel_grace = 1000;
-  }
-  if (io_buffer.underruns() != dobbel_underruns) {
-    dobbel_underruns = io_buffer.underruns();
-    if (!dobbel_grace) ui.set_dobbel_overrun();
-  }
-  if (dobbel_grace) --dobbel_grace;
   for (size_t ch = 0; ch < kNumChannels; ++ch) {
     dobbel::Input& in = dobbel_input[ch];
     in.slider = block->slider[ch];

@@ -19,11 +19,11 @@ It is built on [BRIBESTAGES](https://github.com/thisisbribery/bribestages) (qiem
 
 **Manual:** [`docs/Cirrostratus-Stages-Manual.pdf`](docs/Cirrostratus-Stages-Manual.pdf), with a drawing of the panel for every section (also readable as [`docs/Cirrostratus-Stages-Manual.md`](docs/Cirrostratus-Stages-Manual.md)).
 
-> Tested on the host (713 checks on the real engine code) and on an emulated Cortex-M4 for CPU, and the update file is checked to decode to exactly the firmware. **Not yet run on a real Stages.**
+> Tested on the host (713 checks on the real engine code) and on an emulated Cortex-M4 (CPU, and the same samples as the host), and the update file is checked to decode to exactly the firmware. Runs on real Stages modules since 1.2.
 
 ## Download
 
-[`firmware/cirrostratus-stages-v1.3.2.wav`](firmware/cirrostratus-stages-v1.3.2.wav) for a module mounted normally, [`firmware/cirrostratus-stages-v1.3.2-flipped.wav`](firmware/cirrostratus-stages-v1.3.2-flipped.wav) upside down (SHA-256 in `firmware/SHA256SUMS.txt`). Also on the [releases page](https://github.com/femifleming/cirrostratus/releases).
+[`firmware/cirrostratus-stages-v1.3.3.wav`](firmware/cirrostratus-stages-v1.3.3.wav) for a module mounted normally, [`firmware/cirrostratus-stages-v1.3.3-flipped.wav`](firmware/cirrostratus-stages-v1.3.3-flipped.wav) upside down (SHA-256 in `firmware/SHA256SUMS.txt`). Also on the [releases page](https://github.com/femifleming/cirrostratus/releases).
 
 ## Install
 
@@ -39,7 +39,7 @@ The module updates from an audio file; the updater can't be damaged by a failed 
 
 All six button lights blinking red: press button 6, raise slider 6, play again from the start. Upside-down module: use the `-flipped` file, mirrored (leftmost segment). Then **hold button 6 for 5 seconds** to enter Cirrostratus Stages.
 
-Your BRIBESTAGES / qiemem settings are kept; Cirrostratus Stages stores its own settings separately, in the last 4 KB of flash. (Coming from 1.0: its settings start fresh once, they grew. 1.1 → 1.3.2 keeps them.)
+Your BRIBESTAGES / qiemem settings are kept; Cirrostratus Stages stores its own settings separately, in the last 4 KB of flash. (Coming from 1.0: its settings start fresh once, they grew. 1.1 → 1.3.3 keeps them.)
 
 ## Build
 
@@ -49,14 +49,14 @@ Needs the Arm GNU toolchain and Python 3.
 touch stages/resources.cc stages/resources.h
 make -f stages/makefile TOOLCHAIN_PATH=<toolchain>/
 make -f stages/makefile TOOLCHAIN_PATH=<toolchain>/ build/stages/stages.bin
-python3 tools/qpsk.py encode build/stages/stages.bin Cirrostratus Stages.wav
-python3 tools/qpsk.py decode Cirrostratus Stages.wav check.bin    # expect bad=0
+python3 tools/qpsk.py encode build/stages/stages.bin cirrostratus-stages.wav
+python3 tools/qpsk.py decode cirrostratus-stages.wav check.bin    # expect bad=0
 ```
 Add `FLIPPED=1` for the upside-down build.
 
 **Tests** (no hardware): `make -f stages/test/dobbel.mk test` runs the engine on the computer with sanitizers (713 checks): pitch and 1 V/oct, envelope times, ratchets, loop, random rates, ranges and clocked chance, orbit, kin, Turing, logistic, Lorenz, coin, dust, cellular, follower, transient, slew, looper, crush, FM, rider, the wave bank and the oscillators' alias levels; the scales to the cent, hold, comparator, filter, VCA, ring, comb pitch, echo time, every cord, the stair, the weather, Gendy rows, dream drift, and a storm of every type, flavour and option with cords on and the controls thrown.
 
-**CPU:** `tools/bench/run.sh` runs the engine on QEMU's Cortex-M4F and prints instructions per sample for six segments of every flavour (worst 1179, default layout 532; Stages has 2304 cycles per sample, and from flash it needs more than one per instruction: if the module ever misses a block, its button lights flicker red; hold buttons 5 and 6 for 1 s and the slider lights show the real load, from the chip's cycle counter). `BENCH_DEFS=-DBENCH_JITTER=0.004f` adds ADC-like noise to every control; each line also shows the worst block.
+**CPU:** `tools/bench/run.sh` runs the engine on QEMU's Cortex-M4F and prints instructions per sample for six segments of every flavour (1.3.3: worst 778, six oscillators 403–764, default layout 420; 1.3.2: 1179 and 532). Stages has 2304 cycles per sample, and from flash it needs more than one per instruction; hold buttons 5 and 6 for 1 s and the slider lights show the real load, from the chip's cycle counter. `BENCH_DEFS="-DBENCH_JITTER=0.004f"` adds ADC-like noise to every control, `-DBENCH_POT=1.0f -DBENCH_SLIDER=0.1f` other knob and slider positions; each line also shows the worst block. `tools/bench/profile.sh <type> <flavour>` profiles one layout instruction by instruction (by source line, by function, and the inlined helpers by caller).
 
 **Wave bank:** `python3 tools/make_bank.py` writes `stages/dobbel_bank.cc` (16 waves, band-limited per octave, 8 to 16 points per harmonic, in flash).
 

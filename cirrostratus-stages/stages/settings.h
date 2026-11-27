@@ -146,9 +146,6 @@ class Settings {
   inline const dobbel::Config& dobbel() const { return dobbel_; }
   inline dobbel::Config* mutable_dobbel() { return &dobbel_; }
   void SaveDobbel();
-  // Flash writes so far. The chip can't run code while it writes flash, so
-  // the audio misses a block or two around every save.
-  uint32_t saves() const { return saves_; }
 
   inline bool in_ouroboros_mode() const {
     return state_.multimode == MULTI_MODE_OUROBOROS
@@ -161,7 +158,6 @@ class Settings {
   }
 
  private:
-  volatile uint32_t saves_ = 0;
   PersistentData persistent_data_;
   State state_;
 

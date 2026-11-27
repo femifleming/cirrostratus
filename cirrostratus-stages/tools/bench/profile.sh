@@ -35,6 +35,30 @@ for i, a in enumerate(addrs):
 print("functions:")
 for k, v in by_fn.most_common(12):
     print("  %5.1f %%  %s" % (100.0 * v / total, k))
+# the function each instruction really ran in (inlined helpers counted in
+# their caller), and the inlined helpers by caller
+import bisect
+syms = []
+for l in subprocess.run(["arm-none-eabi-nm", "-C", "-n", out + "/bench.elf"],
+                        capture_output=True, text=True).stdout.split("\n"):
+    p = l.split(" ", 2)
+    if len(p) == 3 and p[1] in "tTwW":
+        syms.append((int(p[0], 16), re.sub(r"\(.*", "", p[2])))
+syms.sort()
+starts = [a for a, _ in syms]
+owner, helper = collections.Counter(), collections.Counter()
+for i, a in enumerate(addrs):
+    o = syms[bisect.bisect_right(starts, a) - 1][1]
+    owner[o] += pcs[a]
+    fn = re.sub(r"\(.*", "", res[2 * i])
+    if fn != o:
+        helper["%s in %s" % (fn, o)] += pcs[a]
+print("real functions:")
+for k, v in owner.most_common(8):
+    print("  %5.1f %%  %s" % (100.0 * v / total, k))
+print("inlined helpers, by caller:")
+for k, v in helper.most_common(10):
+    print("  %5.1f %%  %s" % (100.0 * v / total, k))
 print("lines:")
 for k, v in by_line.most_common(n):
     print("  %5.1f %%  %s" % (100.0 * v / total, k))

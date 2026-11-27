@@ -2,7 +2,7 @@
 
 ### *every segment its own instrument, for Stages*
 
-**Version 1.3.2**
+**Version 1.3.3**
 
 <!-- FIG overview -->
 
@@ -29,6 +29,16 @@ Segments can also take each other's outputs through **cords**, the same
 kinds as in Sleepcousonique (section 10), and the whole panel can **dream**
 when you leave it alone (section 11).
 
+**New in 1.3.3:** six oscillators at once, without the chip running out of
+time. Oscillators and Effects now need a third less of the chip (six Morph
+oscillators: 1,179 → 734 instructions a sample; six choruses: 1,118 → 771),
+and everything else is lighter too (the default set 532 → 420). The
+oscillators sound the same: their phase is now exact integer arithmetic,
+the voice option's VCA follows its gate once per block of 8 samples, and
+every flavour was checked sample by sample against 1.3.2. The **red overload
+light is gone**: the button lights only ever show the segments now. (The
+load meter on buttons 5 and 6 is still there.) Your settings are kept.
+
 **New in 1.3.2:** less work for the chip, so the overload light should stay
 dark with more kinds of patches. Random, Chaos, Envelope and Processor now
 work out their value once per block of 8 samples (3,900 times a second,
@@ -47,7 +57,7 @@ so a block that runs long borrows time from the others; a block is only
 missed when the chip is out of time on average. And there is a **load meter**:
 hold buttons 5 and 6 together for a second and the slider lights show how
 much of the chip's time the engine uses, read from the chip's own cycle
-counter (section 14). The light no longer flickers when you change a type or a
+counter (section 14). The light (gone since 1.3.3) no longer flickers when you change a type or a
 flavour: that was the settings save, not the engine. Your settings are kept.
 
 **New in 1.3:** the oscillators are cleaner still, and the whole engine is
@@ -58,7 +68,7 @@ last source of grit at low notes, so the bank now stops at 128 harmonics
 16 points per harmonic. Cirrostratus Stages also needs about a quarter less CPU
 (the heaviest set of segments went from 1,512 to 1,156 instructions a
 sample). If the module ever does run out of time, the **button lights
-flicker red** for a moment (section 14). Your settings are kept.
+flicker red** for a moment (until 1.3.3, which removed the light). Your settings are kept.
 
 **New in 1.2:** cleaner oscillators. Morph, the wave bank and Fold no longer
 alias (the grainy, "low-res" edge at higher notes): the wave bank is now
@@ -88,7 +98,7 @@ lives in Cirrostratus, next to the Monsoon firmware.)
 
 **You need:** a computer or phone with a headphone jack (a wired USB headphone
 adapter works, Bluetooth doesn't), a 3.5 mm patch cable, and
-`cirrostratus-stages-v1.3.2.wav` (or `cirrostratus-stages-v1.3.2-flipped.wav` for a module mounted
+`cirrostratus-stages-v1.3.3.wav` (or `cirrostratus-stages-v1.3.3-flipped.wav` for a module mounted
 upside down).
 
 <!-- FIG install -->
@@ -523,19 +533,19 @@ go: your gesture loops.
 | | |
 |---|---|
 | Output | −8 to +8 V at most; randoms 0 to 8 V or ±5 V; oscillators and effects ±5 V; chaos and stair gates 8 V (times the amplitude); transient, compare and quantise triggers 5 V (compare up to 8 V) |
-| Processing | Oscillators and Effects: 31,250 samples a second (Effects process their left neighbour at that rate); Random, Chaos, Envelope and Processor: once per block of 8 (3,906 a second), gliding between blocks (notes, gates and triggers jump); CV and knobs read 3,906 times a second; cords once per block (3,906 a second) |
-| CPU | measured on an emulated Cortex-M4: 532 instructions per sample for the default set (651 in 1.3.1), about 400–520 for six CV segments, 1,179 for the heaviest (six Fold or six Morph oscillators), 1,118 for six effects (six choruses); no single block above 1,241, with the controls jittering as the module's inputs do; the chip has 2,304 cycles per sample, and running from flash it needs more than one cycle per instruction |
-| Overload light | if the processing ever misses its deadline (the DAC would play a stale block: a gritty, chopped sound), all six **button lights flicker red** for half a second. (Not for the moment after a settings save: every change is saved to flash when you let go of the button, and the chip can't run anything while it writes flash, so a block or two goes missing there, as on stock Stages.) If you see it, the set of segments is too heavy for the chip: please report which types and flavours were running, and what the load meter shows |
+| Processing | Oscillators and Effects: 31,250 samples a second (Effects process their left neighbour at that rate; the oscillators' voice VCA follows its gate once per block, gliding); Random, Chaos, Envelope and Processor: once per block of 8 (3,906 a second), gliding between blocks (notes, gates and triggers jump); CV and knobs read 3,906 times a second; cords once per block (3,906 a second) |
+| CPU | measured on an emulated Cortex-M4: 420 instructions per sample for the default set (532 in 1.3.2, 651 in 1.3.1), about 320–440 for six CV segments, 400–770 for six oscillators (six Bank the heaviest; six Additive at 16 harmonics 795), 450–780 for six effects (six combs the heaviest); no single block above 845, with every control jittering as the module's inputs do and the knobs at their heaviest; the chip has 2,304 cycles per sample, and running from flash it needs more than one cycle per instruction |
 | Load meter | hold buttons 5 and 6 together for 1 s: the slider lights show the share of the chip's time the engine uses (interrupts that land in it included), measured with the chip's own cycle counter over the last 65 ms. Each light is a sixth; the last lit one glows dimmer for a part. All six full = out of time |
 | Buffering | the engine runs up to three blocks of 8 samples ahead of the outputs (0.8 ms), so one slow block doesn't miss its deadline (Stages had one block) |
-| Memory | Cirrostratus Stages uses the memory the normal Stages engines use; they rest while it runs (16.7 KB of their 23.6 KB); the wave bank is in flash: 16 waves × 8 band-limited octave tables, 69 KB |
+| Memory | Cirrostratus Stages uses the memory the normal Stages engines use; they rest while it runs (16.3 KB of their 23.6 KB); the wave bank is in flash: 16 waves × 8 band-limited octave tables, 69 KB |
 | Settings | stored in their own flash pages (the last 4 KB), untouched by firmware updates and by the other modes |
 | Chaining | each module runs its own six segments; Cirrostratus Stages doesn't chain |
 | Tests | 713 host checks on the real engine code (pitch, V/oct, envelope times, rates, ranges, every flavour; scales to the cent, filter, ring, comb pitch, echo time, every cord, the stair, the weather, Gendy rows, dream drift; the wave bank's tables and, by FFT at C2, C4 and C6, how far below the notes everything between the harmonics sits; a storm of every type, flavour and option with cords and thrown controls) and a check that the update file decodes to exactly the firmware |
 
-Cirrostratus Stages runs on real Stages modules: the overload light and the load
-meter came out of the first runs on one (1.2 to 1.3.1), and every version is
-also tested on the computer and on an emulated processor first.
+Cirrostratus Stages runs on real Stages modules: the load meter came out of
+the first runs on one (1.2 to 1.3.2), and every version is also tested on
+the computer and on an emulated processor first (1.3.3: the emulated chip
+renders the same samples as the computer, to 2 parts in 10 million).
 
 ---
 

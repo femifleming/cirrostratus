@@ -57,11 +57,20 @@ static float Jitter(float amount) {
   return amount * ((rng >> 8) * (1.0f / 16777216.0f) - 0.5f);
 }
 
+// BENCH_DEFS="-DBENCH_POT=1.0f -DBENCH_SLIDER=0.1f": other controls (the
+// default: knobs at 0.6, notes from E4 up)
+#ifndef BENCH_POT
+#define BENCH_POT 0.6f
+#endif
+#ifndef BENCH_SLIDER
+#define BENCH_SLIDER 0.55f
+#endif
+
 static uint32_t Measure(const Config& config) {
   Input in[kNumSegments];
   for (int i = 0; i < kNumSegments; ++i) {
-    in[i].slider = 0.55f + 0.05f * i;
-    in[i].pot = 0.6f;
+    in[i].slider = BENCH_SLIDER + 0.05f * i;
+    in[i].pot = BENCH_POT;
     in[i].cv = 0.01f;
     in[i].cv_raw = 0.0f;
     in[i].cv_slider = in[i].slider;
@@ -77,8 +86,8 @@ static uint32_t Measure(const Config& config) {
       in[i].cv_raw = (b & 1) ? 0.3f : -0.3f;
 #ifdef BENCH_JITTER
       // ADC noise as on the module: every value moves a little every block.
-      in[i].slider = 0.55f + 0.05f * i + Jitter(BENCH_JITTER);
-      in[i].pot = 0.6f + Jitter(BENCH_JITTER);
+      in[i].slider = BENCH_SLIDER + 0.05f * i + Jitter(BENCH_JITTER);
+      in[i].pot = BENCH_POT + Jitter(BENCH_JITTER);
       in[i].cv = 0.01f + Jitter(BENCH_JITTER);
       in[i].cv_slider = in[i].slider;
 #endif

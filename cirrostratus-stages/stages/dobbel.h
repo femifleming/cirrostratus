@@ -159,12 +159,12 @@ struct Segment {
   // shared
   float out;        // last output (1.0 = 8 V)
   float norm;       // 0-1 for neighbours and LEDs
-  float phase;      // clock phase (random / chaos) or oscillator phase
+  float phase;      // clock phase (random / chaos)
   float phase2;
-  float dt;         // oscillator: last block's phase increment (glides)
+  uint32_t ph, ph2; // oscillator: phase, second phase (2^32 = one turn)
+  uint32_t inc, inc2;  // oscillator: last block's phase increments (glides)
   float fold_sin;   // oscillator: the folder's last sine
-  float fold_z[38]; // oscillator: the folder's 2x oversampled history (twice)
-  int fold_pos;
+  float fold_z[18]; // oscillator: the folder's 2x oversampled history (oldest first)
   uint32_t since;   // samples since the last tick
   float period;     // samples between ticks
   float target;
@@ -226,6 +226,8 @@ struct Segment {
 
   // quantiser, stair
   float q_cents;
+  const float* q_scale;   // quantiser: the scale found for q_scale_index
+  int q_scale_index;
   uint8_t step;
 
   // the cord into this segment
@@ -282,8 +284,10 @@ class Engine {
   float run_y_[kNumSegments][kMaxBlockSize];
   float run_z_[kNumSegments][kMaxBlockSize];
   uint64_t run_cells_[kNumSegments][kMaxBlockSize];
-  // Each segment's output this block, for its right neighbour.
-  float block_out_[kNumSegments][kMaxBlockSize];
+  // Each segment's output this block, for its right neighbour: the
+  // caller's output rows (segment 6's last block, for segment 1's cord, is
+  // segment_[5].out).
+  const float* block_out_[kNumSegments];
   float block_norm_[kNumSegments][kMaxBlockSize];
 
   // Dream drift: how far (0-1), how long nothing was touched, where the
