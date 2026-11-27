@@ -6,7 +6,7 @@ and narrator as Cirrostratus' Monsoon video (deep blue, Inter / Plex Mono,
 Kokoro "bf_emma"), music under the voice, ducked while she speaks.
 
   python3 tools/video/build_video.py --music ~/Desktop/Njari/Bliss.wav
-      [--out ~/Desktop/Cirrostratus-Stages-Video-Manual-1.3.1.mp4] [--only 3-5]
+      [--out ~/Desktop/Cirrostratus-Stages-Video-Manual-1.3.3.mp4] [--only 3-5]
       [--still] [--print]
 
 The narration uses the Monsoon video's Kokoro set-up next door
@@ -152,38 +152,37 @@ def chapters():
              "it alone.", dict(cols=DEFAULT, rings=[(0, "cv"), (1, "cv"), (2, "cv")])),
         ]))
 
-    ch.append(dict(code="new", title="new in 1.3.1", sub="room to breathe, and a load meter",
-        say="New in one point three point one.",
+    ch.append(dict(code="new", title="new in 1.3.3", sub="six oscillators at once, and no red light",
+        say="New in one point three point three.",
         steps=[
-            ("buffer", "three blocks ahead",
-             "The audio now runs up to three blocks ahead of the outputs, under a millisecond, so one slow block "
-             "borrows time from the others instead of being missed.", dict(cols=DEFAULT,
-                 rings=[(i, "out") for i in range(6)])),
+            ("six oscillators", "a third lighter",
+             "Oscillators and effects now need about a third less of the chip, so all six segments can be "
+             "oscillators at once. They sound the same: every flavour was checked, sample by sample, against the "
+             "last version.",
+             dict(cols=cols("greenred", "greenred", "greenred", "greenred", "greenred", "greenred"),
+                  rings=[(i, "out") for i in range(6)])),
+            ("no red light", "the lights only show the segments",
+             "The red overload light is gone. The button lights only ever show your segments now.",
+             dict(cols=DEFAULT, rings=[(i, "led") for i in range(6)])),
             ("load meter", "hold 5 and 6 for a second",
-             "Hold buttons five and six together for a second, and the slider lights show how much of the chip's "
-             "time the engine uses, read from the chip's own cycle counter. Each light is a sixth. All six full "
-             "means it's out of time.",
+             "The load meter is still there. Hold buttons five and six together for a second, and the slider "
+             "lights show how much of the chip's time the engine uses. Each light is a sixth.",
              dict(cols=cols(G, G, G, G, R, "greenred", c0=dict(glow=1.0), c1=dict(glow=1.0), c2=dict(glow=0.5)),
                   rings=[(4, "button"), (5, "button")] + [(i, "slider") for i in range(3)],
                   badges=[(4, "button", "hold"), (5, "button", "hold")])),
-            ("overload light", "red flicker = out of time",
-             "If the engine ever misses its deadline, all six button lights flicker red for half a second. Not "
-             "when you change a type: that's the settings being saved to flash, which pauses the chip for a "
-             "moment, just as on stock Stages.",
-             dict(cols=cols(R, R, R, R, R, R), rings=[(i, "led") for i in range(6)])),
-            ("1.3", "cleaner oscillators",
-             "And since one point three, the oscillators are clean right across the slider: the wave bank and "
-             "Morph keep everything that isn't the note sixty to seventy decibels below it.",
-             one(5, "greenred", [("slider", "pitch"), ("pot", "timbre")])),
+            ("1.3.2", "CV types once a block",
+             "And since one point three point two, Random, Chaos, Envelope and Processor work out their value "
+             "once every eight samples and glide in between; notes, gates and triggers still jump cleanly.",
+             dict(cols=cols(G, Y, R, "yellowred", None, None), rings=[(i, "out") for i in range(4)])),
         ]))
 
     ch.append(dict(code="install", title="installing", sub="the update is an audio file",
         say="Installing. The module updates from an audio file. The updater is built in, and a failed try "
             "can't damage it, so you can always try again.",
         steps=[
-            ("the file", "cirrostratus-stages-v1.3.1.wav",
+            ("the file", "cirrostratus-stages-v1.3.3.wav",
              "You need a computer or phone with a headphone jack, a patch cable, and the file Cirrostratus Stages "
-             "version one point three point one, from the Cirrostratus releases page. There's a flipped one for "
+             "version one point three point three, from the Cirrostratus releases page. There's a flipped one for "
              "a module mounted upside down.", dict(cols=[dict(led=None) for _ in range(6)])),
             ("cv 6", "headphones into CV 6, slider 6 to the middle",
              "Power the rack off and unplug every cable. Patch the headphone out into the C.V. input of segment "
@@ -599,7 +598,7 @@ def load_music(path, seconds):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--music", required=True)
-    ap.add_argument("--out", default=os.path.expanduser("~/Desktop/Cirrostratus-Stages-Video-Manual-1.3.1.mp4"))
+    ap.add_argument("--out", default=os.path.expanduser("~/Desktop/Cirrostratus-Stages-Video-Manual-1.3.3.mp4"))
     ap.add_argument("--work", default=os.path.join(ROOT, "build", "video"))
     ap.add_argument("--only", help="chapter range a-b (for previews)")
     ap.add_argument("--still", action="store_true", help="one frame per chapter as PNG, then stop")

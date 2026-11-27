@@ -55,3 +55,7 @@
 > firmware is good, push it
 
 1.3.3 confirmed on the module.
+
+> update manual and video manual for monsoona nd stages
+
+Video manuals: Monsoon chapter "new in 1.5.3" (finer SMEAR, TEXTURE), Stages chapter "new in 1.3.3" (six oscillators, no red light); install file names 1.3.3. Videos stay off GitHub.

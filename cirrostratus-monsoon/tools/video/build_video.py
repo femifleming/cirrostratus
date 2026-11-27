@@ -226,22 +226,24 @@ def general_chapters():
                  "Same panel, same jacks. Only the weather changes.",
              rows=[row("modes", "30 · two banks", hl=[]), row("engine", "48 kHz · 32-bit float", hl=[]),
                    row("slots", "4 jars of sky", hl=[]), row("look up", "always", hl=[])], kind="intro"),
-        dict(code="nw152", title="new in 1.5.2", sub="a spring tank, a smooth smear",
-             desc="Mode 1 is SPRING: a spring reverb tank, every echo a falling chirp. SPECTRAL's SMEAR is "
-                  "smooth at long blurs: no more flutter, no more dropouts. And since 1.5.1 no clicks when "
-                  "a block runs long.",
-             say="New in one point five point two.",
-             rows=[row("1 · spring", "a spring reverb tank",
-                       "Mode one is back, as Spring: the tank from the back of a guitar amp. Every echo arrives "
-                       "as a falling chirp, the boing and the drip. Texture sets how long the drip is, RVB is "
-                       "the dwell, and TRIG kicks the tank.", hl=["disp", "leds", "sl3", "k3"]),
-                   row("smear", "smooth, at any blur",
-                       "Spectral's Smear option is smooth now. Under a long blur, the bins of one note used to "
-                       "drift against each other, so the smear fluttered like a stutter and sometimes cancelled "
-                       "itself out. Now they move as one.", hl=["sl1"]),
-                   row("1.5.1", "no more pulses",
-                       "And since one point five point one, a block that runs a little long no longer leaves a "
-                       "click: the effect glides out and back in.", hl=["out_l", "out_r"]),
+        dict(code="nw153", title="new in 1.5.3", sub="a finer smear, a texture for it",
+             desc="SPECTRAL's SMEAR is four times finer: 2048 points, 23 Hz apart, so chords stay chords. "
+                  "TEXTURE now sets its character, from clear steady tones to a soft diffuse wash. Since 1.5.2 "
+                  "mode 1 is SPRING, a spring reverb tank.",
+             say="New in one point five point three.",
+             rows=[row("smear", "four times finer",
+                       "Spectral's Smear option now listens four times more closely: two thousand and forty-eight "
+                       "points, twenty-three hertz apart. Chords stay chords under a long blur, instead of melting "
+                       "into a grainy blend.", hl=["sl1"]),
+                   row("texture", "clear → a soft wash",
+                       "And Texture now shapes the smear. Fully left, the blurred sound holds as clear, steady "
+                       "tones. Turn it right and every partial starts to wander, until it becomes a soft, diffuse "
+                       "wash, like a long reverb of the same colours. The level stays the same all the way.",
+                       hl=["sl3"]),
+                   row("1 · spring", "a spring reverb tank (1.5.2)",
+                       "Since one point five point two, mode one is Spring: the tank from the back of a guitar amp. "
+                       "Every echo arrives as a falling chirp. RVB is the dwell, and TRIG kicks the tank.",
+                       hl=["disp", "leds", "sl3", "k3"]),
                    row("checked", "every mode, on the chip's twin",
                        "Every mode and option ran again on an emulated copy of the module's chip, checked "
                        "against a computer: all of them pass.", hl=["sl0", "sl1", "sl2", "sl3"])], kind="steps"),
